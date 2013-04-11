@@ -59,7 +59,10 @@
 # define DLOG(fmt, args...)
 #endif
 
+#if defined(TARGET_RASPBERRY_PI)
 static void SetResolutionString(RESOLUTION_INFO &res);
+static SDTV_ASPECT_T get_sdtv_aspect_from_display_aspect(float display_aspect);
+#endif
 
 CEGLNativeTypeRaspberryPI::CEGLNativeTypeRaspberryPI()
 {

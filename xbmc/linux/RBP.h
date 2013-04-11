@@ -59,6 +59,9 @@ public:
   DllOMX *GetDllOMX() { return m_OMX ? m_OMX->GetDll() : NULL; }
   void WaitVsync();
 
+  void SuspendVideoOutput();
+  void ResumeVideoOutput();
+
 private:
   DllBcmHost *m_DllBcmHost;
   bool       m_initialized;
