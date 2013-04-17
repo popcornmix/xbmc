@@ -1,5 +1,6 @@
 SRCS=ConsoleDeviceKitPowerSyscall.cpp \
      ConsoleUPowerSyscall.cpp \
+     RaspberryPIPowerSyscall.cpp \
      UPowerSyscall.cpp \
      LogindUPowerSyscall.cpp
 
