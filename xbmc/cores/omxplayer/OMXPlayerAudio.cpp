@@ -392,7 +392,15 @@ void OMXPlayerAudio::Process()
     else if (pMsg->IsType(CDVDMsg::GENERAL_RESYNC))
     { //player asked us to set internal clock
       CDVDMsgGeneralResync* pMsgGeneralResync = (CDVDMsgGeneralResync*)pMsg;
-      CLog::Log(LOGDEBUG, "COMXPlayerAudio - CDVDMsg::GENERAL_RESYNC(%f, %d)", m_audioClock, pMsgGeneralResync->m_clock);
+
+      if (pMsgGeneralResync->m_clock && pMsgGeneralResync->m_timestamp != DVD_NOPTS_VALUE)
+      {
+        CLog::Log(LOGDEBUG, "CDVDPlayerAudio - CDVDMsg::GENERAL_RESYNC(%f, %f, 1)", m_audioClock, pMsgGeneralResync->m_timestamp);
+        m_av_clock->Discontinuity(pMsgGeneralResync->m_timestamp);
+      }
+      else
+        CLog::Log(LOGDEBUG, "CDVDPlayerAudio - CDVDMsg::GENERAL_RESYNC(%f, 0)", m_audioClock);
+
       m_flush = false;
       m_audioClock = DVD_NOPTS_VALUE;
     }

@@ -388,6 +388,7 @@ protected:
   float m_current_volume;
   bool m_current_mute;
   bool m_change_volume;
+  bool m_stepped;
 
   CDVDOverlayContainer m_overlayContainer;
 
