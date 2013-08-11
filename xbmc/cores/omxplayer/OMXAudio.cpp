@@ -94,6 +94,8 @@ COMXAudio::COMXAudio() :
   m_pCallback       (NULL   ),
   m_Initialized     (false  ),
   m_CurrentVolume   (0      ),
+  m_Mute            (false  ),
+  m_drc             (0      ),
   m_Passthrough     (false  ),
   m_HWDecode        (false  ),
   m_BytesPerSec     (0      ),
@@ -180,6 +182,8 @@ bool COMXAudio::PortSettingsChanged()
 
   if(!m_omx_render.Initialize("OMX.broadcom.audio_render", OMX_IndexParamAudioInit))
     return false;
+
+  ApplyVolume();
 
   if(!m_Passthrough)
   {
@@ -650,32 +654,37 @@ void COMXAudio::Flush()
 }
 
 //***********************************************************************************************
-long COMXAudio::GetCurrentVolume() const
+void COMXAudio::SetDynamicRangeCompression(long drc)
 {
-  return m_CurrentVolume;
 }
 
 //***********************************************************************************************
-void COMXAudio::Mute(bool bMute)
+void COMXAudio::SetMute(bool bMute)
 {
-  if(!m_Initialized)
-    return;
-
-  if (bMute)
-    SetCurrentVolume(VOLUME_MINIMUM);
-  else
-    SetCurrentVolume(m_CurrentVolume);
+  m_Mute = bMute;
+  if (m_settings_changed)
+    ApplyVolume();
 }
 
 //***********************************************************************************************
-bool COMXAudio::SetCurrentVolume(float fVolume)
+void COMXAudio::SetVolume(float fVolume)
+{
+  m_CurrentVolume = fVolume;
+  if (m_settings_changed)
+    ApplyVolume();
+}
+
+//***********************************************************************************************
+bool COMXAudio::ApplyVolume(void)
 {
   CSingleLock lock (m_critSection);
 
-  if(!m_Initialized || m_Passthrough)
+  if (!m_Initialized || m_Passthrough)
     return false;
+
+  float fVolume = m_Mute ? VOLUME_MINIMUM : m_CurrentVolume;
+
   double gain = pow(10, (g_advancedSettings.m_ac3Gain - 12.0f) / 20.0);
-  m_CurrentVolume = fVolume;
 
   if (m_format.m_channelLayout.Count() > 2)
   {
@@ -741,7 +750,8 @@ bool COMXAudio::SetCurrentVolume(float fVolume)
                 CLASSNAME, __func__, omx_err);
       return false;
     }
-  }  
+  }
+  CLog::Log(LOGINFO, "%s::%s - Volume=%.2f\n", CLASSNAME, __func__, fVolume);
   return true;
 }
 
