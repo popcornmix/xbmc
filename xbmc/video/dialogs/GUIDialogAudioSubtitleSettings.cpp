@@ -277,7 +277,9 @@ void CGUIDialogAudioSubtitleSettings::OnSettingChanged(SettingInfo &setting)
       case 0: g_guiSettings.SetInt("audiooutput.mode", AUDIO_ANALOG ); break;
       case 1: g_guiSettings.SetInt("audiooutput.mode", AUDIO_IEC958 ); bitstream = true; break;
       case 2: g_guiSettings.SetInt("audiooutput.mode", AUDIO_HDMI   ); bitstream = true; break;
+#ifdef TARGET_RASPBERRY_PI
       case 3: g_guiSettings.SetInt("audiooutput.mode", AUDIO_BOTH   ); break;
+#endif
     }
 
     EnableSettings(AUDIO_SETTINGS_OUTPUT_TO_ALL_SPEAKERS, bitstream);
