@@ -14883,6 +14883,11 @@ msgctxt "#36546"
 msgid "Sets the visual depth of subtitles for stereoscopic videos. The higher the value, the closer the subtitles will appear to the viewer."
 msgstr ""
 
+#: system/settings/rbp.xml
+msgctxt "#36547"
+msgid "Use higher quality textures for covers and fanart"
+msgstr ""
+
 #empty strings from id 36547 to 36999
 #reserved strings 365XX
 
@@ -14946,4 +14951,8 @@ msgstr ""
 #: system/settings/settings.xml
 msgctxt "#37019"
 msgid "Enables system keys like printscreen, alt-tab and volume keys when in fullscreen"
+
+#: system/settings/rbp.xml
+msgctxt "#37020"
+msgid "Enable 32 bit textures"
 msgstr ""
