@@ -61,7 +61,7 @@ public:
   float GetCacheTime();
   float GetCacheTotal();
   COMXAudio();
-  bool Initialize(AEAudioFormat format, OMXClock *clock, CDVDStreamInfo &hints, uint64_t channelMap, bool bUsePassthrough, bool bUseHWDecode);
+  bool Initialize(AEAudioFormat format, OMXClock *clock, CDVDStreamInfo &hints, uint64_t channelMap, bool bUsePassthrough, bool bUseHWDecode, bool is_live);
   bool PortSettingsChanged();
   ~COMXAudio();
 
@@ -142,6 +142,7 @@ private:
   CAERemap      m_vizRemap;
   bool          m_submitted_eos;
   bool          m_failed_eos;
+  bool          m_live;
   typedef struct {
     int num_samples;
     float samples[VIS_PACKET_SIZE];

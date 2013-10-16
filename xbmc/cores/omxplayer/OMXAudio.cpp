@@ -408,7 +408,7 @@ static unsigned count_bits(int64_t value)
   return bits;
 }
 
-bool COMXAudio::Initialize(AEAudioFormat format, OMXClock *clock, CDVDStreamInfo &hints, uint64_t channelMap, bool bUsePassthrough, bool bUseHWDecode)
+bool COMXAudio::Initialize(AEAudioFormat format, OMXClock *clock, CDVDStreamInfo &hints, uint64_t channelMap, bool bUsePassthrough, bool bUseHWDecode, bool is_live)
 {
   CSingleLock lock (m_critSection);
   OMX_ERRORTYPE omx_err;
@@ -420,6 +420,7 @@ bool COMXAudio::Initialize(AEAudioFormat format, OMXClock *clock, CDVDStreamInfo
 
   m_HWDecode    = bUseHWDecode;
   m_Passthrough = bUsePassthrough;
+  m_live = is_live;
 
   m_InputChannels = count_bits(channelMap);
   m_format = format;
