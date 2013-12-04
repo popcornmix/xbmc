@@ -31,17 +31,28 @@ using namespace PiAudioAE;
 #include "linux/RBP.h"
 #endif
 
+#define printf if (1) {} else printf
+
 CPiAudioAE::CPiAudioAE()
 : CThread("CPiAudio")
 {
+  printf("%s: %p\n", __func__, this);
+  m_initialized = false;
+  m_mode = AE_SOUND_OFF;
+  m_playing = false;
+  m_playing_passthrough = false;
+  m_stream = NULL;
 }
 
 CPiAudioAE::~CPiAudioAE()
 {
+  printf("%s: %p\n", __func__, this);
 }
 
 bool CPiAudioAE::Initialize()
 {
+  printf("%s\n", __func__);
+
   UpdateStreamSilence();
   Create();
   return true;
@@ -100,6 +111,8 @@ float CPiAudioAE::GetVolume()
 
 void CPiAudioAE::SetVolume(const float volume)
 {
+  printf("%s: %.2f\n", __func__, volume);
+
   m_aeVolume = std::max( 0.0f, std::min(1.0f, volume));
 }
 
@@ -115,23 +128,69 @@ bool CPiAudioAE::IsMuted()
 
 IAEStream *CPiAudioAE::MakeStream(enum AEDataFormat dataFormat, unsigned int sampleRate, unsigned int encodedSampleRate, CAEChannelInfo channelLayout, unsigned int options)
 {
-  return NULL;
+  CPiAudioAEStream *s = NULL;
+
+  if (!sampleRate)
+  {
+    m_playing = true;
+    m_playing_passthrough = options != 0;
+    SetSoundMode(m_mode);
+  }
+  else
+  {
+    s = new CPiAudioAEStream(dataFormat, sampleRate, channelLayout, options);
+  }
+  printf("%s: %p,%d,%d,%d,%x,%x %p\n", __func__, m_stream, dataFormat, sampleRate, encodedSampleRate, 0, options, s);
+  return s;
 }
 
 IAEStream *CPiAudioAE::FreeStream(IAEStream *stream)
 {
   // will retrigger the streamsilence timer
-  UpdateStreamSilence();
+  printf("%s: %p\n", __func__, stream);
+  if (!stream)
+  {
+    m_playing = false;
+    m_playing_passthrough = false;
+    SetSoundMode(m_mode);
+    UpdateStreamSilence();
+  }
+  delete static_cast<CPiAudioAEStream *>(stream);
   return NULL;
 }
 
 IAESound *CPiAudioAE::MakeSound(const std::string& file)
 {
-  return NULL;
+  if (!m_initialized)
+  {
+    CAEChannelInfo channelLayout;
+    channelLayout.Reset();
+    channelLayout += AE_CH_FL;
+    channelLayout += AE_CH_FR;
+
+    m_stream = static_cast<CPiAudioAEStream *>(MakeStream(AE_FMT_FLOAT, 48000, 48000, channelLayout, 0));
+    if (!m_stream)
+      CLog::Log(LOGERROR, "%s: Failed to makeStream", __func__);
+    else
+      m_initialized = true;
+    SetSoundMode(m_mode);
+  }
+
+  CPiAudioAESound *s = new CPiAudioAESound(file, m_stream);
+  if (!s->Initialize())
+  {
+  printf("%s: %s=%p FAILED\n", __func__, file.c_str(), s);
+    delete s;
+    return NULL;
+  }
+  printf("%s: %s=%p\n", __func__, file.c_str(), s);
+  return s;
 }
 
 void CPiAudioAE::FreeSound(IAESound *sound)
 {
+  printf("%s: %p\n", __func__, sound);
+  delete static_cast<CPiAudioAESound *>(sound);
 }
 
 bool CPiAudioAE::SupportsRaw(AEDataFormat format)
@@ -166,6 +225,8 @@ void CPiAudioAE::OnSettingsChange(const std::string& setting)
 {
   if (setting == "audiooutput.streamsilence" || setting == "audiooutput.audiodevice")
     UpdateStreamSilence();
+  if (setting == "audiooutput.audiodevice")
+    SetSoundMode(m_mode);
 }
 
 void CPiAudioAE::EnumerateOutputDevices(AEDeviceList &devices, bool passthrough)
@@ -180,6 +241,24 @@ void CPiAudioAE::EnumerateOutputDevices(AEDeviceList &devices, bool passthrough)
 std::string CPiAudioAE::GetDefaultDevice(bool passthrough)
 {
   return "HDMI";
+}
+
+void CPiAudioAE::SetSoundMode(const int mode)
+{
+   printf("%s: mode=%d\n", __func__, mode);
+   m_mode = mode;
+   if (!m_stream)
+     return;
+   if (m_playing_passthrough)
+     m_stream->Pause();
+   else if (m_mode == AE_SOUND_ALWAYS)
+     m_stream->Resume();
+   else if (m_mode == AE_SOUND_OFF)
+     m_stream->Pause();
+   else if (m_playing)
+     m_stream->Pause();
+   else
+     m_stream->Resume();
 }
 
 bool CPiAudioAE::IsSettingVisible(const std::string &settingId)

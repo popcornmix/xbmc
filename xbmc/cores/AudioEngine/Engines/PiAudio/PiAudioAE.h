@@ -22,8 +22,10 @@
 #include "system.h"
 #include "threads/Thread.h"
 
-#include "Interfaces/AEStream.h"
-#include "Interfaces/AESound.h"
+//#include "Interfaces/AEStream.h"
+#include "PiAudioAEStream.h"
+//#include "Interfaces/AESound.h"
+#include "PiAudioAESound.h"
 #include "AEFactory.h"
 
 namespace PiAudioAE
@@ -47,7 +49,7 @@ public:
   virtual void  SetVolume(const float volume);
   virtual void  SetMute(const bool enabled);
   virtual bool  IsMuted();
-  virtual void  SetSoundMode(const int mode) {}
+  virtual void  SetSoundMode(const int mode);
 
   /* returns a new stream for data in the specified format */
   virtual IAEStream *MakeStream(enum AEDataFormat dataFormat, unsigned int sampleRate, unsigned int encodedSampleRate, CAEChannelInfo channelLayout, unsigned int options = 0);
@@ -76,5 +78,11 @@ protected:
   bool m_aeMuted;
   int m_extSilenceTimeout;
   XbmcThreads::EndTime m_extSilenceTimer;
+  bool m_initialized;
+  bool m_playing;
+  bool m_playing_passthrough;
+  int m_mode;
+
+  CPiAudioAEStream *m_stream;
 };
 };

@@ -104,9 +104,6 @@
           <control type="spinner" format="string" />
         </setting>
       </group>
-      <group id="2">
-        <visible>false</visible>
-      </group>
       <group id="3">
         <setting id="audiooutput.passthrough">
           <level>2</level>

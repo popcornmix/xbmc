@@ -47,6 +47,8 @@ SRCS += Engines/ActiveAE/ActiveAEResample.cpp
 SRCS += Engines/ActiveAE/ActiveAEBuffer.cpp
 
 SRCS += Engines/PiAudio/PiAudioAE.cpp
+SRCS += Engines/PiAudio/PiAudioAEStream.cpp
+SRCS += Engines/PiAudio/PiAudioAESound.cpp
 
 ifeq (@USE_ANDROID@,1)
 SRCS += Sinks/AESinkAUDIOTRACK.cpp
