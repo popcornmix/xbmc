@@ -101,6 +101,7 @@ OMXPlayerVideo::OMXPlayerVideo(OMXClock *av_clock,
   m_nextOverlay = DVD_NOPTS_VALUE;
   m_flush = false;
   m_view_mode = 0;
+  m_stereo_mode = RENDER_STEREO_MODE_OFF;
   m_history_valid_pts = 0;
 }
 
@@ -644,31 +645,49 @@ int OMXPlayerVideo::GetFreeSpace()
   return m_omxVideo.GetFreeSpace();
 }
 
-void OMXPlayerVideo::SetVideoRect(const CRect &SrcRect, const CRect &DestRect)
+void OMXPlayerVideo::SetVideoRect(const CRect &InSrcRect, const CRect &InDestRect)
 {
-  // in 3d modes skip this - we get called as the gui switches from left eye to right eye
-  unsigned flags = GetStereoModeFlags(m_hints.stereo_mode);
-  if (CONF_FLAGS_STEREO_MODE_MASK(flags))
-    return;
-
-  // check if destination rect or video view mode has changed
-  if ((m_dst_rect != DestRect) || (m_view_mode != CMediaSettings::Get().GetCurrentVideoSettings().m_ViewMode))
-  {
-    m_dst_rect  = DestRect;
-    m_view_mode = CMediaSettings::Get().GetCurrentVideoSettings().m_ViewMode;
-  }
-  else
-  {
-    return;
-  }
-
+  CRect SrcRect = InSrcRect, DestRect = InDestRect;
   // might need to scale up m_dst_rect to display size as video decodes
   // to separate video plane that is at display size.
   CRect gui, display, dst_rect;
   RESOLUTION res = g_graphicsContext.GetVideoResolution();
   gui.SetRect(0, 0, CDisplaySettings::Get().GetResolutionInfo(res).iWidth, CDisplaySettings::Get().GetResolutionInfo(res).iHeight);
   display.SetRect(0, 0, CDisplaySettings::Get().GetResolutionInfo(res).iScreenWidth, CDisplaySettings::Get().GetResolutionInfo(res).iScreenHeight);
-  
+
+  // in 3d modes skip this - we get called as the gui switches from left eye to right eye
+  unsigned flags = GetStereoModeFlags(m_hints.stereo_mode);
+
+  if (CONF_FLAGS_STEREO_MODE_MASK(flags))
+  {
+    DestRect = gui;
+    if (g_graphicsContext.GetStereoMode() == RENDER_STEREO_MODE_MONO)
+    {
+       if (GetStereoMode() == "left_right")
+         SrcRect.x1 = 0, SrcRect.y1 = 0, SrcRect.x2 = m_hints.width>>1, SrcRect.y2 = m_hints.height;
+       else if (GetStereoMode() == "right_left")
+         SrcRect.x1 = m_hints.width>>1, SrcRect.y1 = 0, SrcRect.x2 = m_hints.width, SrcRect.y2 = m_hints.height;
+       else if (GetStereoMode() == "top_bottom")
+         SrcRect.x1 = 0, SrcRect.y1 = 0, SrcRect.x2 = m_hints.width, SrcRect.y2 = m_hints.height>>1;
+       else if (GetStereoMode() == "bottom_top")
+         SrcRect.x1 = 0, SrcRect.y1 = m_hints.height>>1, SrcRect.x2 = m_hints.width, SrcRect.y2 = m_hints.height;
+    }
+    else
+      SrcRect.x1 = 0, SrcRect.y1 = 0, SrcRect.x2 = m_hints.width, SrcRect.y2 = m_hints.height;
+  }
+
+  // check if destination rect or video view mode has changed
+  if ((m_dst_rect != DestRect) || (m_view_mode != CMediaSettings::Get().GetCurrentVideoSettings().m_ViewMode) || m_stereo_mode != g_graphicsContext.GetStereoMode())
+  {
+    m_dst_rect  = DestRect;
+    m_view_mode = CMediaSettings::Get().GetCurrentVideoSettings().m_ViewMode;
+    m_stereo_mode = g_graphicsContext.GetStereoMode();
+  }
+  else
+  {
+    return;
+  }
+
   dst_rect = m_dst_rect;
   if (gui != display)
   {

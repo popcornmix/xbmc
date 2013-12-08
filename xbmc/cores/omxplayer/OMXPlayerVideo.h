@@ -38,6 +38,7 @@
 #include "utils/BitstreamStats.h"
 #include "linux/DllBCM.h"
 #include "cores/VideoRenderers/RenderManager.h"
+#include "guilib/StereoscopicsManager.h"
 
 using namespace std;
 
@@ -69,6 +70,7 @@ protected:
 
   CRect                     m_dst_rect;
   int                       m_view_mode;
+  enum RENDER_STEREO_MODE   m_stereo_mode;
 
   uint32_t                  m_history_valid_pts;
   DllBcmHost                m_DllBcmHost;
