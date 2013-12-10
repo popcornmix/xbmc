@@ -133,12 +133,10 @@ private:
   CStdString m_fallback;
   std::vector<CInfoPortion> m_info;
 
+  mutable bool m_isLabelOfListItem;
   mutable bool m_labelDirty;
   mutable std::string m_label;
   mutable std::vector<std::string> m_labelPortions;
-  mutable bool m_itemLabelDirty;
-  mutable std::string m_itemLabel;
-  mutable std::vector<std::string> m_itemLabelPortions;
 };
 
 #endif
