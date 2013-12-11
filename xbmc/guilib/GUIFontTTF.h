@@ -77,8 +77,8 @@ public:
 
   bool Load(const CStdString& strFilename, float height = 20.0f, float aspect = 1.0f, float lineSpacing = 1.0f, bool border = false);
 
-  virtual void Begin() = 0;
-  virtual void End() = 0;
+  void Begin();
+  void End();
 
   const CStdString& GetFileName() const { return m_strFileName; };
 
@@ -169,6 +169,8 @@ protected:
   CStdString m_strFileName;
 
 private:
+  virtual bool FirstBegin() = 0;
+  virtual void LastEnd() = 0;
   CGUIFontTTFBase(const CGUIFontTTFBase&);
   CGUIFontTTFBase& operator=(const CGUIFontTTFBase&);
   int m_referenceCount;
