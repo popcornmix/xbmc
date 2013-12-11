@@ -139,8 +139,7 @@ CGUIFontTTFBase::CGUIFontTTFBase(const CStdString& strFileName)
   m_nestedBeginCount = 0;
 
   m_bTextureLoaded = false;
-  m_vertex_size   = 4*1024;
-  m_vertex        = (SVertex*)malloc(m_vertex_size * sizeof(SVertex));
+  m_vertex.reserve(4*1024);
 
   m_face = NULL;
   m_stroker = NULL;
@@ -155,7 +154,6 @@ CGUIFontTTFBase::CGUIFontTTFBase(const CStdString& strFileName)
   m_textureScaleX = m_textureScaleY = 0.0;
   m_ellipsesWidth = m_height = 0.0f;
   m_color = 0;
-  m_vertex_count = 0;
   m_nTexture = 0;
 }
 
@@ -216,9 +214,7 @@ void CGUIFontTTFBase::Clear()
     g_freeTypeLibrary.ReleaseStroker(m_stroker);
   m_stroker = NULL;
 
-  free(m_vertex);
-  m_vertex = NULL;
-  m_vertex_count = 0;
+  m_vertex.clear();
 }
 
 bool CGUIFontTTFBase::Load(const CStdString& strFilename, float height, float aspect, float lineSpacing, bool border)
@@ -313,7 +309,7 @@ void CGUIFontTTFBase::Begin()
 {
   if (m_nestedBeginCount == 0 && m_texture != NULL && FirstBegin())
   {
-    m_vertex_count = 0;
+    m_vertex.clear();
   }
   // Keep track of the nested begin/end calls.
   m_nestedBeginCount++;
@@ -746,22 +742,9 @@ void CGUIFontTTFBase::RenderCharacter(float posX, float posY, const Character *c
   float tt = texture.y1 * m_textureScaleY;
   float tb = texture.y2 * m_textureScaleY;
 
-  // grow the vertex buffer if required
-  if(m_vertex_count >= m_vertex_size)
-  {
-    m_vertex_size *= 2;
-    void* old      = m_vertex;
-    m_vertex       = (SVertex*)realloc(m_vertex, m_vertex_size * sizeof(SVertex));
-    if (!m_vertex)
-    {
-      free(old);
-      CLog::Log(LOGSEVERE, "%s: can't allocate %"PRIdS" bytes for texture", __FUNCTION__ , m_vertex_size * sizeof(SVertex));
-      return;
-    }
-  }
-
+  m_vertex.resize(m_vertex.size() + 4);
+  SVertex* v = &m_vertex[m_vertex.size() - 4];
   m_color = color;
-  SVertex* v = m_vertex + m_vertex_count;
 
   unsigned char r = GET_R(color)
               , g = GET_G(color)
@@ -828,8 +811,6 @@ void CGUIFontTTFBase::RenderCharacter(float posX, float posY, const Character *c
   v[3].y = y[2];
   v[3].z = z[2];
 #endif
-
-  m_vertex_count+=4;
 }
 
 // Oblique code - original taken from freetype2 (ftsynth.c)

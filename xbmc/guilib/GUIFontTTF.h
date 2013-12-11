@@ -157,9 +157,7 @@ protected:
   bool m_bTextureLoaded;
   unsigned int m_nTexture;
 
-  SVertex* m_vertex;
-  int      m_vertex_count;
-  int      m_vertex_size;
+  std::vector<SVertex> m_vertex;
 
   float    m_textureScaleX;
   float    m_textureScaleY;
