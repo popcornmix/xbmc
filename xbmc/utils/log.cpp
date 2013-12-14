@@ -23,6 +23,7 @@
 #include "threads/SingleLock.h"
 #include "threads/Thread.h"
 #include "utils/StringUtils.h"
+#include "utils/TimeUtils.cpp"
 
 static const char* const levelNames[] =
 {"DEBUG", "INFO", "NOTICE", "WARNING", "ERROR", "SEVERE", "FATAL", "NONE"};
@@ -195,19 +196,22 @@ void CLog::PrintDebugString(const std::string& line)
 
 bool CLog::WriteLogString(int logLevel, const std::string& logString)
 {
-  static const char* prefixFormat = "%02.2d:%02.2d:%02.2d T:%" PRIu64" %7s: ";
-
+  static const char* prefixFormat = "%02.2d:%02.2d:%02.2d %10.6f T:%" PRIu64" %7s: ";
   std::string strData(logString);
   /* fixup newline alignment, number of spaces should equal prefix length */
   StringUtils::Replace(strData, "\n", "\n                                            ");
 
   int hour, minute, second;
   s_globals.m_platform.GetCurrentLocalTime(hour, minute, second);
-  
+
+  struct timespec now;
+  clock_gettime(CLOCK_MONOTONIC, &now);
+  float Now = now.tv_sec + now.tv_nsec * 1e-9;
+
   strData = StringUtils::Format(prefixFormat,
                                   hour,
                                   minute,
-                                  second,
+                                  second, Now,
                                   (uint64_t)CThread::GetCurrentThreadId(),
                                   levelNames[logLevel]) + strData;
 
