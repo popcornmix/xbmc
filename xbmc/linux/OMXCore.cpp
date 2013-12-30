@@ -448,7 +448,7 @@ void COMXCoreComponent::FlushAll()
 
 void COMXCoreComponent::FlushInput()
 {
-  if(!m_handle)
+  if(!m_handle || m_resource_error)
     return;
 
   OMX_ERRORTYPE omx_err = OMX_ErrorNone;
@@ -470,7 +470,7 @@ void COMXCoreComponent::FlushInput()
 
 void COMXCoreComponent::FlushOutput()
 {
-  if(!m_handle)
+  if(!m_handle || m_resource_error)
     return;
 
   OMX_ERRORTYPE omx_err = OMX_ErrorNone;
