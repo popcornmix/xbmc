@@ -18,6 +18,10 @@
  *
  */
 
+#include "system.h"
+
+#if !defined(TARGET_RASPBERRY_PI)
+
 #include "ActiveAEResample.h"
 #include "utils/log.h"
 
@@ -386,3 +390,4 @@ int CActiveAEResample::GetAVChannelIndex(enum AEChannel aechannel, uint64_t layo
 {
   return av_get_channel_layout_channel_index(layout, GetAVChannel(aechannel));
 }
+#endif

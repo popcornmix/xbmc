@@ -19,21 +19,7 @@
  *
  */
 
-#include "system.h"
-
-#include "cores/AudioEngine/Utils/AEChannelInfo.h"
-#include "cores/AudioEngine/Utils/AEAudioFormat.h"
-#include "cores/AudioEngine/Engines/ActiveAE/ActiveAEBuffer.h"
-#include "cores/AudioEngine/Interfaces/AE.h"
-
-extern "C" {
-#include "libavutil/avutil.h"
-#include "libswresample/swresample.h"
-}
-
-#if defined(TARGET_RASPBERRY_PI)
-#include "ActiveAEResamplePi.h"
-#else
+#include "linux/OMXCore.h"
 
 namespace ActiveAE
 {
@@ -53,21 +39,25 @@ public:
   static uint64_t GetAVChannelLayout(CAEChannelInfo &info);
 //  static CAEChannelInfo GetAEChannelLayout(uint64_t layout);
   static AVSampleFormat GetAVSampleFormat(AEDataFormat format);
+  static AEDataFormat GetAESampleFormat(AVSampleFormat format, int bits);
   static uint64_t GetAVChannel(enum AEChannel aechannel);
   int GetAVChannelIndex(enum AEChannel aechannel, uint64_t layout);
 
 protected:
-  bool m_loaded;
+  void DeInit();
   uint64_t m_src_chan_layout, m_dst_chan_layout;
   int m_src_rate, m_dst_rate;
   int m_src_channels, m_dst_channels;
   AVSampleFormat m_src_fmt, m_dst_fmt;
   int m_src_bits, m_dst_bits;
-  int m_src_dither_bits, m_dst_dither_bits;
-  SwrContext *m_pContext;
-  double m_rematrix[AE_CH_MAX][AE_CH_MAX];
+
+  OMX_AUDIO_PARAM_PCMMODETYPE m_pcm_input;
+  OMX_AUDIO_PARAM_PCMMODETYPE m_pcm_output;
+  COMXCoreComponent    m_omx_mixer;
+  bool                 m_Initialized;
+  AVSampleFormat m_last_src_fmt, m_last_dst_fmt;
+  int m_last_src_channels, m_last_dst_channels;
+  OMX_BUFFERHEADERTYPE *m_encoded_buffer;
 };
 
 }
-
-#endif
