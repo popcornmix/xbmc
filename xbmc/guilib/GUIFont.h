@@ -64,7 +64,6 @@ public:
   void Reset()
   {
     waitTime = initialWait;
-    characterPos = 0;
     // pixelPos is where we start the current letter, so is measured
     // to the left of the text rendering's left edge.  Thus, a negative
     // value will mean the text starts to the right
@@ -72,25 +71,19 @@ public:
     // privates:
     m_averageFrameTime = 1000.f / abs(defaultSpeed);
     m_lastFrameTime = 0;
-  }
-  uint32_t GetCurrentChar(const vecText &text) const
-  {
-    assert(text.size());
-    if (characterPos < text.size())
-      return text[characterPos];
-    else if (characterPos < text.size() + suffix.size())
-      return suffix[characterPos - text.size()];
-    return text[0];
+    m_widthValid = false;
   }
   float GetPixelsPerFrame();
 
   float pixelPos;
   float pixelSpeed;
   unsigned int waitTime;
-  unsigned int characterPos;
   unsigned int initialWait;
   float initialPos;
-  CStdStringW suffix;
+  vecText suffix;
+  mutable float m_textWidth;
+  mutable float m_totalWidth;
+  mutable bool m_widthValid;
 
   static const int defaultSpeed = 60;
 private:
