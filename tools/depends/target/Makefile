@@ -55,10 +55,10 @@ endif
 ALSA_LIB=
 LINUX_SYSTEM_LIBS=
 ifeq ($(OS),linux)
-  #not for raspberry pi
+  DEPENDS += alsa-lib
+  ALSA_LIB = alsa-lib
   ifneq ($(CPU),arm)
-    DEPENDS += alsa-lib libsdl linux-system-libs
-    ALSA_LIB = alsa-lib
+    DEPENDS += libsdl linux-system-libs
     LINUX_SYSTEM_LIBS = linux-system-libs
   endif
 endif
