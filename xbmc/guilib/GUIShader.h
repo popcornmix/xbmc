@@ -41,6 +41,7 @@ public:
   GLint GetCord1Loc() { return m_hCord1; }
   GLint GetUniColLoc() { return m_hUniCol; }
   GLint GetCoord0MatrixLoc() { return m_hCoord0Matrix; }
+  GLint GetModelLoc() { return m_hModel; }
   bool HardwareClipIsPossible() { return m_clipPossible; }
   GLfloat GetClipXFactor() { return m_clipXFactor; }
   GLfloat GetClipXOffset() { return m_clipXOffset; }

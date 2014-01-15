@@ -91,6 +91,7 @@ public:
   GLint GUIShaderGetCoord1();
   GLint GUIShaderGetUniCol();
   GLint GUIShaderGetCoord0Matrix();
+  GLint GUIShaderGetModel();
 
 protected:
   virtual void SetVSyncImpl(bool enable) = 0;
