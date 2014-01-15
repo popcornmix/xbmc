@@ -343,13 +343,18 @@ void CGUIFontTTFBase::DrawTextInternal(float x, float y, const vecColors &colors
                                               g_graphicsContext.ScaleFinalYCoord(x, y),
                                               g_graphicsContext.ScaleFinalZCoord(x, y));
   }
-  std::vector<SVertex> &vertices = hardwareClipping ?
+  CVertexBuffer unusedVertexBuffer;
+  CVertexBuffer &vertexBuffer = hardwareClipping ?
       m_dynamicCache.Lookup(dynamicPos,
                             colors, text,
                             alignment, maxPixelWidth,
                             scrolling,
                             XbmcThreads::SystemClockMillis(),
                             dirtyCache) :
+      unusedVertexBuffer;
+  std::vector<SVertex> tempVertices;
+  std::vector<SVertex> &vertices = hardwareClipping ?
+      tempVertices :
       m_staticCache.Lookup(staticPos,
                            colors, text,
                            alignment, maxPixelWidth,
@@ -459,10 +464,14 @@ void CGUIFontTTFBase::DrawTextInternal(float x, float y, const vecColors &colors
         cursorX += ch->advance;
     }
     if (hardwareClipping)
-      m_vertexTrans.push_back(CTranslatedVertices(0, 0, 0, &vertices, g_graphicsContext.GetClipRegion()));
+    {
+      CVertexBuffer newVertexBuffer = CreateVertexBuffer(tempVertices);
+      vertexBuffer = newVertexBuffer;
+      m_vertexTrans.push_back(CTranslatedVertices(0, 0, 0, &vertexBuffer, g_graphicsContext.GetClipRegion()));
+    }
   }
   else if (hardwareClipping)
-    m_vertexTrans.push_back(CTranslatedVertices(dynamicPos.m_x, dynamicPos.m_y, dynamicPos.m_z, &vertices, g_graphicsContext.GetClipRegion()));
+    m_vertexTrans.push_back(CTranslatedVertices(dynamicPos.m_x, dynamicPos.m_y, dynamicPos.m_z, &vertexBuffer, g_graphicsContext.GetClipRegion()));
   if (!hardwareClipping)
     /* Append the new vertices (from the cache or otherwise) to the set collected
      * since the first Begin() call */
