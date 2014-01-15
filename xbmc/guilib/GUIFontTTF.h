@@ -64,6 +64,9 @@ struct SVertex
 };
 
 
+#include "GUIFontCache.h"
+
+
 class CGUIFontTTFBase
 {
   friend class CGUIFont;
@@ -164,6 +167,8 @@ protected:
   static int justification_word_weight;
 
   CStdString m_strFileName;
+
+  CGUIFontCache<CGUIFontCacheStaticPosition, CGUIFontCacheStaticValue> m_staticCache;
 
 private:
   virtual bool FirstBegin() = 0;
