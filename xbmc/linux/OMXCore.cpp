@@ -460,7 +460,12 @@ void COMXCoreComponent::FlushInput()
     CLog::Log(LOGERROR, "COMXCoreComponent::FlushInput - Error on component %s omx_err(0x%08x)", 
               m_componentName.c_str(), (int)omx_err);
   }
-  WaitForCommand(OMX_CommandFlush, m_input_port);
+  omx_err = WaitForCommand(OMX_CommandFlush, m_input_port);
+  if(omx_err != OMX_ErrorNone)
+  {
+    CLog::Log(LOGERROR, "COMXCoreComponent::FlushInput - %s WaitForCommand omx_err(0x%08x)",
+              m_componentName.c_str(), (int)omx_err);
+  }
 }
 
 void COMXCoreComponent::FlushOutput()
@@ -477,7 +482,12 @@ void COMXCoreComponent::FlushOutput()
     CLog::Log(LOGERROR, "COMXCoreComponent::FlushOutput - Error on component %s omx_err(0x%08x)", 
               m_componentName.c_str(), (int)omx_err);
   }
-  WaitForCommand(OMX_CommandFlush, m_output_port);
+  omx_err = WaitForCommand(OMX_CommandFlush, m_output_port);
+  if(omx_err != OMX_ErrorNone)
+  {
+    CLog::Log(LOGERROR, "COMXCoreComponent::FlushOutput - %s WaitForCommand omx_err(0x%08x)",
+              m_componentName.c_str(), (int)omx_err);
+  }
 }
 
 // timeout in milliseconds
@@ -1149,7 +1159,12 @@ OMX_STATETYPE COMXCoreComponent::GetState()
 
   OMX_STATETYPE state;
 
-  OMX_GetState(m_handle, &state);
+  OMX_ERRORTYPE omx_err = OMX_GetState(m_handle, &state);
+  if (omx_err != OMX_ErrorNone)
+  {
+    CLog::Log(LOGERROR, "COMXCoreComponent::GetState - %s failed with omx_err(0x%x)\n",
+      m_componentName.c_str(), omx_err);
+  }
   return state;
 }
 
@@ -1307,6 +1322,8 @@ OMX_ERRORTYPE COMXCoreComponent::DisablePort(unsigned int port, bool wait)
 
 OMX_ERRORTYPE COMXCoreComponent::UseEGLImage(OMX_BUFFERHEADERTYPE** ppBufferHdr, OMX_U32 nPortIndex, OMX_PTR pAppPrivate, void* eglImage)
 {
+if (m_callbacks.FillBufferDone == &COMXCoreComponent::DecoderFillBufferDoneCallback)
+{
   OMX_ERRORTYPE omx_err = OMX_ErrorNone;
 
   if(!m_handle)
@@ -1383,8 +1400,21 @@ OMX_ERRORTYPE COMXCoreComponent::UseEGLImage(OMX_BUFFERHEADERTYPE** ppBufferHdr,
 
   return omx_err;
 }
+else
+{
+  OMX_ERRORTYPE omx_err;
+    omx_err = OMX_UseEGLImage(m_handle, ppBufferHdr, nPortIndex, pAppPrivate, eglImage);
+    if(omx_err != OMX_ErrorNone)
+    {
+      CLog::Log(LOGERROR, "%s::%s - %s failed with omx_err(0x%x)\n",
+                CLASSNAME, __func__, m_componentName.c_str(), omx_err);
+      return omx_err;
+    }
+  return omx_err;
+}
+}
 
-bool COMXCoreComponent::Initialize( const std::string &component_name, OMX_INDEXTYPE index)
+bool COMXCoreComponent::Initialize( const std::string &component_name, OMX_INDEXTYPE index, OMX_CALLBACKTYPE *callbacks)
 {
   OMX_ERRORTYPE omx_err;
 
@@ -1418,6 +1448,13 @@ bool COMXCoreComponent::Initialize( const std::string &component_name, OMX_INDEX
   m_callbacks.EventHandler    = &COMXCoreComponent::DecoderEventHandlerCallback;
   m_callbacks.EmptyBufferDone = &COMXCoreComponent::DecoderEmptyBufferDoneCallback;
   m_callbacks.FillBufferDone  = &COMXCoreComponent::DecoderFillBufferDoneCallback;
+
+  if (callbacks && callbacks->EventHandler)
+    m_callbacks.EventHandler    = callbacks->EventHandler;
+  if (callbacks && callbacks->EmptyBufferDone)
+    m_callbacks.EmptyBufferDone = callbacks->EmptyBufferDone;
+  if (callbacks && callbacks->FillBufferDone)
+    m_callbacks.FillBufferDone  = callbacks->FillBufferDone;
 
   // Get video component handle setting up callbacks, component is in loaded state on return.
   if(!m_handle)

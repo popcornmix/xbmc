@@ -1948,9 +1948,24 @@ if test "$host_vendor" = "apple" ; then
   USE_OPENMAX=0
   AC_MSG_NOTICE($openmax_disabled)
 elif test "$target_platform" = "target_raspberry_pi"; then
-  use_openmax="no"
-  USE_OPENMAX=0
-  AC_MSG_NOTICE($openmax_disabled)
+  if test "$use_gles" = "yes" && test "$use_openmax" = "auto"; then
+    use_openmax="yes"
+    USE_OPENMAX=1
+    HAVE_LIBOPENMAX=1
+    AC_DEFINE([HAVE_LIBOPENMAX], [1], [Define to 1 if you have the 'LIBOPENMAX' library.])
+    AC_DEFINE([OMX_SKIP64BIT], [1], [Define to 1 if you have the 'LIBOPENMAX' library.])
+    AC_MSG_NOTICE($openmax_enabled)
+  elif test "$use_gles" = "yes" && test "$use_openmax" = "yes"; then
+    use_openmax="yes"
+    USE_OPENMAX=1
+    HAVE_LIBOPENMAX=1
+    AC_DEFINE([HAVE_LIBOPENMAX], [1], [Define to 1 if you have the 'LIBOPENMAX' library.])
+    AC_MSG_NOTICE($openmax_enabled)
+  else
+    AC_MSG_NOTICE($openmax_disabled)
+    use_openmax=no
+    USE_OPENMAX=0
+  fi
 else
   if test "$use_gles" = "yes" && test "$use_openmax" = "auto"; then
     PKG_CHECK_MODULES([OPENMAX], [libomxil-bellagio],

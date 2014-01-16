@@ -21,12 +21,35 @@
 
 #if defined(HAVE_LIBOPENMAX)
 
-#include "OpenMax.h"
+#include "system_gl.h"
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
 
+#include "linux/OMXCore.h"
+#include "linux/OMXClock.h"
+
+#include "cores/dvdplayer/DVDStreamInfo.h"
+#include "DVDVideoCodec.h"
+#include "threads/Event.h"
+
+#include <queue>
+#include <semaphore.h>
+
+typedef struct omx_demux_packet {
+  OMX_U8 *buff;
+  int size;
+  double dts;
+  double pts;
+} omx_demux_packet;
+
+class COpenMaxVideo;
 // an omx egl video frame
-typedef struct OpenMaxVideoBuffer {
+class COpenMaxVideoBuffer
+{
+public:
+  COpenMaxVideoBuffer(COpenMaxVideo *omv);
+  virtual ~COpenMaxVideoBuffer();
+
   OMX_BUFFERHEADERTYPE *omx_buffer;
   int width;
   int height;
@@ -35,79 +58,86 @@ typedef struct OpenMaxVideoBuffer {
   // used for egl based rendering if active
   EGLImageKHR egl_image;
   GLuint texture_id;
-} OpenMaxVideoBuffer;
+  // reference counting
+  COpenMaxVideoBuffer* Acquire();
+  long                 Release();
+  void                 Sync();
 
-class COpenMaxVideo : public COpenMax
+  COpenMaxVideo *m_omv;
+  long m_refs;
+private:
+};
+
+class COpenMaxVideo
 {
 public:
   COpenMaxVideo();
   virtual ~COpenMaxVideo();
 
   // Required overrides
-  bool Open(CDVDStreamInfo &hints);
-  void Close(void);
-  int  Decode(uint8_t *pData, int iSize, double dts, double pts);
-  void Reset(void);
-  bool GetPicture(DVDVideoPicture *pDvdVideoPicture);
-  void SetDropState(bool bDrop);
+  virtual bool Open(CDVDStreamInfo &hints, CDVDCodecOptions &options);
+  virtual void Dispose(void);
+  virtual int  Decode(uint8_t *pData, int iSize, double dts, double pts);
+  virtual void Reset(void);
+  virtual bool GetPicture(DVDVideoPicture *pDvdVideoPicture);
+  virtual bool ClearPicture(DVDVideoPicture* pDvdVideoPicture);
+  virtual unsigned GetAllowedReferences() { return 2; }
+  virtual void SetDropState(bool bDrop);
+  virtual const char* GetName(void) { return (const char*)m_pFormatName; }
+
+  // OpenMax decoder callback routines.
+  OMX_ERRORTYPE DecoderFillBufferDone(OMX_HANDLETYPE hComponent, OMX_BUFFERHEADERTYPE* pBuffer);
+  void ReleaseOpenMaxBuffer(COpenMaxVideoBuffer *buffer);
+
 protected:
   void QueryCodec(void);
   OMX_ERRORTYPE PrimeFillBuffers(void);
   OMX_ERRORTYPE AllocOMXInputBuffers(void);
-  OMX_ERRORTYPE FreeOMXInputBuffers(bool wait);
-  OMX_ERRORTYPE AllocOMXOutputBuffers(void);
-  OMX_ERRORTYPE FreeOMXOutputBuffers(bool wait);
-  static void CallbackAllocOMXEGLTextures(void*);
+  OMX_ERRORTYPE FreeOMXInputBuffers(void);
+  bool AllocOMXOutputBuffers(void);
+  bool FreeOMXOutputBuffers(void);
+  static bool CallbackAllocOMXEGLTextures(void*);
   OMX_ERRORTYPE AllocOMXOutputEGLTextures(void);
-  static void CallbackFreeOMXEGLTextures(void*);
-  OMX_ERRORTYPE FreeOMXOutputEGLTextures(bool wait);
-
-  // TODO Those should move into the base class. After start actions can be executed by callbacks.
-  OMX_ERRORTYPE StartDecoder(void);
+  static bool CallbackFreeOMXEGLTextures(void*);
+  OMX_ERRORTYPE FreeOMXOutputEGLTextures(void);
   OMX_ERRORTYPE StopDecoder(void);
-
-  // OpenMax decoder callback routines.
-  virtual OMX_ERRORTYPE DecoderEventHandler(OMX_HANDLETYPE hComponent, OMX_PTR pAppData,
-    OMX_EVENTTYPE eEvent, OMX_U32 nData1, OMX_U32 nData2, OMX_PTR pEventData);
-  virtual OMX_ERRORTYPE DecoderEmptyBufferDone(
-    OMX_HANDLETYPE hComponent, OMX_PTR pAppData, OMX_BUFFERHEADERTYPE* pBuffer);
-  virtual OMX_ERRORTYPE DecoderFillBufferDone(
-    OMX_HANDLETYPE hComponent, OMX_PTR pAppData, OMX_BUFFERHEADERTYPE* pBufferHeader);
+  OMX_ERRORTYPE ReturnOpenMaxBuffer(COpenMaxVideoBuffer *buffer);
 
   // EGL Resources
   EGLDisplay        m_egl_display;
   EGLContext        m_egl_context;
 
   // Video format
-  DVDVideoPicture   m_videobuffer;
   bool              m_drop_state;
   int               m_decoded_width;
   int               m_decoded_height;
+  unsigned int      m_egl_buffer_count;
+
+  bool m_port_settings_changed;
+  const char        *m_pFormatName;
 
   std::queue<double> m_dts_queue;
   std::queue<omx_demux_packet> m_demux_queue;
 
-  // OpenMax input buffers (demuxer packets)
-  pthread_mutex_t   m_omx_input_mutex;
-  std::queue<OMX_BUFFERHEADERTYPE*> m_omx_input_avaliable;
-  std::vector<OMX_BUFFERHEADERTYPE*> m_omx_input_buffers;
-  bool              m_omx_input_eos;
-  int               m_omx_input_port;
-  //sem_t             *m_omx_flush_input;
-  CEvent            m_input_consumed_event;
-
   // OpenMax output buffers (video frames)
   pthread_mutex_t   m_omx_output_mutex;
-  std::queue<OpenMaxVideoBuffer*> m_omx_output_busy;
-  std::queue<OpenMaxVideoBuffer*> m_omx_output_ready;
-  std::vector<OpenMaxVideoBuffer*> m_omx_output_buffers;
-  bool              m_omx_output_eos;
-  int               m_omx_output_port;
-  //sem_t             *m_omx_flush_output;
+  std::vector<COpenMaxVideoBuffer*> m_omx_output_busy;
+  std::queue<COpenMaxVideoBuffer*> m_omx_output_ready;
+  std::vector<COpenMaxVideoBuffer*> m_omx_output_buffers;
 
-  bool              m_portChanging;
+  // initialize OpenMax and get decoder component
+  bool Initialize( const CStdString &decoder_name);
 
-  volatile bool     m_videoplayback_done;
+  // Components
+  COMXCoreComponent m_omx_decoder;
+  COMXCoreComponent m_omx_egl_render;
+
+  COMXCoreTunel     m_omx_tunnel;
+  OMX_VIDEO_CODINGTYPE m_codingType;
+
+  bool PortSettingsChanged();
+  bool SendDecoderConfig(uint8_t *extradata, int extrasize);
+  bool NaluFormatStartCodes(enum AVCodecID codec, uint8_t *extradata, int extrasize);
 };
 
 // defined(HAVE_LIBOPENMAX)

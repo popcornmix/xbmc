@@ -39,7 +39,7 @@ class CRenderCapture;
 class CBaseTexture;
 namespace Shaders { class BaseYUV2RGBShader; }
 namespace Shaders { class BaseVideoFilterShader; }
-class COpenMaxVideo;
+class COpenMaxVideoBuffer;
 class CDVDVideoCodecStageFright;
 class CDVDMediaCodecInfo;
 typedef std::vector<int>     Features;
@@ -161,7 +161,7 @@ public:
   virtual std::vector<ERenderFormat> SupportedFormats() { return m_formats; }
 
 #ifdef HAVE_LIBOPENMAX
-  virtual void         AddProcessor(COpenMax* openMax, DVDVideoPicture *picture, int index);
+  virtual void         AddProcessor(COpenMaxVideoBuffer *openMaxVideoBuffer, int index);
 #endif
 #ifdef HAVE_VIDEOTOOLBOXDECODER
   virtual void         AddProcessor(struct __CVBuffer *cvBufferRef, int index);
@@ -275,7 +275,7 @@ protected:
     unsigned  flipindex; /* used to decide if this has been uploaded */
 
 #ifdef HAVE_LIBOPENMAX
-    OpenMaxVideoBuffer *openMaxBuffer;
+    COpenMaxVideoBuffer *openMaxBuffer;
 #endif
 #ifdef HAVE_VIDEOTOOLBOXDECODER
     struct __CVBuffer *cvBufferRef;

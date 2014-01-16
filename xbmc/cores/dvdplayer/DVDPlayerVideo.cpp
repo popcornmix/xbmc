@@ -325,6 +325,9 @@ void CDVDPlayerVideo::Process()
 
   while (!m_bStop)
   {
+    DemuxPacket staticPacket = {};
+    DemuxPacket* pPacket = NULL;
+    bool bPacketDrop = false;
     int iQueueTimeOut = (int)(m_stalled ? frametime / 4 : frametime * 10) / 1000;
     int iPriority = (m_speed == DVD_PLAYSPEED_PAUSE && m_started) ? 1 : 0;
 
@@ -361,8 +364,10 @@ void CDVDPlayerVideo::Process()
         OutputPicture(&picture, pts);
         pts+= frametime;
       }
-
-      continue;
+      pPacket = &staticPacket;
+      bPacketDrop = false;
+      goto submit_empty_packet;
+      //continue;
     }
 
     if (pMsg->IsType(CDVDMsg::GENERAL_SYNCHRONIZE))
@@ -489,9 +494,12 @@ void CDVDPlayerVideo::Process()
 
     if (pMsg->IsType(CDVDMsg::DEMUXER_PACKET))
     {
-      DemuxPacket* pPacket = ((CDVDMsgDemuxerPacket*)pMsg)->GetPacket();
-      bool bPacketDrop     = ((CDVDMsgDemuxerPacket*)pMsg)->GetPacketDrop();
-
+      pPacket = ((CDVDMsgDemuxerPacket*)pMsg)->GetPacket();
+      bPacketDrop     = ((CDVDMsgDemuxerPacket*)pMsg)->GetPacketDrop();
+    }
+submit_empty_packet:
+    if (ret == MSGQ_TIMEOUT || pMsg->IsType(CDVDMsg::DEMUXER_PACKET))
+    {
       if (m_stalled)
       {
         CLog::Log(LOGINFO, "CDVDPlayerVideo - Stillframe left, switching to normal playback");
@@ -749,7 +757,8 @@ void CDVDPlayerVideo::Process()
     }
 
     // all data is used by the decoder, we can safely free it now
-    pMsg->Release();
+    if (ret != MSGQ_TIMEOUT)
+        pMsg->Release();
   }
 
   // we need to let decoder release any picture retained resources.

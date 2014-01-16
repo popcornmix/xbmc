@@ -910,7 +910,7 @@ int CXBMCRenderManager::AddVideoPicture(DVDVideoPicture& pic)
 #endif
 #ifdef HAVE_LIBOPENMAX
   else if(pic.format == RENDER_FMT_OMXEGL)
-    m_pRenderer->AddProcessor(pic.openMax, &pic, index);
+    m_pRenderer->AddProcessor(pic.openMaxBuffer, index);
 #endif
 #ifdef TARGET_DARWIN
   else if(pic.format == RENDER_FMT_CVBREF)
