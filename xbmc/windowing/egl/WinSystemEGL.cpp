@@ -29,6 +29,7 @@
 #include "settings/AdvancedSettings.h"
 #include "settings/Settings.h"
 #include "settings/DisplaySettings.h"
+#include "guilib/GUIFontTTFGL.h"
 #include "utils/log.h"
 #include "EGLWrapper.h"
 #include "EGLQuirks.h"
@@ -193,6 +194,9 @@ bool CWinSystemEGL::CreateWindow(RESOLUTION_INFO &res)
     return false;
   }
 
+#if HAS_GLES
+  bool newContext = false;
+#endif
   if (m_context == EGL_NO_CONTEXT)
   {
     if (!m_egl->CreateContext(m_display, m_config, contextAttrs, &m_context))
@@ -200,6 +204,9 @@ bool CWinSystemEGL::CreateWindow(RESOLUTION_INFO &res)
       CLog::Log(LOGERROR, "%s: Could not create context",__FUNCTION__);
       return false;
     }
+#if HAS_GLES
+    newContext = true;
+#endif
   }
 
   if (!m_egl->BindContext(m_display, m_surface, m_context))
@@ -207,6 +214,11 @@ bool CWinSystemEGL::CreateWindow(RESOLUTION_INFO &res)
     CLog::Log(LOGERROR, "%s: Could not bind to context",__FUNCTION__);
     return false;
   }
+
+#if HAS_GLES
+  if (newContext)
+    CGUIFontTTFGL::CreateStaticVertexBuffers();
+#endif
 
   // for the non-trivial dirty region modes, we need the EGL buffer to be preserved across updates
   if (g_advancedSettings.m_guiAlgorithmDirtyRegions == DIRTYREGION_SOLVER_COST_REDUCTION ||
@@ -229,7 +241,12 @@ bool CWinSystemEGL::DestroyWindowSystem()
   DestroyWindow();
 
   if (m_context != EGL_NO_CONTEXT)
+  {
+#if HAS_GLES
+    CGUIFontTTFGL::DestroyStaticVertexBuffers();
+#endif
     m_egl->DestroyContext(m_display, m_context);
+  }
   m_context = EGL_NO_CONTEXT;
 
   if (m_display != EGL_NO_DISPLAY)
