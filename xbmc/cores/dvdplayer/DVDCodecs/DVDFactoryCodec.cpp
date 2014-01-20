@@ -193,14 +193,15 @@ CDVDVideoCodec* CDVDFactoryCodec::CreateVideoCodec(CDVDStreamInfo &hint, unsigne
 #endif
 
   CLog::Log(LOGDEBUG, "CDVDFactoryCodec: compiled in hardware support: %s", hwSupport.c_str());
-#if defined(HAS_LIBAMCODEC)
-  // amcodec can handle dvd playback.
-  if (!CSettings::Get().GetBool("videoplayer.useamcodec"))
+#if defined(HAS_LIBAMCODEC) || defined(HAVE_LIBOPENMAX)
+  // amcodec and libopenmax can handle dvd playback.
+  if (!CSettings::Get().GetBool("videoplayer.useamcodec") && !CSettings::Get().GetBool("videoplayer.useomx"))
 #endif
   {
     // dvd's have weird still-frames in it, which is not fully supported in ffmpeg
     if(hint.stills && (hint.codec == AV_CODEC_ID_MPEG2VIDEO || hint.codec == AV_CODEC_ID_MPEG1VIDEO))
     {
+      CLog::Log(LOGINFO, "LibMpeg2 Video Decoder...");
       if( (pCodec = OpenCodec(new CDVDVideoCodecLibMpeg2(), hint, options)) ) return pCodec;
     }
   }
@@ -282,6 +283,7 @@ CDVDVideoCodec* CDVDFactoryCodec::CreateVideoCodec(CDVDStreamInfo &hint, unsigne
         hint.codec == AV_CODEC_ID_VP6 || hint.codec == AV_CODEC_ID_VP6F || hint.codec == AV_CODEC_ID_VP6A || hint.codec == AV_CODEC_ID_VP8 ||
         hint.codec == AV_CODEC_ID_THEORA || hint.codec == AV_CODEC_ID_MJPEG || hint.codec == AV_CODEC_ID_MJPEGB || hint.codec == AV_CODEC_ID_VC1 || hint.codec == AV_CODEC_ID_WMV3)
     {
+      CLog::Log(LOGINFO, "OpenMax Video Decoder...");
       if ( (pCodec = OpenCodec(new CDVDVideoCodecOpenMax(), hint, options)) ) return pCodec;
     }
   }
@@ -321,6 +323,7 @@ CDVDVideoCodec* CDVDFactoryCodec::CreateVideoCodec(CDVDStreamInfo &hint, unsigne
 
   CStdString value = StringUtils::Format("%d", surfaces);
   options.m_keys.push_back(CDVDCodecOption("surfaces", value));
+  CLog::Log(LOGINFO, "FFMpeg Software Video Decoder...");
   if( (pCodec = OpenCodec(new CDVDVideoCodecFFmpeg(), hint, options)) ) return pCodec;
 
   return NULL;
