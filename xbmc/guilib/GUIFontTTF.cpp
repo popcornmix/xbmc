@@ -132,7 +132,7 @@ private:
 XBMC_GLOBAL_REF(CFreeTypeLibrary, g_freeTypeLibrary); // our freetype library
 #define g_freeTypeLibrary XBMC_GLOBAL_USE(CFreeTypeLibrary)
 
-CGUIFontTTFBase::CGUIFontTTFBase(const CStdString& strFileName) : m_staticCache(*this)
+CGUIFontTTFBase::CGUIFontTTFBase(const CStdString& strFileName) : m_staticCache(*this), m_dynamicCache(*this)
 {
   m_texture = NULL;
   m_char = NULL;
@@ -332,13 +332,28 @@ void CGUIFontTTFBase::DrawTextInternal(float x, float y, const vecColors &colors
   Begin();
 
   bool dirtyCache;
+  bool hardwareClipping = g_Windowing.ScissorsCanEffectClipping();
   CGUIFontCacheStaticPosition staticPos(x, y);
-  std::vector<SVertex> &vertices = m_staticCache.Lookup(staticPos,
-                                                        colors, text,
-                                                        alignment, maxPixelWidth,
-                                                        scrolling,
-                                                        XbmcThreads::SystemClockMillis(),
-                                                        dirtyCache);
+  CGUIFontCacheDynamicPosition dynamicPos;
+  if (hardwareClipping)
+  {
+    dynamicPos = CGUIFontCacheDynamicPosition(g_graphicsContext.ScaleFinalXCoord(x, y),
+                                              g_graphicsContext.ScaleFinalYCoord(x, y),
+                                              g_graphicsContext.ScaleFinalZCoord(x, y));
+  }
+  std::vector<SVertex> &vertices = hardwareClipping ?
+      m_dynamicCache.Lookup(dynamicPos,
+                            colors, text,
+                            alignment, maxPixelWidth,
+                            scrolling,
+                            XbmcThreads::SystemClockMillis(),
+                            dirtyCache) :
+      m_staticCache.Lookup(staticPos,
+                           colors, text,
+                           alignment, maxPixelWidth,
+                           scrolling,
+                           XbmcThreads::SystemClockMillis(),
+                           dirtyCache);
   if (dirtyCache)
   {
     // save the origin, which is scaled separately
@@ -441,10 +456,28 @@ void CGUIFontTTFBase::DrawTextInternal(float x, float y, const vecColors &colors
       else
         cursorX += ch->advance;
     }
+    if (hardwareClipping)
+      /* Append the new vertices (which we have just constructed in the cache)
+       * to the set collected since the first Begin() call */
+      m_vertex.insert(m_vertex.end(), vertices.begin(), vertices.end());
   }
-  /* Append the new vertices (from the cache or otherwise) to the set collected
-   * since the first Begin() call */
-  m_vertex.insert(m_vertex.end(), vertices.begin(), vertices.end());
+  else if (hardwareClipping)
+  {
+    /* Apply the translation offset to the vertices from the cache after
+     * appending them to the set collected since the first Begin() call */
+    m_vertex.insert(m_vertex.end(), vertices.begin(), vertices.end());
+    SVertex *v;
+    for (v = &*m_vertex.end() - vertices.size(); v != &*m_vertex.end(); v++)
+    {
+      v->x += dynamicPos.m_x;
+      v->y += dynamicPos.m_y;
+      v->z += dynamicPos.m_z;
+    }
+  }
+  if (!hardwareClipping)
+    /* Append the new vertices (from the cache or otherwise) to the set collected
+     * since the first Begin() call */
+    m_vertex.insert(m_vertex.end(), vertices.begin(), vertices.end());
 
   End();
 }

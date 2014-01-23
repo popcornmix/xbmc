@@ -44,6 +44,7 @@
 using namespace boost::multi_index;
 
 #define FONT_CACHE_TIME_LIMIT (1000)
+#define FONT_CACHE_DIST_LIMIT (0.01)
 
 template<class Position, class Value> class CGUIFontCache;
 class CGUIFontTTFBase;
@@ -197,6 +198,7 @@ struct CGUIFontCacheStaticPosition
   float m_x;
   float m_y;
   CGUIFontCacheStaticPosition(float x, float y) : m_x(x), m_y(y) {}
+  void UpdateWithOffsets(const CGUIFontCacheStaticPosition &cached, bool scrolling) {}
 };
 
 typedef std::vector<SVertex> CGUIFontCacheStaticValue;
@@ -212,6 +214,47 @@ inline float MatrixHashContribution(const CGUIFontCacheKey<CGUIFontCacheStaticPo
 {
   /* Ensure horizontally translated versions end up in different buckets */
   return a.m_matrix.m[0][3];
+}
+
+struct CGUIFontCacheDynamicPosition
+{
+  float m_x;
+  float m_y;
+  float m_z;
+  CGUIFontCacheDynamicPosition() {}
+  CGUIFontCacheDynamicPosition(float x, float y, float z) : m_x(x), m_y(y), m_z(z) {}
+  void UpdateWithOffsets(const CGUIFontCacheDynamicPosition &cached, bool scrolling)
+  {
+    if (scrolling)
+      m_x = m_x - cached.m_x;
+    else
+      m_x = floorf(m_x - cached.m_x + FONT_CACHE_DIST_LIMIT);
+    m_y = floorf(m_y - cached.m_y + FONT_CACHE_DIST_LIMIT);
+    m_z = floorf(m_z - cached.m_z + FONT_CACHE_DIST_LIMIT);
+  }
+};
+
+typedef std::vector<SVertex> CGUIFontCacheDynamicValue;
+
+inline bool Match(const CGUIFontCacheDynamicPosition &a, const TransformMatrix &a_m,
+                  const CGUIFontCacheDynamicPosition &b, const TransformMatrix &b_m,
+                  bool scrolling)
+{
+  float diffX = a.m_x - b.m_x + FONT_CACHE_DIST_LIMIT;
+  float diffY = a.m_y - b.m_y + FONT_CACHE_DIST_LIMIT;
+  float diffZ = a.m_z - b.m_z + FONT_CACHE_DIST_LIMIT;
+  return (scrolling || diffX - floorf(diffX) < 2 * FONT_CACHE_DIST_LIMIT) &&
+          diffY - floorf(diffY) < 2 * FONT_CACHE_DIST_LIMIT &&
+          diffZ - floorf(diffZ) < 2 * FONT_CACHE_DIST_LIMIT &&
+          a_m.m[0][0] == b_m.m[0][0] &&
+          a_m.m[1][1] == b_m.m[1][1] &&
+          a_m.m[2][2] == b_m.m[2][2];
+          // We already know the first 3 columns of both matrices are diagonal, so no need to check the other elements
+}
+
+inline float MatrixHashContribution(const CGUIFontCacheKey<CGUIFontCacheDynamicPosition> &a)
+{
+  return 0;
 }
 
 #endif
