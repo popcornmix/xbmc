@@ -41,6 +41,11 @@ public:
   GLint GetCord1Loc() { return m_hCord1; }
   GLint GetUniColLoc() { return m_hUniCol; }
   GLint GetCoord0MatrixLoc() { return m_hCoord0Matrix; }
+  bool HardwareClipIsPossible() { return m_clipPossible; }
+  GLfloat GetClipXFactor() { return m_clipXFactor; }
+  GLfloat GetClipXOffset() { return m_clipXOffset; }
+  GLfloat GetClipYFactor() { return m_clipYFactor; }
+  GLfloat GetClipYOffset() { return m_clipYOffset; }
 
 protected:
   GLint m_hTex0;
@@ -56,6 +61,12 @@ protected:
 
   GLfloat *m_proj;
   GLfloat *m_model;
+
+  bool m_clipPossible;
+  GLfloat m_clipXFactor;
+  GLfloat m_clipXOffset;
+  GLfloat m_clipYFactor;
+  GLfloat m_clipYOffset;
 };
 
 #endif // GUI_SHADER_H
