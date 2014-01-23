@@ -169,6 +169,7 @@ protected:
   CStdString m_strFileName;
 
   CGUIFontCache<CGUIFontCacheStaticPosition, CGUIFontCacheStaticValue> m_staticCache;
+  CGUIFontCache<CGUIFontCacheDynamicPosition, CGUIFontCacheDynamicValue> m_dynamicCache;
 
 private:
   virtual bool FirstBegin() = 0;
