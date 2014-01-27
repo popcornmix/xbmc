@@ -215,6 +215,7 @@ void CGUIFontTTFBase::Clear()
     g_freeTypeLibrary.ReleaseStroker(m_stroker);
   m_stroker = NULL;
 
+  m_vertexTrans.clear();
   m_vertex.clear();
 }
 
@@ -310,6 +311,7 @@ void CGUIFontTTFBase::Begin()
 {
   if (m_nestedBeginCount == 0 && m_texture != NULL && FirstBegin())
   {
+    m_vertexTrans.clear();
     m_vertex.clear();
   }
   // Keep track of the nested begin/end calls.
@@ -457,23 +459,10 @@ void CGUIFontTTFBase::DrawTextInternal(float x, float y, const vecColors &colors
         cursorX += ch->advance;
     }
     if (hardwareClipping)
-      /* Append the new vertices (which we have just constructed in the cache)
-       * to the set collected since the first Begin() call */
-      m_vertex.insert(m_vertex.end(), vertices.begin(), vertices.end());
+      m_vertexTrans.push_back(CTranslatedVertices(0, 0, 0, &vertices));
   }
   else if (hardwareClipping)
-  {
-    /* Apply the translation offset to the vertices from the cache after
-     * appending them to the set collected since the first Begin() call */
-    m_vertex.insert(m_vertex.end(), vertices.begin(), vertices.end());
-    SVertex *v;
-    for (v = &*m_vertex.end() - vertices.size(); v != &*m_vertex.end(); v++)
-    {
-      v->x += dynamicPos.m_x;
-      v->y += dynamicPos.m_y;
-      v->z += dynamicPos.m_z;
-    }
-  }
+    m_vertexTrans.push_back(CTranslatedVertices(dynamicPos.m_x, dynamicPos.m_y, dynamicPos.m_z, &vertices));
   if (!hardwareClipping)
     /* Append the new vertices (from the cache or otherwise) to the set collected
      * since the first Begin() call */

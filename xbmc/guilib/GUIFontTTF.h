@@ -61,6 +61,14 @@ struct SVertex
   unsigned char r, g, b, a;
 #endif
   float u, v;
+  struct SVertex Offset(float translate[3]) const
+  {
+    SVertex out = *this;
+    out.x += translate[0];
+    out.y += translate[1];
+    out.z += translate[2];
+    return out;
+  }
 };
 
 
@@ -160,6 +168,15 @@ protected:
   bool m_bTextureLoaded;
   unsigned int m_nTexture;
 
+  struct CTranslatedVertices
+  {
+    float translateX;
+    float translateY;
+    float translateZ;
+    const std::vector<SVertex> *vertexBuffer;
+    CTranslatedVertices(float translateX, float translateY, float translateZ, const std::vector<SVertex> *vertexBuffer) : translateX(translateX), translateY(translateY), translateZ(translateZ), vertexBuffer(vertexBuffer) {}
+  };
+  std::vector<CTranslatedVertices> m_vertexTrans;
   std::vector<SVertex> m_vertex;
 
   float    m_textureScaleX;
