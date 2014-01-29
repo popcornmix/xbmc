@@ -459,10 +459,10 @@ void CGUIFontTTFBase::DrawTextInternal(float x, float y, const vecColors &colors
         cursorX += ch->advance;
     }
     if (hardwareClipping)
-      m_vertexTrans.push_back(CTranslatedVertices(0, 0, 0, &vertices));
+      m_vertexTrans.push_back(CTranslatedVertices(0, 0, 0, &vertices, g_graphicsContext.GetClipRegion()));
   }
   else if (hardwareClipping)
-    m_vertexTrans.push_back(CTranslatedVertices(dynamicPos.m_x, dynamicPos.m_y, dynamicPos.m_z, &vertices));
+    m_vertexTrans.push_back(CTranslatedVertices(dynamicPos.m_x, dynamicPos.m_y, dynamicPos.m_z, &vertices, g_graphicsContext.GetClipRegion()));
   if (!hardwareClipping)
     /* Append the new vertices (from the cache or otherwise) to the set collected
      * since the first Begin() call */

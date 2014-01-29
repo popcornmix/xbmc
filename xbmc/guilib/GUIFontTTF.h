@@ -27,6 +27,8 @@
  *
  */
 
+#include "Geometry.h"
+
 // forward definition
 class CBaseTexture;
 
@@ -166,7 +168,8 @@ protected:
     float translateY;
     float translateZ;
     const std::vector<SVertex> *vertexBuffer;
-    CTranslatedVertices(float translateX, float translateY, float translateZ, const std::vector<SVertex> *vertexBuffer) : translateX(translateX), translateY(translateY), translateZ(translateZ), vertexBuffer(vertexBuffer) {}
+    CRect clip;
+    CTranslatedVertices(float translateX, float translateY, float translateZ, const std::vector<SVertex> *vertexBuffer, const CRect &clip) : translateX(translateX), translateY(translateY), translateZ(translateZ), vertexBuffer(vertexBuffer), clip(clip) {}
   };
   std::vector<CTranslatedVertices> m_vertexTrans;
   std::vector<SVertex> m_vertex;
