@@ -43,6 +43,7 @@
 #include <IL/OMX_Image.h>
 
 #include "cores/omxplayer/OMXImage.h"
+#include "linux/RBP.h"
 
 #define DTS_QUEUE
 
@@ -155,7 +156,7 @@ COpenMaxVideo::~COpenMaxVideo()
 bool COpenMaxVideo::Open(CDVDStreamInfo &hints, CDVDCodecOptions &options, OpenMaxVideoPtr myself)
 {
   #if defined(OMX_DEBUG_VERBOSE)
-  CLog::Log(LOGDEBUG, "%s::%s", CLASSNAME, __func__);
+  CLog::Log(LOGDEBUG, "%s::%s useomx:%d software:%d", CLASSNAME, __func__, CSettings::Get().GetBool("videoplayer.useomx"), hints.software);
   #endif
 
   // we always qualify even if DVDFactoryCodec does this too.
@@ -230,6 +231,13 @@ bool COpenMaxVideo::Open(CDVDStreamInfo &hints, CDVDCodecOptions &options, OpenM
       CLog::Log(LOGERROR, "%s::%s : Video codec unknown: %x", CLASSNAME, __func__, hints.codec);
       return false;
     break;
+  }
+
+  if ( (m_codingType == OMX_VIDEO_CodingMPEG2 && !g_RBP.GetCodecMpg2() ) ||
+       (m_codingType == OMX_VIDEO_CodingWMV   && !g_RBP.GetCodecWvc1() ) )
+  {
+    CLog::Log(LOGWARNING, "%s::%s Codec %s is not supported\n", CLASSNAME, __func__, m_pFormatName);
+    return false;
   }
 
   // initialize OpenMAX.
