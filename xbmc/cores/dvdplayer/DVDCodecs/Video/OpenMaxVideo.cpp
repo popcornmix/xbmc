@@ -126,6 +126,7 @@ COpenMaxVideo::COpenMaxVideo()
   m_egl_buffer_count = 0;
 
   m_port_settings_changed = false;
+  m_finished = false;
   m_pFormatName = "omx-xxxx";
 }
 
@@ -134,6 +135,7 @@ COpenMaxVideo::~COpenMaxVideo()
   #if defined(OMX_DEBUG_VERBOSE)
   CLog::Log(LOGDEBUG, "%s::%s %p", CLASSNAME, __func__, this);
   #endif
+  assert(m_finished);
   if (m_omx_decoder.IsInitialized())
   {
     if (m_omx_tunnel.IsInitialized())
@@ -149,7 +151,7 @@ COpenMaxVideo::~COpenMaxVideo()
   pthread_mutex_destroy(&m_omx_output_mutex);
 }
 
-bool COpenMaxVideo::Open(CDVDStreamInfo &hints, CDVDCodecOptions &options)
+bool COpenMaxVideo::Open(CDVDStreamInfo &hints, CDVDCodecOptions &options, OpenMaxVideoPtr myself)
 {
   #if defined(OMX_DEBUG_VERBOSE)
   CLog::Log(LOGDEBUG, "%s::%s", CLASSNAME, __func__);
@@ -161,6 +163,7 @@ bool COpenMaxVideo::Open(CDVDStreamInfo &hints, CDVDCodecOptions &options)
 
   OMX_ERRORTYPE omx_err = OMX_ErrorNone;
 
+  m_myself = myself;
   m_decoded_width  = hints.width;
   m_decoded_height = hints.height;
 
@@ -331,6 +334,15 @@ void COpenMaxVideo::Dispose()
   #if defined(OMX_DEBUG_VERBOSE)
   CLog::Log(LOGDEBUG, "%s::%s", CLASSNAME, __func__);
   #endif
+  // we are happy to exit, but let last shared pointer being deleted trigger the destructor
+  bool done = false;
+  pthread_mutex_lock(&m_omx_output_mutex);
+  if (m_omx_output_busy.empty())
+    done = true;
+  m_finished = true;
+  pthread_mutex_unlock(&m_omx_output_mutex);
+  if (done)
+    m_myself.reset();
 }
 
 void COpenMaxVideo::SetDropState(bool bDrop)
@@ -752,6 +764,13 @@ void COpenMaxVideo::ReleaseOpenMaxBuffer(COpenMaxVideoBuffer *buffer)
   m_omx_output_busy.erase(std::remove(m_omx_output_busy.begin(), m_omx_output_busy.end(), buffer), m_omx_output_busy.end());
   pthread_mutex_unlock(&m_omx_output_mutex);
   ReturnOpenMaxBuffer(buffer);
+  bool done = false;
+  pthread_mutex_lock(&m_omx_output_mutex);
+  if (m_finished && m_omx_output_busy.empty())
+    done = true;
+  pthread_mutex_unlock(&m_omx_output_mutex);
+  if (done)
+    m_myself.reset();
 }
 
 bool COpenMaxVideo::GetPicture(DVDVideoPicture* pDvdVideoPicture)

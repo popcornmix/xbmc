@@ -28,7 +28,6 @@
 #include "DVDClock.h"
 #include "DVDStreamInfo.h"
 #include "DVDVideoCodecOpenMax.h"
-#include "OpenMaxVideo.h"
 #include "settings/Settings.h"
 #include "utils/log.h"
 
@@ -36,8 +35,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////
 CDVDVideoCodecOpenMax::CDVDVideoCodecOpenMax()
+ : m_omx_decoder( new COpenMaxVideo )
 {
-  m_omx_decoder = NULL;
   CLog::Log(LOGDEBUG, "%s::%s %p\n", CLASSNAME, __func__, this);
 }
 
@@ -49,8 +48,7 @@ CDVDVideoCodecOpenMax::~CDVDVideoCodecOpenMax()
 
 bool CDVDVideoCodecOpenMax::Open(CDVDStreamInfo &hints, CDVDCodecOptions &options)
 {
-  m_omx_decoder = new COpenMaxVideo;
-  return m_omx_decoder->Open(hints, options);
+  return m_omx_decoder->Open(hints, options, m_omx_decoder);
 }
 
 const char* CDVDVideoCodecOpenMax::GetName(void)
@@ -60,12 +58,7 @@ const char* CDVDVideoCodecOpenMax::GetName(void)
 
 void CDVDVideoCodecOpenMax::Dispose()
 {
-  if (m_omx_decoder)
-  {
-    m_omx_decoder->Dispose();
-    delete m_omx_decoder;
-    m_omx_decoder = NULL;
-  }
+  m_omx_decoder->Dispose();
 }
 
 void CDVDVideoCodecOpenMax::SetDropState(bool bDrop)

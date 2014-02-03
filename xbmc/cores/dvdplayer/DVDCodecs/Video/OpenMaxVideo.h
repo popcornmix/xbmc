@@ -43,6 +43,7 @@ typedef struct omx_demux_packet {
 } omx_demux_packet;
 
 class COpenMaxVideo;
+typedef boost::shared_ptr<COpenMaxVideo> OpenMaxVideoPtr;
 // an omx egl video frame
 class COpenMaxVideoBuffer
 {
@@ -75,7 +76,7 @@ public:
   virtual ~COpenMaxVideo();
 
   // Required overrides
-  virtual bool Open(CDVDStreamInfo &hints, CDVDCodecOptions &options);
+  virtual bool Open(CDVDStreamInfo &hints, CDVDCodecOptions &options, OpenMaxVideoPtr myself);
   virtual void Dispose(void);
   virtual int  Decode(uint8_t *pData, int iSize, double dts, double pts);
   virtual void Reset(void);
@@ -112,9 +113,11 @@ protected:
   int               m_decoded_width;
   int               m_decoded_height;
   unsigned int      m_egl_buffer_count;
+  bool              m_finished;
 
   bool m_port_settings_changed;
   const char        *m_pFormatName;
+  OpenMaxVideoPtr   m_myself;
 
   std::queue<double> m_dts_queue;
   std::queue<omx_demux_packet> m_demux_queue;

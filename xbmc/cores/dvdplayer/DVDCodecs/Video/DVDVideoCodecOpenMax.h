@@ -22,6 +22,7 @@
 #if defined(HAVE_LIBOPENMAX)
 
 #include "DVDVideoCodec.h"
+#include "OpenMaxVideo.h"
 
 class COpenMaxVideo;
 class CDVDVideoCodecOpenMax : public CDVDVideoCodec
@@ -42,7 +43,7 @@ public:
   virtual const char* GetName(void);
   
 protected:
-  COpenMaxVideo     *m_omx_decoder;
+  OpenMaxVideoPtr m_omx_decoder;
 };
 
 #endif
