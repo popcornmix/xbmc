@@ -805,6 +805,12 @@ void CLinuxRendererGLES::LoadShaders(int field)
     m_textureCreate = &CLinuxRendererGLES::CreateNV12Texture;
     m_textureDelete = &CLinuxRendererGLES::DeleteNV12Texture;
   }
+  else if (m_format == RENDER_FMT_OMXEGL)
+  {
+    m_textureUpload = &CLinuxRendererGLES::UploadOMXEGLTexture;
+    m_textureCreate = &CLinuxRendererGLES::CreateOMXEGLTexture;
+    m_textureDelete = &CLinuxRendererGLES::DeleteOMXEGLTexture;
+  }
   else
   {
     // default to YV12 texture handlers
@@ -2484,6 +2490,33 @@ bool CLinuxRendererGLES::CreateSurfaceTexture(int index)
     plane.texheight = NP2(plane.texheight);
   }
 
+  return true;
+}
+
+//********************************************************************************************************
+// SurfaceTexture creation, deletion, copying + clearing
+//********************************************************************************************************
+void CLinuxRendererGLES::UploadOMXEGLTexture(int index)
+{
+#ifdef HAVE_LIBOPENMAX
+  YUVBUFFER &buf = m_buffers[index];
+  if (buf.openMaxBuffer)
+  {
+    //buf.openMaxBuffer->Sync();
+  }
+#endif
+}
+void CLinuxRendererGLES::DeleteOMXEGLTexture(int index)
+{
+#ifdef HAVE_LIBOPENMAX
+  YUVBUFFER &buf = m_buffers[index];
+  if (buf.openMaxBuffer)
+    SAFE_RELEASE(buf.openMaxBuffer);
+#endif
+}
+bool CLinuxRendererGLES::CreateOMXEGLTexture(int index)
+{
+  DeleteOMXEGLTexture(index);
   return true;
 }
 

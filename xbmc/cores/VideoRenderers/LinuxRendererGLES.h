@@ -212,6 +212,10 @@ protected:
   void DeleteSurfaceTexture(int index);
   bool CreateSurfaceTexture(int index);
 
+  void UploadOMXEGLTexture(int index);
+  void DeleteOMXEGLTexture(int index);
+  bool CreateOMXEGLTexture(int index);
+
   void CalculateTextureSourceRects(int source, int num_planes);
 
   // renderers
