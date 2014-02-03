@@ -63,6 +63,7 @@ COpenMaxVideoBuffer::COpenMaxVideoBuffer(COpenMaxVideo *omv)
   index = 0;
   egl_image = 0;
   texture_id = 0;
+  m_aspect_ratio = 0.0f;
 }
 
 COpenMaxVideoBuffer::~COpenMaxVideoBuffer()
@@ -166,6 +167,8 @@ bool COpenMaxVideo::Open(CDVDStreamInfo &hints, CDVDCodecOptions &options, OpenM
   m_myself = myself;
   m_decoded_width  = hints.width;
   m_decoded_height = hints.height;
+  m_forced_aspect_ratio = hints.forced_aspect;
+  m_aspect_ratio = hints.aspect;
 
   m_egl_display = g_Windowing.GetEGLDisplay();
   m_egl_context = g_Windowing.GetEGLContext();
@@ -435,6 +438,9 @@ bool COpenMaxVideo::PortSettingsChanged()
     CLog::Log(LOGERROR, "%s::%s - error m_omx_decoder.GetParameter(OMX_IndexParamBrcmPixelAspectRatio) omx_err(0x%08x)", CLASSNAME, __func__, omx_err);
     return false;
   }
+  if (!m_forced_aspect_ratio && pixel_aspect.nX && pixel_aspect.nY)
+    m_aspect_ratio = (float)pixel_aspect.nX * port_def.format.video.nFrameWidth /
+      ((float)pixel_aspect.nY * port_def.format.video.nFrameHeight);
 
   if (m_port_settings_changed)
   {
@@ -800,6 +806,16 @@ bool COpenMaxVideo::GetPicture(DVDVideoPicture* pDvdVideoPicture)
     pDvdVideoPicture->iDisplayWidth  = m_decoded_width;
     pDvdVideoPicture->iDisplayHeight = m_decoded_height;
 
+    if (buffer->m_aspect_ratio > 0.0 && !m_forced_aspect_ratio)
+    {
+      pDvdVideoPicture->iDisplayWidth  = ((int)lrint(pDvdVideoPicture->iHeight * buffer->m_aspect_ratio)) & -3;
+      if (pDvdVideoPicture->iDisplayWidth > pDvdVideoPicture->iWidth)
+      {
+        pDvdVideoPicture->iDisplayWidth  = pDvdVideoPicture->iWidth;
+        pDvdVideoPicture->iDisplayHeight = ((int)lrint(pDvdVideoPicture->iWidth / buffer->m_aspect_ratio)) & -3;
+      }
+    }
+
 #ifdef DTS_QUEUE
     if (!m_dts_queue.empty())
     {
@@ -853,6 +869,7 @@ OMX_ERRORTYPE COpenMaxVideo::DecoderFillBufferDone(
 
   // queue output omx buffer to ready list.
   pthread_mutex_lock(&m_omx_output_mutex);
+  buffer->m_aspect_ratio = m_aspect_ratio;
   m_omx_output_ready.push(buffer);
   pthread_mutex_unlock(&m_omx_output_mutex);
 

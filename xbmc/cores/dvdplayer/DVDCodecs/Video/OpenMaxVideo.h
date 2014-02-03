@@ -54,6 +54,7 @@ public:
   OMX_BUFFERHEADERTYPE *omx_buffer;
   int width;
   int height;
+  float m_aspect_ratio;
   int index;
 
   // used for egl based rendering if active
@@ -114,6 +115,8 @@ protected:
   int               m_decoded_height;
   unsigned int      m_egl_buffer_count;
   bool              m_finished;
+  float             m_aspect_ratio;
+  bool              m_forced_aspect_ratio;
 
   bool m_port_settings_changed;
   const char        *m_pFormatName;
