@@ -61,26 +61,26 @@ Value &CGUIFontCache<Position, Value>::Lookup(Position &pos,
                                        alignment, maxPixelWidth,
                                        scrolling, g_graphicsContext.GetGUIMatrix(),
                                        g_graphicsContext.GetGUIScaleX(), g_graphicsContext.GetGUIScaleY());
-  EntryHashIterator i = m_list.get<Hash>().find(key);
-  if (i == m_list.get<Hash>().end())
+  EntryHashIterator i = m_list.template get<Hash>().find(key);
+  if (i == m_list.template get<Hash>().end())
   {
     /* Cache miss */
-    EntryAgeIterator oldest = m_list.get<Age>().begin();
-    if (!m_list.get<Age>().empty() && nowMillis - oldest->m_lastUsedMillis > FONT_CACHE_TIME_LIMIT)
+    EntryAgeIterator oldest = m_list.template get<Age>().begin();
+    if (!m_list.template get<Age>().empty() && nowMillis - oldest->m_lastUsedMillis > FONT_CACHE_TIME_LIMIT)
     {
       /* The oldest existing entry is old enough to expire and reuse */
-      m_list.get<Hash>().modify(m_list.project<Hash>(oldest), typename CGUIFontCacheEntry<Position, Value>::Reassign(key, nowMillis));
-      m_list.get<Age>().relocate(m_list.get<Age>().end(), oldest);
+      m_list.template get<Hash>().modify(m_list.template project<Hash>(oldest), typename CGUIFontCacheEntry<Position, Value>::Reassign(key, nowMillis));
+      m_list.template get<Age>().relocate(m_list.template get<Age>().end(), oldest);
     }
     else
     {
       /* We need a new entry instead */
       /* Yes, this causes the creation an destruction of a temporary entry, but
        * this code ought to only be used infrequently, when the cache needs to grow */
-      m_list.get<Age>().push_back(CGUIFontCacheEntry<Position, Value>(*this, key, nowMillis));
+      m_list.template get<Age>().push_back(CGUIFontCacheEntry<Position, Value>(*this, key, nowMillis));
     }
     dirtyCache = true;
-    return (--m_list.get<Age>().end())->m_value;
+    return (--m_list.template get<Age>().end())->m_value;
   }
   else
   {
@@ -90,7 +90,7 @@ Value &CGUIFontCache<Position, Value>::Lookup(Position &pos,
     pos.UpdateWithOffsets(i->m_key.m_pos, scrolling);
     /* Update time in entry and move to the back of the list */
     i->m_lastUsedMillis = nowMillis;
-    m_list.get<Age>().relocate(m_list.get<Age>().end(), m_list.project<Age>(i));
+    m_list.template get<Age>().relocate(m_list.template get<Age>().end(), m_list.template project<Age>(i));
     dirtyCache = false;
     return i->m_value;
   }
@@ -99,7 +99,7 @@ Value &CGUIFontCache<Position, Value>::Lookup(Position &pos,
 template<class Position, class Value>
 void CGUIFontCache<Position, Value>::Flush()
 {
-  m_list.get<Age>().clear();
+  m_list.template get<Age>().clear();
 }
 
 template void CGUIFontCacheEntry<CGUIFontCacheStaticPosition, CGUIFontCacheStaticValue>::Reassign::operator()(CGUIFontCacheEntry<CGUIFontCacheStaticPosition, CGUIFontCacheStaticValue> &entry);
