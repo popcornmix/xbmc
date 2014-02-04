@@ -31,6 +31,7 @@
 #include "cores/dvdplayer/DVDStreamInfo.h"
 #include "DVDVideoCodec.h"
 #include "threads/Event.h"
+#include "xbmc/settings/VideoSettings.h"
 
 #include <queue>
 #include <semaphore.h>
@@ -136,10 +137,16 @@ protected:
 
   // Components
   COMXCoreComponent m_omx_decoder;
+  COMXCoreComponent m_omx_image_fx;
   COMXCoreComponent m_omx_egl_render;
 
-  COMXCoreTunel     m_omx_tunnel;
+  COMXCoreTunel     m_omx_tunnel_decoder;
+  COMXCoreTunel     m_omx_tunnel_image_fx;
   OMX_VIDEO_CODINGTYPE m_codingType;
+
+  bool              m_deinterlace;
+  EDEINTERLACEMODE  m_deinterlace_request;
+  bool              m_deinterlace_second_field;
 
   bool PortSettingsChanged();
   bool SendDecoderConfig(uint8_t *extradata, int extrasize);

@@ -33,6 +33,7 @@
 #include "utils/log.h"
 #include "utils/TimeUtils.h"
 #include "settings/Settings.h"
+#include "settings/MediaSettings.h"
 #include "ApplicationMessenger.h"
 #include "Application.h"
 #include "threads/Atomics.h"
@@ -130,6 +131,10 @@ COpenMaxVideo::COpenMaxVideo()
   m_port_settings_changed = false;
   m_finished = false;
   m_pFormatName = "omx-xxxx";
+
+  m_deinterlace = false;
+  m_deinterlace_request = VS_DEINTERLACEMODE_OFF;
+  m_deinterlace_second_field = false;
 }
 
 COpenMaxVideo::~COpenMaxVideo()
@@ -140,13 +145,17 @@ COpenMaxVideo::~COpenMaxVideo()
   assert(m_finished);
   if (m_omx_decoder.IsInitialized())
   {
-    if (m_omx_tunnel.IsInitialized())
-      m_omx_tunnel.Deestablish();
+    if (m_omx_tunnel_decoder.IsInitialized())
+      m_omx_tunnel_decoder.Deestablish();
+    if (m_omx_tunnel_image_fx.IsInitialized())
+      m_omx_tunnel_image_fx.Deestablish();
 
     StopDecoder();
 
     if (m_omx_egl_render.IsInitialized())
       m_omx_egl_render.Deinitialize();
+    if (m_omx_image_fx.IsInitialized())
+      m_omx_image_fx.Deinitialize();
     if (m_omx_decoder.IsInitialized())
       m_omx_decoder.Deinitialize();
   }
@@ -164,6 +173,8 @@ bool COpenMaxVideo::Open(CDVDStreamInfo &hints, CDVDCodecOptions &options, OpenM
     return false;
 
   OMX_ERRORTYPE omx_err = OMX_ErrorNone;
+
+  m_deinterlace_request = CMediaSettings::Get().GetCurrentVideoSettings().m_DeinterlaceMode;
 
   m_myself = myself;
   m_decoded_width  = hints.width;
@@ -467,6 +478,49 @@ bool COpenMaxVideo::PortSettingsChanged()
     return false;
   }
 
+  OMX_CONFIG_INTERLACETYPE interlace;
+  OMX_INIT_STRUCTURE(interlace);
+  interlace.nPortIndex = m_omx_decoder.GetOutputPort();
+  omx_err = m_omx_decoder.GetConfig(OMX_IndexConfigCommonInterlace, &interlace);
+
+  if (m_deinterlace_request == VS_DEINTERLACEMODE_FORCE)
+    m_deinterlace = true;
+  else if (m_deinterlace_request == VS_DEINTERLACEMODE_OFF)
+    m_deinterlace = false;
+  else
+    m_deinterlace = interlace.eMode != OMX_InterlaceProgressive;
+
+  CLog::Log(LOGDEBUG, "%s::%s - %dx%d@%.2f interlace:%d deinterlace:%d",
+  CLASSNAME, __func__, port_def.format.video.nFrameWidth, port_def.format.video.nFrameHeight, port_def.format.video.xFramerate / (float) (1 << 16),
+      interlace.eMode, m_deinterlace);
+
+  if (m_deinterlace)
+  {
+    if (!m_omx_image_fx.Initialize("OMX.broadcom.image_fx", OMX_IndexParamImageInit))
+    {
+      CLog::Log(LOGERROR, "%s::%s error m_omx_image_fx.Initialize", CLASSNAME, __func__);
+      return false;
+    }
+  }
+
+  if (m_deinterlace)
+  {
+    OMX_CONFIG_IMAGEFILTERPARAMSTYPE image_filter;
+    OMX_INIT_STRUCTURE(image_filter);
+
+    image_filter.nPortIndex = m_omx_image_fx.GetOutputPort();
+    image_filter.nNumParams = 1;
+    image_filter.nParams[0] = 3;
+    image_filter.eImageFilter = OMX_ImageFilterDeInterlaceAdvanced;
+
+    omx_err = m_omx_image_fx.SetConfig(OMX_IndexConfigCommonImageFilterParameters, &image_filter);
+    if (omx_err != OMX_ErrorNone)
+    {
+      CLog::Log(LOGERROR, "%s::%s - OMX_IndexConfigCommonImageFilterParameters omx_err(0x%08x)", CLASSNAME, __func__, omx_err);
+      return false;
+    }
+  }
+
   OMX_CALLBACKTYPE callbacks = { NULL, NULL, DecoderFillBufferDoneCallback };
   if (!m_omx_egl_render.Initialize("OMX.broadcom.egl_render", OMX_IndexParamVideoInit, &callbacks))
   {
@@ -487,17 +541,38 @@ bool COpenMaxVideo::PortSettingsChanged()
 
   m_omx_egl_render.ResetEos();
 
-  CLog::Log(LOGDEBUG, "%s::%s - %dx%d@%.2f interlace:%d deinterlace:%d", CLASSNAME, __func__,
-      port_def.format.video.nFrameWidth, port_def.format.video.nFrameHeight,
-      port_def.format.video.xFramerate / (float)(1<<16), 0,0);
+  if (m_deinterlace)
+  {
+    m_omx_tunnel_decoder.Initialize(&m_omx_decoder, m_omx_decoder.GetOutputPort(), &m_omx_image_fx, m_omx_image_fx.GetInputPort());
+    m_omx_tunnel_image_fx.Initialize(&m_omx_image_fx, m_omx_image_fx.GetOutputPort(), &m_omx_egl_render, m_omx_egl_render.GetInputPort());
+  }
+  else
+  {
+    m_omx_tunnel_decoder.Initialize(&m_omx_decoder, m_omx_decoder.GetOutputPort(), &m_omx_egl_render, m_omx_egl_render.GetInputPort());
+  }
 
-  m_omx_tunnel.Initialize(&m_omx_decoder, m_omx_decoder.GetOutputPort(), &m_omx_egl_render, m_omx_egl_render.GetInputPort());
-
-  omx_err = m_omx_tunnel.Establish();
+  omx_err = m_omx_tunnel_decoder.Establish();
   if (omx_err != OMX_ErrorNone)
   {
-    CLog::Log(LOGERROR, "%s::%s - m_omx_tunnel.Establish omx_err(0x%08x)", CLASSNAME, __func__, omx_err);
+    CLog::Log(LOGERROR, "%s::%s - m_omx_tunnel_decoder.Establish omx_err(0x%08x)", CLASSNAME, __func__, omx_err);
     return false;
+  }
+
+  if (m_deinterlace)
+  {
+    omx_err = m_omx_tunnel_image_fx.Establish();
+    if (omx_err != OMX_ErrorNone)
+    {
+      CLog::Log(LOGERROR, "%s::%s - m_omx_tunnel_image_fx.Establish omx_err(0x%08x)", CLASSNAME, __func__, omx_err);
+      return false;
+    }
+    omx_err = m_omx_image_fx.SetStateForComponent(OMX_StateExecuting);
+    if (omx_err != OMX_ErrorNone)
+    {
+      CLog::Log(LOGERROR, "%s::%s - m_omx_image_fx.SetStateForComponent omx_err(0x%08x)",
+      CLASSNAME, __func__, omx_err);
+      return false;
+    }
   }
 
   // Obtain the information about the output port.
@@ -724,8 +799,12 @@ void COpenMaxVideo::Reset(void)
   #if defined(OMX_DEBUG_VERBOSE)
   CLog::Log(LOGDEBUG, "%s::%s", CLASSNAME, __func__);
   #endif
-  m_omx_egl_render.FlushAll();
-  m_omx_decoder.FlushAll();
+  if (m_omx_egl_render.IsInitialized())
+    m_omx_egl_render.FlushAll();
+  if (m_omx_image_fx.IsInitialized())
+    m_omx_image_fx.FlushAll();
+  if (m_omx_decoder.IsInitialized())
+    m_omx_decoder.FlushAll();
   // blow all ready video frames
   while (!m_omx_output_ready.empty())
   {
@@ -825,11 +904,14 @@ bool COpenMaxVideo::GetPicture(DVDVideoPicture* pDvdVideoPicture)
     }
 
 #ifdef DTS_QUEUE
-    if (!m_dts_queue.empty())
+    if (!m_deinterlace_second_field)
     {
+      assert(!m_dts_queue.empty());
       pDvdVideoPicture->dts = m_dts_queue.front();
       m_dts_queue.pop();
     }
+    if (m_deinterlace)
+      m_deinterlace_second_field = !m_deinterlace_second_field;
 #endif
     // nTimeStamp is in microseconds
     double ts = FromOMXTime(buffer->omx_buffer->nTimeStamp);
