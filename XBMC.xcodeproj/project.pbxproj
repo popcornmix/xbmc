@@ -168,6 +168,9 @@
 		1D638128161E211E003603ED /* PeripheralImon.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1D638126161E211E003603ED /* PeripheralImon.cpp */; };
 		1DAFDB7C16DFDCA7007F8C68 /* PeripheralBusCEC.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1DAFDB7A16DFDCA7007F8C68 /* PeripheralBusCEC.cpp */; };
 		1DE0443515828F4B005DDB4D /* Exception.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1DE0443315828F4B005DDB4D /* Exception.cpp */; };
+		2FD7EC5F18A14FE50047F86C /* GUIFontCache.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 2FD7EC5D18A14FE50047F86C /* GUIFontCache.cpp */; };
+		2FD7EC6018A14FE50047F86C /* GUIFontCache.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 2FD7EC5D18A14FE50047F86C /* GUIFontCache.cpp */; };
+		2FD7EC6118A14FE50047F86C /* GUIFontCache.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 2FD7EC5D18A14FE50047F86C /* GUIFontCache.cpp */; };
 		32C631281423A90F00F18420 /* JpegIO.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 32C631261423A90F00F18420 /* JpegIO.cpp */; };
 		36A9443D15821E2800727135 /* DatabaseUtils.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 36A9443B15821E2800727135 /* DatabaseUtils.cpp */; };
 		36A9444115821E7C00727135 /* SortUtils.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 36A9443F15821E7C00727135 /* SortUtils.cpp */; };
@@ -3534,6 +3537,8 @@
 		1DAFDB7B16DFDCA7007F8C68 /* PeripheralBusCEC.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PeripheralBusCEC.h; sourceTree = "<group>"; };
 		1DE0443315828F4B005DDB4D /* Exception.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = Exception.cpp; path = commons/Exception.cpp; sourceTree = "<group>"; };
 		1DE0443415828F4B005DDB4D /* Exception.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = Exception.h; path = commons/Exception.h; sourceTree = "<group>"; };
+		2FD7EC5D18A14FE50047F86C /* GUIFontCache.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = GUIFontCache.cpp; sourceTree = "<group>"; };
+		2FD7EC5E18A14FE50047F86C /* GUIFontCache.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = GUIFontCache.h; sourceTree = "<group>"; };
 		32C631261423A90F00F18420 /* JpegIO.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = JpegIO.cpp; sourceTree = "<group>"; };
 		32C631271423A90F00F18420 /* JpegIO.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = JpegIO.h; sourceTree = "<group>"; };
 		36A9443B15821E2800727135 /* DatabaseUtils.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = DatabaseUtils.cpp; sourceTree = "<group>"; };
@@ -5874,6 +5879,8 @@
 				18B7C76A1294222E009E7A26 /* GUIFixedListContainer.cpp */,
 				18B7C7101294222D009E7A26 /* GUIFixedListContainer.h */,
 				18B7C76B1294222E009E7A26 /* GUIFont.cpp */,
+				2FD7EC5D18A14FE50047F86C /* GUIFontCache.cpp */,
+				2FD7EC5E18A14FE50047F86C /* GUIFontCache.h */,
 				18B7C7111294222D009E7A26 /* GUIFont.h */,
 				18B7C76C1294222E009E7A26 /* GUIFontManager.cpp */,
 				18B7C7121294222D009E7A26 /* GUIFontManager.h */,
@@ -10773,6 +10780,7 @@
 				7C8AE850189DE3CD00C33786 /* CoreAudioHardware.cpp in Sources */,
 				7C8AE851189DE3CD00C33786 /* CoreAudioStream.cpp in Sources */,
 				7C8AE854189DE47F00C33786 /* CoreAudioHelpers.cpp in Sources */,
+				2FD7EC5F18A14FE50047F86C /* GUIFontCache.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -11821,6 +11829,7 @@
 				F5CC234818150277006B5E91 /* AESinkNULL.cpp in Sources */,
 				F5CC238918150768006B5E91 /* AESinkProfiler.cpp in Sources */,
 				DF374B2518AC2BA20076B514 /* CoreAudioHelpers.cpp in Sources */,
+				2FD7EC6118A14FE50047F86C /* GUIFontCache.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -12871,6 +12880,7 @@
 				F5CC234718150277006B5E91 /* AESinkNULL.cpp in Sources */,
 				F5CC238818150768006B5E91 /* AESinkProfiler.cpp in Sources */,
 				DF374B2418AC2BA20076B514 /* CoreAudioHelpers.cpp in Sources */,
+				2FD7EC6018A14FE50047F86C /* GUIFontCache.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
