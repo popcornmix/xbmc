@@ -26,7 +26,7 @@
 #include "GUIShader.h"
 #include "MatrixGLES.h"
 #include "utils/log.h"
-#include "windowing/egl/WinSystemEGL.h"
+#include "windowing/WindowingFactory.h"
 #include "guilib/GraphicContext.h"
 
 CGUIShader::CGUIShader( const char *shader ) : CGLSLShaderProgram("guishader_vert.glsl", shader)
