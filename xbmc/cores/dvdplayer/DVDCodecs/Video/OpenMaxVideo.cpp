@@ -55,6 +55,9 @@
 
 #define CLASSNAME "COpenMaxVideo"
 
+#define OMX_BUFFERFLAG_PTS_INVALID (1<<28)
+#define OMX_BUFFERFLAG_DROPPED     (1<<29)
+
 COpenMaxVideoBuffer::COpenMaxVideoBuffer(COpenMaxVideo *omv)
     : m_omv(omv), m_refs(0)
 {
@@ -120,7 +123,9 @@ void COpenMaxVideoBuffer::Sync()
 
 COpenMaxVideo::COpenMaxVideo()
 {
+  #if defined(OMX_DEBUG_VERBOSE)
   CLog::Log(LOGDEBUG, "%s::%s %p", CLASSNAME, __func__, this);
+  #endif
   pthread_mutex_init(&m_omx_output_mutex, NULL);
 
   m_drop_state = false;
@@ -135,6 +140,7 @@ COpenMaxVideo::COpenMaxVideo()
   m_deinterlace = false;
   m_deinterlace_request = VS_DEINTERLACEMODE_OFF;
   m_deinterlace_second_field = false;
+  m_startframe = false;
 }
 
 COpenMaxVideo::~COpenMaxVideo()
@@ -182,8 +188,6 @@ bool COpenMaxVideo::Open(CDVDStreamInfo &hints, CDVDCodecOptions &options, OpenM
   m_forced_aspect_ratio = hints.forced_aspect;
   m_aspect_ratio = hints.aspect;
 
-  m_egl_display = g_Windowing.GetEGLDisplay();
-  m_egl_context = g_Windowing.GetEGLContext();
   m_egl_buffer_count = 4;
 
   m_codingType = OMX_VIDEO_CodingUnused;
@@ -347,6 +351,7 @@ bool COpenMaxVideo::Open(CDVDStreamInfo &hints, CDVDCodecOptions &options, OpenM
     return false;
 
   m_drop_state = false;
+  m_startframe = false;
 
   return true;
 }
@@ -375,6 +380,25 @@ void COpenMaxVideo::SetDropState(bool bDrop)
       CLASSNAME, __func__, bDrop);
 #endif
   m_drop_state = bDrop;
+  if (m_drop_state)
+  {
+    while (1)
+    {
+      COpenMaxVideoBuffer *buffer = NULL;
+      pthread_mutex_lock(&m_omx_output_mutex);
+      // fetch a output buffer and pop it off the ready list
+      if (!m_omx_output_ready.empty())
+      {
+        buffer = m_omx_output_ready.front();
+        m_omx_output_ready.pop();
+      }
+      pthread_mutex_unlock(&m_omx_output_mutex);
+      if (buffer)
+        ReturnOpenMaxBuffer(buffer);
+      else
+        break;
+    }
+  }
 }
 
 bool COpenMaxVideo::SendDecoderConfig(uint8_t *extradata, int extrasize)
@@ -713,10 +737,13 @@ int COpenMaxVideo::Decode(uint8_t* pData, int iSize, double dts, double pts)
 
       if (demuxer_bytes == 0)
         omx_buffer->nFlags |= OMX_BUFFERFLAG_ENDOFFRAME;
-      if (pts == DVD_NOPTS_VALUE)
+      // openmax doesn't like an unknown timestamp as first frame
+      if (pts == DVD_NOPTS_VALUE && m_startframe)
         omx_buffer->nFlags |= OMX_BUFFERFLAG_TIME_UNKNOWN;
+      if (pts == DVD_NOPTS_VALUE) // hijack an omx flag to indicate there wasn't a real timestamp - it will be returned with the picture (but otherwise ignored)
+        omx_buffer->nFlags |= OMX_BUFFERFLAG_PTS_INVALID;
       if (m_drop_state) // hijack an omx flag to signal this frame to be dropped - it will be returned with the picture (but otherwise ignored)
-        omx_buffer->nFlags |= OMX_BUFFERFLAG_DATACORRUPT;
+        omx_buffer->nFlags |= OMX_BUFFERFLAG_DECODEONLY | OMX_BUFFERFLAG_DROPPED;
 
 #if defined(OMX_DEBUG_VERBOSE)
       CLog::Log(LOGDEBUG, "%s::%s - %-6d dts:%.3f pts:%.3f flags:%x",
@@ -731,10 +758,14 @@ int COpenMaxVideo::Decode(uint8_t* pData, int iSize, double dts, double pts)
       }
       if (demuxer_bytes == 0)
       {
+        m_startframe = true;
 #ifdef DTS_QUEUE
-        // only push if we are successful with feeding OMX_EmptyThisBuffer
-        m_dts_queue.push(dts);
-        assert(m_dts_queue.size() < 32);
+        if (!m_drop_state)
+        {
+          // only push if we are successful with feeding OMX_EmptyThisBuffer
+          m_dts_queue.push(dts);
+          assert(m_dts_queue.size() < 32);
+        }
 #endif
         if (buffer_to_free)
         {
@@ -806,15 +837,8 @@ void COpenMaxVideo::Reset(void)
   if (m_omx_decoder.IsInitialized())
     m_omx_decoder.FlushAll();
   // blow all ready video frames
-  while (!m_omx_output_ready.empty())
-  {
-    pthread_mutex_lock(&m_omx_output_mutex);
-    COpenMaxVideoBuffer *pic = m_omx_output_ready.front();
-    m_omx_output_ready.pop();
-    pthread_mutex_unlock(&m_omx_output_mutex);
-    // return the omx buffer back to OpenMax to fill.
-    ReturnOpenMaxBuffer(pic);
-  }
+  SetDropState(true);
+  SetDropState(false);
 #ifdef DTS_QUEUE
   while (!m_dts_queue.empty())
     m_dts_queue.pop();
@@ -822,6 +846,7 @@ void COpenMaxVideo::Reset(void)
 
   while (!m_demux_queue.empty())
     m_demux_queue.pop();
+  m_startframe = false;
 }
 
 
@@ -914,17 +939,17 @@ bool COpenMaxVideo::GetPicture(DVDVideoPicture* pDvdVideoPicture)
       m_deinterlace_second_field = !m_deinterlace_second_field;
 #endif
     // nTimeStamp is in microseconds
-    double ts = FromOMXTime(buffer->omx_buffer->nTimeStamp);
-    pDvdVideoPicture->pts = (ts == 0) ? DVD_NOPTS_VALUE : ts;
+    pDvdVideoPicture->pts = FromOMXTime(buffer->omx_buffer->nTimeStamp);
     pDvdVideoPicture->openMaxBuffer->Acquire();
     pDvdVideoPicture->iFlags  = DVP_FLAG_ALLOCATED;
-    if (buffer->omx_buffer->nFlags & OMX_BUFFERFLAG_DATACORRUPT)
-      pDvdVideoPicture->iFlags |= DVP_FLAG_DROPPED;
+    if (buffer->omx_buffer->nFlags & OMX_BUFFERFLAG_PTS_INVALID)
+      pDvdVideoPicture->pts = DVD_NOPTS_VALUE;
 #if defined(OMX_DEBUG_VERBOSE)
     CLog::Log(LOGINFO, "%s::%s dts:%.3f pts:%.3f flags:%x:%x openMaxBuffer:%p omx_buffer:%p egl_image:%p texture_id:%x", CLASSNAME, __func__,
         pDvdVideoPicture->dts == DVD_NOPTS_VALUE ? 0.0 : pDvdVideoPicture->dts*1e-6, pDvdVideoPicture->pts == DVD_NOPTS_VALUE ? 0.0 : pDvdVideoPicture->pts*1e-6,
         pDvdVideoPicture->iFlags, buffer->omx_buffer->nFlags, pDvdVideoPicture->openMaxBuffer, pDvdVideoPicture->openMaxBuffer->omx_buffer, pDvdVideoPicture->openMaxBuffer->egl_image, pDvdVideoPicture->openMaxBuffer->texture_id);
 #endif
+    assert(!(buffer->omx_buffer->nFlags & (OMX_BUFFERFLAG_DECODEONLY | OMX_BUFFERFLAG_DROPPED)));
   }
   else
   {
@@ -953,10 +978,11 @@ OMX_ERRORTYPE COpenMaxVideo::DecoderFillBufferDone(
   COpenMaxVideoBuffer *buffer = (COpenMaxVideoBuffer*)pBuffer->pAppPrivate;
 
   #if defined(OMX_DEBUG_VERBOSE)
-  CLog::Log(LOGDEBUG, "%s::%s - %p (%p,%p) buffer_size(%u), pts:%.3f",
-    CLASSNAME, __func__, buffer, pBuffer, buffer->omx_buffer, pBuffer->nFilledLen, (double)FromOMXTime(buffer->omx_buffer->nTimeStamp)*1e-6);
+  CLog::Log(LOGDEBUG, "%s::%s - %p (%p,%p) buffer_size(%u), pts:%.3f flags:%x",
+    CLASSNAME, __func__, buffer, pBuffer, buffer->omx_buffer, pBuffer->nFilledLen, (double)FromOMXTime(buffer->omx_buffer->nTimeStamp)*1e-6, buffer->omx_buffer->nFlags);
   #endif
 
+  assert(!(buffer->omx_buffer->nFlags & (OMX_BUFFERFLAG_DECODEONLY | OMX_BUFFERFLAG_DROPPED)));
   // queue output omx buffer to ready list.
   pthread_mutex_lock(&m_omx_output_mutex);
   buffer->m_aspect_ratio = m_aspect_ratio;
@@ -1000,41 +1026,60 @@ OMX_ERRORTYPE COpenMaxVideo::FreeOMXInputBuffers(void)
   return(omx_err);
 }
 
-bool COpenMaxVideo::CallbackAllocOMXEGLTextures(void *userdata)
+bool COpenMaxVideo::CallbackAllocOMXEGLTextures(EGLDisplay egl_display, EGLContext egl_context, void *userdata)
 {
   COpenMaxVideo *omx = static_cast<COpenMaxVideo*>(userdata);
-  return omx->AllocOMXOutputEGLTextures() == OMX_ErrorNone;
+  return omx->AllocOMXOutputEGLTextures(egl_display, egl_context) == OMX_ErrorNone;
 }
 
-bool COpenMaxVideo::CallbackFreeOMXEGLTextures(void *userdata)
+bool COpenMaxVideo::CallbackFreeOMXEGLTextures(EGLDisplay egl_display, EGLContext egl_context, void *userdata)
 {
   COpenMaxVideo *omx = static_cast<COpenMaxVideo*>(userdata);
-  return omx->FreeOMXOutputEGLTextures() == OMX_ErrorNone;
+  return omx->FreeOMXOutputEGLTextures(egl_display, egl_context) == OMX_ErrorNone;
 }
 
 bool COpenMaxVideo::AllocOMXOutputBuffers(void)
 {
-  return g_OMXImage.SendMessage(CallbackAllocOMXEGLTextures, (void *)this);
+  pthread_mutex_lock(&m_omx_output_mutex);
+  for (size_t i = 0; i < m_egl_buffer_count; i++)
+  {
+    COpenMaxVideoBuffer *egl_buffer = new COpenMaxVideoBuffer(this);
+    egl_buffer->width  = m_decoded_width;
+    egl_buffer->height = m_decoded_height;
+    egl_buffer->index = i;
+    m_omx_output_buffers.push_back(egl_buffer);
+  }
+  bool ret = g_OMXImage.SendMessage(CallbackAllocOMXEGLTextures, (void *)this);
+  pthread_mutex_unlock(&m_omx_output_mutex);
+  return ret;
 }
 
 bool COpenMaxVideo::FreeOMXOutputBuffers(void)
 {
-  return g_OMXImage.SendMessage(CallbackFreeOMXEGLTextures, (void *)this);
+  pthread_mutex_lock(&m_omx_output_mutex);
+  bool ret = g_OMXImage.SendMessage(CallbackFreeOMXEGLTextures, (void *)this);
+
+  for (size_t i = 0; i < m_omx_output_buffers.size(); i++)
+  {
+    COpenMaxVideoBuffer *egl_buffer = m_omx_output_buffers[i];
+    delete egl_buffer;
+  }
+
+  m_omx_output_buffers.clear();
+  pthread_mutex_unlock(&m_omx_output_mutex);
+  return ret;
 }
 
-OMX_ERRORTYPE COpenMaxVideo::AllocOMXOutputEGLTextures(void)
+OMX_ERRORTYPE COpenMaxVideo::AllocOMXOutputEGLTextures(EGLDisplay egl_display, EGLContext egl_context)
 {
   OMX_ERRORTYPE omx_err = OMX_ErrorNone;
   EGLint attrib = EGL_NONE;
-  COpenMaxVideoBuffer *egl_buffer;
 
   glActiveTexture(GL_TEXTURE0);
 
   for (size_t i = 0; i < m_egl_buffer_count; i++)
   {
-    egl_buffer = new COpenMaxVideoBuffer(this);
-    egl_buffer->width  = m_decoded_width;
-    egl_buffer->height = m_decoded_height;
+    COpenMaxVideoBuffer *egl_buffer = m_omx_output_buffers[i];
 
     glGenTextures(1, &egl_buffer->texture_id);
     glBindTexture(GL_TEXTURE_2D, egl_buffer->texture_id);
@@ -1057,8 +1102,8 @@ OMX_ERRORTYPE COpenMaxVideo::AllocOMXOutputEGLTextures(void)
 
     // create EGLImage from texture
     egl_buffer->egl_image = eglCreateImageKHR(
-      m_egl_display,
-      m_egl_context,
+      egl_display,
+      egl_context,
       EGL_GL_TEXTURE_2D_KHR,
       (EGLClientBuffer)(egl_buffer->texture_id),
       &attrib);
@@ -1067,7 +1112,6 @@ OMX_ERRORTYPE COpenMaxVideo::AllocOMXOutputEGLTextures(void)
       CLog::Log(LOGERROR, "%s::%s - ERROR creating EglImage", CLASSNAME, __func__);
       return(OMX_ErrorUndefined);
     }
-    egl_buffer->index = i;
 
     // tell decoder output port that it will be using EGLImage
     omx_err = m_omx_egl_render.UseEGLImage(
@@ -1078,7 +1122,6 @@ OMX_ERRORTYPE COpenMaxVideo::AllocOMXOutputEGLTextures(void)
         CLASSNAME, __func__, omx_err);
       return(omx_err);
     }
-    m_omx_output_buffers.push_back(egl_buffer);
 
     CLog::Log(LOGDEBUG, "%s::%s - Texture %p Width %d Height %d",
       CLASSNAME, __func__, egl_buffer->egl_image, egl_buffer->width, egl_buffer->height);
@@ -1086,26 +1129,22 @@ OMX_ERRORTYPE COpenMaxVideo::AllocOMXOutputEGLTextures(void)
   return omx_err;
 }
 
-OMX_ERRORTYPE COpenMaxVideo::FreeOMXOutputEGLTextures(void)
+OMX_ERRORTYPE COpenMaxVideo::FreeOMXOutputEGLTextures(EGLDisplay egl_display, EGLContext egl_context)
 {
   OMX_ERRORTYPE omx_err = OMX_ErrorNone;
-  COpenMaxVideoBuffer *egl_buffer;
 
   for (size_t i = 0; i < m_omx_output_buffers.size(); i++)
   {
-    egl_buffer = m_omx_output_buffers[i];
+    COpenMaxVideoBuffer *egl_buffer = m_omx_output_buffers[i];
     // tell decoder output port to stop using the EGLImage
     omx_err = m_omx_egl_render.FreeOutputBuffer(egl_buffer->omx_buffer);
     if (omx_err != OMX_ErrorNone)
       CLog::Log(LOGERROR, "%s::%s m_omx_egl_render.FreeOutputBuffer(%p) omx_err(0x%08x)", CLASSNAME, __func__, egl_buffer->omx_buffer, omx_err);
     // destroy egl_image
-    eglDestroyImageKHR(m_egl_display, egl_buffer->egl_image);
+    eglDestroyImageKHR(egl_display, egl_buffer->egl_image);
     // free texture
     glDeleteTextures(1, &egl_buffer->texture_id);
-    delete egl_buffer;
   }
-  m_omx_output_buffers.clear();
-
   return omx_err;
 }
 

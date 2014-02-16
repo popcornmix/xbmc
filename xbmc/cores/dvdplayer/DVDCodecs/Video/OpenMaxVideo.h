@@ -99,16 +99,12 @@ protected:
   OMX_ERRORTYPE FreeOMXInputBuffers(void);
   bool AllocOMXOutputBuffers(void);
   bool FreeOMXOutputBuffers(void);
-  static bool CallbackAllocOMXEGLTextures(void*);
-  OMX_ERRORTYPE AllocOMXOutputEGLTextures(void);
-  static bool CallbackFreeOMXEGLTextures(void*);
-  OMX_ERRORTYPE FreeOMXOutputEGLTextures(void);
+  static bool CallbackAllocOMXEGLTextures(EGLDisplay egl_display, EGLContext egl_context, void*);
+  OMX_ERRORTYPE AllocOMXOutputEGLTextures(EGLDisplay egl_display, EGLContext egl_context);
+  static bool CallbackFreeOMXEGLTextures(EGLDisplay egl_display, EGLContext egl_context, void*);
+  OMX_ERRORTYPE FreeOMXOutputEGLTextures(EGLDisplay egl_display, EGLContext egl_context);
   OMX_ERRORTYPE StopDecoder(void);
   OMX_ERRORTYPE ReturnOpenMaxBuffer(COpenMaxVideoBuffer *buffer);
-
-  // EGL Resources
-  EGLDisplay        m_egl_display;
-  EGLContext        m_egl_context;
 
   // Video format
   bool              m_drop_state;
@@ -147,6 +143,8 @@ protected:
   bool              m_deinterlace;
   EDEINTERLACEMODE  m_deinterlace_request;
   bool              m_deinterlace_second_field;
+
+  bool              m_startframe;
 
   bool PortSettingsChanged();
   bool SendDecoderConfig(uint8_t *extradata, int extrasize);
