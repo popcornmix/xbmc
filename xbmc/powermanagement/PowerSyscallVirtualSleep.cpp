@@ -62,14 +62,14 @@ bool CPowerSyscallVirtualSleep::ProcessAction(const CAction& action)
 
   // device is in virtual sleep, only one of the power keys will
   // wake it up again.
-  if (action.GetID() == ACTION_BUILT_IN_FUNCTION)
+  //if (action.GetID() == ACTION_BUILT_IN_FUNCTION)
   {
     CStdString name = action.GetName();
     StringUtils::ToLower(name);
-    if(name.Equals("xbmc.suspend()") ||
+    /*if(name.Equals("system.suspend") ||
        name.Equals("shutdown") ||
        name.Equals("suspend")  ||
-       name.Equals("hibernate"))
+       name.Equals("hibernate"))*/
     {
       if(VirtualWake())
       {
