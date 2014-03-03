@@ -33,6 +33,11 @@ bool CPowerSyscallVirtualSleep::Suspend()
       return true;
     }
   }
+  else if (VirtualWake())
+  {
+    m_virtualSleepState = VIRTUAL_SLEEP_STATE_WILL_WAKE;
+    return false;
+  }
 
   return false;
 }
