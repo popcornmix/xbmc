@@ -241,7 +241,7 @@ void CPowerManager::OnSleep()
   CLog::Log(LOGNOTICE, "%s: Running sleep jobs", __FUNCTION__);
 
   // stop lirc
-#if defined(HAS_LIRC) || defined(HAS_IRSERVERSUITE)
+#if 0 //defined(HAS_LIRC) || defined(HAS_IRSERVERSUITE)
   CLog::Log(LOGNOTICE, "%s: Stopping lirc", __FUNCTION__);
   CBuiltins::Execute("LIRC.Stop");
 #endif
@@ -277,7 +277,7 @@ void CPowerManager::OnWake()
 #endif
 
   // restart lirc
-#if defined(HAS_LIRC) || defined(HAS_IRSERVERSUITE)
+#if 0 // defined(HAS_LIRC) || defined(HAS_IRSERVERSUITE)
   CLog::Log(LOGNOTICE, "%s: Restarting lirc", __FUNCTION__);
   CBuiltins::Execute("LIRC.Start");
 #endif

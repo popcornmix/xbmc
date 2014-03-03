@@ -183,12 +183,49 @@ void CPeripheralCecAdapter::Announce(AnnouncementFlag flag, const char *sender, 
   }
   else if (flag == System && !strcmp(sender, "xbmc") && !strcmp(message, "OnSleep"))
   {
+#if 1
+  bool bSendStandbyCommands(false);
+  {
+    CSingleLock lock(m_critSection);
+    bSendStandbyCommands = m_iExitCode != EXITCODE_REBOOT &&
+                           m_iExitCode != EXITCODE_RESTARTAPP &&
+                           !m_bDeviceRemoved &&
+                           (!m_bGoingToStandby || GetSettingBool("standby_tv_on_pc_standby")) &&
+                           GetSettingBool("enabled");
+
+    if (m_bGoingToStandby)
+      m_bActiveSourceBeforeStandby = m_cecAdapter->IsLibCECActiveSource();
+  }
+
+  if (bSendStandbyCommands)
+  {
+    if (m_cecAdapter->IsLibCECActiveSource())
+    {
+      if (!m_configuration.powerOffDevices.IsEmpty())
+      {
+        CLog::Log(LOGDEBUG, "%s - sending standby commands", __FUNCTION__);
+        m_standbySent = CDateTime::GetCurrentDateTime();
+        m_cecAdapter->StandbyDevices();
+      }
+      else if (m_configuration.bSendInactiveSource == 1)
+      {
+        CLog::Log(LOGDEBUG, "%s - sending inactive source commands", __FUNCTION__);
+        m_cecAdapter->SetInactiveView();
+      }
+    }
+    else
+    {
+      CLog::Log(LOGDEBUG, "%s - XBMC is not the active source, not sending any standby commands", __FUNCTION__);
+    }
+  }
+#else
     // this will also power off devices when we're the active source
     {
       CSingleLock lock(m_critSection);
       m_bGoingToStandby = true;
     }
     StopThread();
+#endif
   }
   else if (flag == System && !strcmp(sender, "xbmc") && !strcmp(message, "OnWake"))
   {
