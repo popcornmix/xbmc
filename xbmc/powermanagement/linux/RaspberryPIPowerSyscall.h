@@ -31,11 +31,11 @@ public:
   CRaspberryPIPowerSyscall() : CPowerSyscallVirtualSleep() {}
   virtual ~CRaspberryPIPowerSyscall() {}
 
-  virtual bool Powerdown()    { return false; }
+  virtual bool Powerdown();
   virtual bool Hibernate()    { return false; }
-  virtual bool Reboot()       { return false; }
+  virtual bool Reboot();
 
-  virtual bool CanPowerdown() { return false; }
+  virtual bool CanPowerdown() { return true; }
   virtual bool CanHibernate() { return false; }
   virtual bool CanReboot()    { return true; }
 

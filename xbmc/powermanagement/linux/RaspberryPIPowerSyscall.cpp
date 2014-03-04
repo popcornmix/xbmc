@@ -20,7 +20,11 @@
 
 #if defined(TARGET_RASPBERRY_PI)
 
+#include "system.h"
 #include "RaspberryPIPowerSyscall.h"
+#if defined(HAS_DBUS)
+#include "LogindUPowerSyscall.h"
+#endif
 #include "RBP.h"
 
 bool CRaspberryPIPowerSyscall::VirtualSleep()
@@ -33,6 +37,36 @@ bool CRaspberryPIPowerSyscall::VirtualWake()
 {
   g_RBP.ResumeVideoOutput();
   return true;
+}
+
+bool CRaspberryPIPowerSyscall::Powerdown()
+{
+  int s = false;
+#if defined(HAS_DBUS)
+  if (CLogindUPowerSyscall::HasLogind())
+  {
+    IPowerSyscall *m_instance = new CLogindUPowerSyscall;
+    if (m_instance->CanPowerdown())
+      s = m_instance->Powerdown();
+    delete m_instance;
+  }
+#endif
+  return s;
+}
+
+bool CRaspberryPIPowerSyscall::Reboot()
+{
+  int s = false;
+#if defined(HAS_DBUS)
+  if (CLogindUPowerSyscall::HasLogind())
+  {
+    IPowerSyscall *m_instance = new CLogindUPowerSyscall;
+    if (m_instance->CanReboot())
+      s = m_instance->Reboot();
+    delete m_instance;
+  }
+#endif
+  return s;
 }
 
 #endif
