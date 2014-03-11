@@ -1935,7 +1935,11 @@ void CDVDPlayer::CheckAutoSceneSkip()
     /*
      * Seeking is NOT flushed so any content up to the demux point is retained when playing forwards.
      */
+#ifdef TARGET_RASPBERRY_PI
+    m_messenger.Put(new CDVDMsgPlayerSeek((int)seek, true, true, true, false, true));
+#else
     m_messenger.Put(new CDVDMsgPlayerSeek((int)seek, true, false, true, false, true));
+#endif
     /*
      * Seek doesn't always work reliably. Last physical seek time is recorded to prevent looping
      * if there was an error with seeking and it landed somewhere unexpected, perhaps back in the
@@ -1953,7 +1957,11 @@ void CDVDPlayer::CheckAutoSceneSkip()
     /*
      * Seeking is NOT flushed so any content up to the demux point is retained when playing forwards.
      */
+#ifdef TARGET_RASPBERRY_PI
     m_messenger.Put(new CDVDMsgPlayerSeek(cut.end + 1, true, false, true, false, true));
+#else
+    m_messenger.Put(new CDVDMsgPlayerSeek(cut.end + 1, true, false, true, false, true));
+#endif
     /*
      * Each commercial break is only skipped once so poorly detected commercial breaks can be
      * manually re-entered. Start and end are recorded to prevent looping and to allow seeking back
@@ -3293,9 +3301,12 @@ bool CDVDPlayer::CloseTeletextStream(bool bWaitForBuffers)
 void CDVDPlayer::FlushBuffers(bool queued, double pts, bool accurate)
 {
   double startpts;
+#ifndef TARGET_RASPBERRY_PI
+  /* for now, ignore accurate flag as it discards keyframes and causes corrupt frames */
   if(accurate)
     startpts = pts;
   else
+#endif
     startpts = DVD_NOPTS_VALUE;
 
   /* call with demuxer pts */
