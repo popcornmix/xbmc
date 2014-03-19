@@ -88,10 +88,46 @@ void ff_mlp_rematrix_channel(int32_t *samples,
     }
 }
 
+static int32_t (*mlp_select_pack_output(uint8_t max_matrix_channel,
+                                        int is32,
+                                        uint8_t *ch_assign,
+                                        int8_t *output_shift))(int32_t, int32_t (*)[], void *, uint16_t, uint8_t, int, uint8_t*, int8_t *)
+{
+    return ff_mlp_pack_output;
+}
+
+int32_t ff_mlp_pack_output(int32_t lossless_check_data,
+                           int32_t (*sample_buffer)[MAX_CHANNELS],
+                           void *data,
+                           uint16_t blockpos,
+                           uint8_t max_matrix_channel,
+                           int is32,
+                           uint8_t *ch_assign,
+                           int8_t *output_shift)
+{
+    unsigned int i, out_ch = 0;
+    int32_t *data_32 = (int32_t *)data;
+    int16_t *data_16 = (int16_t *)data;
+
+    for (i = 0; i < blockpos; i++) {
+        for (out_ch = 0; out_ch <= max_matrix_channel; out_ch++) {
+            int mat_ch = ch_assign[out_ch];
+            int32_t sample = sample_buffer[i][mat_ch]
+                          << output_shift[mat_ch];
+            lossless_check_data ^= (sample & 0xffffff) << mat_ch;
+            if (is32) *data_32++ = sample << 8;
+            else      *data_16++ = sample >> 8;
+        }
+    }
+    return lossless_check_data;
+}
+
 av_cold void ff_mlpdsp_init(MLPDSPContext *c)
 {
     c->mlp_filter_channel = ff_mlp_filter_channel;
     c->mlp_rematrix_channel = ff_mlp_rematrix_channel;
+    c->mlp_select_pack_output = mlp_select_pack_output;
+    c->mlp_pack_output = ff_mlp_pack_output;
     if (ARCH_X86)
         ff_mlpdsp_init_x86(c);
 }
