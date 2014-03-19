@@ -14,10 +14,14 @@ ARMV6-OBJS-$(CONFIG_H264DSP)           += arm/h264dsp_armv6.o
 OBJS-$(CONFIG_FLAC_DECODER)            += arm/flacdsp_init_arm.o        \
                                           arm/flacdsp_arm.o             \
 
+OBJS-$(CONFIG_MLP_DECODER)             += arm/mlpdsp_init_arm.o         \
+                                          arm/mlpdsp_arm.o
 OBJS-$(CONFIG_MPEGAUDIODSP)            += arm/mpegaudiodsp_init_arm.o
 ARMV6-OBJS-$(CONFIG_MPEGAUDIODSP)      += arm/mpegaudiodsp_fixed_armv6.o
 
 OBJS-$(CONFIG_MPEGVIDEO)               += arm/mpegvideo_arm.o
+OBJS-$(CONFIG_TRUEHD_DECODER)          += arm/mlpdsp_init_arm.o         \
+                                          arm/mlpdsp_arm.o
 OBJS-$(CONFIG_VORBIS_DECODER)          += arm/vorbisdsp_init_arm.o
 OBJS-$(CONFIG_VP3DSP)                  += arm/vp3dsp_init_arm.o
 OBJS-$(CONFIG_VP5_DECODER)             += arm/vp56dsp_init_arm.o
@@ -31,7 +35,6 @@ OBJS-$(CONFIG_H264CHROMA)              += arm/h264chroma_init_arm.o
 OBJS-$(CONFIG_H264DSP)                 += arm/h264dsp_init_arm.o
 OBJS-$(CONFIG_H264PRED)                += arm/h264pred_init_arm.o
 OBJS-$(CONFIG_H264QPEL)                += arm/h264qpel_init_arm.o
-
 OBJS-$(CONFIG_RV30_DECODER)            += arm/rv34dsp_init_arm.o
 OBJS-$(CONFIG_RV40_DECODER)            += arm/rv34dsp_init_arm.o        \
                                           arm/rv40dsp_init_arm.o        \
