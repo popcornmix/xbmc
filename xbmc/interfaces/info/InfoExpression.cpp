@@ -44,7 +44,10 @@ InfoExpression::InfoExpression(const std::string &expression, int context)
 : InfoBool(expression, context)
 {
   if (!Parse(expression))
+  {
     CLog::Log(LOGERROR, "Error parsing boolean expression %s", expression.c_str());
+    m_expression_tree = boost::make_shared<InfoLeaf>(g_infoManager.Register("false", 0), false);
+  }
 }
 
 void InfoExpression::Update(const CGUIListItem *item)
