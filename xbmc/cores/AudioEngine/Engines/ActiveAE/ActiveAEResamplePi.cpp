@@ -97,16 +97,25 @@ bool CActiveAEResample::Init(uint64_t dst_chan_layout, int dst_channels, int dst
   if (!m_loaded)
     return false;
 
+  if (src_bits == 0)
+  {
+    if (src_fmt == AV_SAMPLE_FMT_U8) src_bits = 8;
+    else if (src_fmt == AV_SAMPLE_FMT_S16) src_bits = 16;
+    else if (src_fmt == AV_SAMPLE_FMT_S32) src_bits = 32;
+    else if (src_fmt == AV_SAMPLE_FMT_FLT) src_bits = 32;
+  }
+  assert(src_bits && dst_bits);
+
   m_dst_chan_layout = dst_chan_layout;
   m_dst_channels = dst_channels;
   m_dst_rate = dst_rate;
   m_dst_fmt = dst_fmt;
-  m_dst_bits = dst_bits ? dst_bits : 8;
+  m_dst_bits = dst_bits;
   m_src_chan_layout = src_chan_layout;
   m_src_channels = src_channels;
   m_src_rate = src_rate;
   m_src_fmt = src_fmt;
-  m_src_bits = src_bits ? src_bits : 8;
+  m_src_bits = src_bits;
 
   if (m_dst_chan_layout == 0)
     m_dst_chan_layout = m_dllAvUtil.av_get_default_channel_layout(m_dst_channels);
