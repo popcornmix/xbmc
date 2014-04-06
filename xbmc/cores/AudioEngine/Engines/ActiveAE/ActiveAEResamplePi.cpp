@@ -93,7 +93,7 @@ bool CActiveAEResample::Init(uint64_t dst_chan_layout, int dst_channels, int dst
 {
   LOGTIMEINIT("x");
 
-  CLog::Log(LOGINFO, "%s::%s remap:%p chan:%d->%d rate:%d->%d format:%d->%d bits:%d->%d", CLASSNAME, __func__, remapLayout, src_channels, dst_channels, src_rate, dst_rate, src_fmt, dst_fmt, src_bits, dst_bits);
+  CLog::Log(LOGINFO, "%s::%s remap:%p chan:%d->%d rate:%d->%d format:%d->%d bits:%d->%d norm:%d upmix:%d", CLASSNAME, __func__, remapLayout, src_channels, dst_channels, src_rate, dst_rate, src_fmt, dst_fmt, src_bits, dst_bits, normalize, upmix);
   if (!m_loaded)
     return false;
 
@@ -131,14 +131,20 @@ bool CActiveAEResample::Init(uint64_t dst_chan_layout, int dst_channels, int dst
 // this code is just uses ffmpeg to produce the 8x8 mixing matrix
 {
   // dummy sample rate and format, as we only care about channel mapping
-  SwrContext *m_pContext = m_dllSwResample.swr_alloc_set_opts(NULL, m_dst_chan_layout, AV_SAMPLE_FMT_S16, 48000,
-                                                        m_src_chan_layout, AV_SAMPLE_FMT_S16, 48000,
-                                                        0, NULL);
+  SwrContext *m_pContext = m_dllSwResample.swr_alloc_set_opts(NULL, m_dst_chan_layout, AV_SAMPLE_FMT_FLT, 48000,
+                                                        m_src_chan_layout, AV_SAMPLE_FMT_FLT, 48000, 0, NULL);
   if(!m_pContext)
   {
     CLog::Log(LOGERROR, "CActiveAEResample::Init - create context failed");
     return false;
   }
+  // tell resampler to clamp float values
+  // not required for sink stage (remapLayout == true)
+  if (!remapLayout && normalize)
+  {
+     av_opt_set_double(m_pContext, "rematrix_maxval", 1.0, 0);
+  }
+
   if (remapLayout)
   {
     // one-to-one mapping of channels
@@ -212,20 +218,35 @@ bool CActiveAEResample::Init(uint64_t dst_chan_layout, int dst_channels, int dst
     return false;
   }
 
-  struct SwrContext *context = (struct SwrContext *)m_pContext;
-  for(size_t out = 0; out < 8; ++out)
+  const int samples = 8;
+  uint8_t *output, *input;
+  av_samples_alloc(&output, NULL, m_dst_channels, samples, AV_SAMPLE_FMT_FLT, 1);
+  av_samples_alloc(&input , NULL, m_src_channels, samples, AV_SAMPLE_FMT_FLT, 1);
+
+  // Produce "identity" samples
+  float *f = (float *)input;
+  for (int j=0; j < samples; j++)
+    for (int i=0; i < m_src_channels; i++)
+      *f++ = i == j ? 1.0f : 0.0f;
+
+  int ret = m_dllSwResample.swr_convert(m_pContext, &output, samples, (const uint8_t **)&input, samples);
+  if (ret < 0)
+    CLog::Log(LOGERROR, "CActiveAEResample::Resample - resample failed");
+
+  f = (float *)output;
+  for (int j=0; j < samples; j++)
+    for (int i=0; i < m_dst_channels; i++)
+      mix.coeff[8*i+j] = *f++ * (1<<16);
+
+  for (int j=0; j < 8; j++)
   {
     char s[128] = {}, *t=s;
-    for(size_t in = 0; in < 8; ++in)
-    {
-      if (context->rematrix)
-        mix.coeff[out*8+in] = static_cast<unsigned int>(0x10000 * context->matrix[out][in]);
-      else
-        mix.coeff[out*8+in] = in == out ? 0x10000 : 0;
-      t += sprintf(t, "% 6.2f ", mix.coeff[out*8+in] * (1.0/0x10000));
-    }
+    for (int i=0; i < 8; i++)
+      t += sprintf(t, "% 6.2f ", mix.coeff[j*8+i] * (1.0/0x10000));
     CLog::Log(LOGINFO, "%s::%s  %s", CLASSNAME, __func__, s);
   }
+  av_freep(&input);
+  av_freep(&output);
   m_dllSwResample.swr_free(&m_pContext);
 }
   LOGTIME(2);
