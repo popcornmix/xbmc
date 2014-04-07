@@ -40,7 +40,8 @@ public:
   int GetData(BYTE** dst, double &dts, double &pts);
   void Reset();
   int GetChannels();
-  uint64_t GetChannelMap();
+  void BuildChannelMap();
+  CAEChannelInfo GetChannelMap();
   int GetSampleRate();
   int GetBitsPerSample();
   static const char* GetName() { return "FFmpeg"; }
@@ -62,7 +63,7 @@ protected:
   bool m_bOpenedCodec;
 
   int     m_channels;
-
+  CAEChannelInfo m_channelLayout;
   bool m_bFirstFrame;
   bool m_bGotFrame;
   bool m_bNoConcatenate;

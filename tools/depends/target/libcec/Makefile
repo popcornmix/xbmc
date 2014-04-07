@@ -8,7 +8,7 @@ SOURCE=$(LIBNAME)-$(VERSION)-2
 ARCHIVE=$(SOURCE).tar.gz
 
 # configuration settings
-CONFIGURE=./configure --prefix=$(PREFIX) --disable-rpi \
+CONFIGURE=./configure --prefix=$(PREFIX) --enable-rpi \
 
 LIBDYLIB=$(PLATFORM)/src/lib/.libs/libcec.la
 
