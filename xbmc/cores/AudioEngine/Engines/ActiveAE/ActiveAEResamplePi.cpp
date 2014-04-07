@@ -24,7 +24,6 @@
 
 #include "ActiveAEResamplePi.h"
 #include "linux/RBP.h"
-#include "cores/omxplayer/PCMRemap.h"
 #include "settings/Settings.h"
 #include "lib/ffmpeg/libswresample/swresample_internal.h"
 
