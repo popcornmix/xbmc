@@ -64,7 +64,11 @@ bool CGUIDialogBusy::WaitOnEvent(CEvent &event, unsigned int displaytime /* = 10
     if (dialog)
     {
       dialog->Show();
+#ifdef TARGET_RASPBERRY_PI
+      while(!event.WaitMSec(100))
+#else
       while(!event.WaitMSec(1))
+#endif
       {
         g_windowManager.ProcessRenderLoop(false);
         if (allowCancel && dialog->IsCanceled())
