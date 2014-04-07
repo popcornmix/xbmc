@@ -3172,6 +3172,15 @@ msgctxt "#697"
 msgid "Verbose logging for OMXPLAYER"
 msgstr ""
 
+#: xbmc/settings/AdvancedSettings.cpp
+msgctxt "#698"
+msgid "Dump video frames to debug file"
+msgstr ""
+
+#: xbmc/settings/AdvancedSettings.cpp
+msgctxt "#699"
+msgid "Dump audio frames to debug file"
+msgstr ""
 
 #: xbmc/music/infoscanner/MusicInfoScanner.cpp
 #: xbmc/music/MusicDatabase.cpp

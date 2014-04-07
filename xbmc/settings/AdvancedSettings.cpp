@@ -1467,6 +1467,10 @@ void CAdvancedSettings::SettingOptionsLoggingComponentsFiller(SettingConstPtr se
 #ifdef TARGET_RASPBERRY_PI
   list.push_back(std::make_pair(g_localizeStrings.Get(697), LOGOMXPLAYER));
 #endif
+#ifdef TARGET_RASPBERRY_PI
+  list.push_back(std::make_pair(g_localizeStrings.Get(698), LOGDUMPVIDEO));
+  list.push_back(std::make_pair(g_localizeStrings.Get(699), LOGDUMPAUDIO));
+#endif
 }
 
 void CAdvancedSettings::SetExtraLogLevel(const std::vector<CVariant> &components)
