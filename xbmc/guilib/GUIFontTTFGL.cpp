@@ -194,7 +194,7 @@ void CGUIFontTTFGL::LastEnd()
     {
       // Apply the clip rectangle
       CRect clip = g_Windowing.ClipRectToScissorRect(m_vertexTrans[i].clip);
-      g_graphicsContext.SetScissors(clip);
+      g_Windowing.SetScissors(clip);
 
       // Apply the translation to the currently active (top-of-stack) model view matrix
       g_matrices.MatrixMode(MM_MODELVIEW);
@@ -224,7 +224,7 @@ void CGUIFontTTFGL::LastEnd()
       g_matrices.PopMatrix();
     }
     // Restore the original scissor rectangle
-    g_graphicsContext.ResetScissors();
+    g_Windowing.ResetScissors();
     // Restore the original model view matrix
     glUniformMatrix4fv(modelLoc, 1, GL_FALSE, g_matrices.GetMatrix(MM_MODELVIEW));
     // Unbind GL_ARRAY_BUFFER and GL_ELEMENT_ARRAY_BUFFER
