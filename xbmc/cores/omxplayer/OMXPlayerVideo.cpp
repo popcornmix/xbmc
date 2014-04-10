@@ -527,7 +527,7 @@ bool OMXPlayerVideo::OpenDecoder()
     return false;
 
   if (m_hints.fpsrate && m_hints.fpsscale)
-    m_fFrameRate = DVD_TIME_BASE / OMXClock::NormalizeFrameduration((double)DVD_TIME_BASE * m_hints.fpsscale / m_hints.fpsrate);
+    m_fFrameRate = DVD_TIME_BASE / CDVDCodecUtils::NormalizeFrameduration((double)DVD_TIME_BASE * m_hints.fpsscale / m_hints.fpsrate);
   else
     m_fFrameRate = 25;
 
@@ -564,8 +564,6 @@ bool OMXPlayerVideo::OpenDecoder()
     sprintf(command, "hdmi_ntsc_freqs %d", bNtscFreq);
     CLog::Log(LOGINFO, "OMXPlayerVideo::OpenDecoder fps: %f %s\n", m_fFrameRate, command);
     m_DllBcmHost.vc_gencmd(response, sizeof response, command);
-
-    m_av_clock->SetRefreshRate(m_fFrameRate);
   }
 
   // start from assuming all recent frames had valid pts
