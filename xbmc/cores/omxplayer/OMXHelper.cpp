@@ -8,6 +8,7 @@
 
 #include "VideoPlayer.h"
 #include "ServiceBroker.h"
+#include "settings/AdvancedSettings.h"
 #include "settings/MediaSettings.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
@@ -145,15 +146,15 @@ bool OMXDoProcessing(struct SOmxPlayerState &m_OmxPlayerState, int m_playSpeed, 
     if (!m_HasVideo && m_HasAudio)
       video_fifo_high = true;
 
-    #ifdef _DEBUG
+  if (CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->CanLogComponent(LOGOMXPLAYER))
+  {
     CLog::Log(LOGDEBUG, "%s::%s M:%.6f-%.6f (A:%.6f V:%.6f) PEF:%d%d%d S:%.2f A:%.2f V:%.2f/T:%.2f (A:%d%d V:%d%d) A:%d%% V:%d%%", "CVideoPlayer", __FUNCTION__,
       m_OmxPlayerState.stamp*1e-6, m_OmxPlayerState.av_clock.OMXClockAdjustment()*1e-6, audio_pts*1e-6, video_pts*1e-6,
       m_OmxPlayerState.av_clock.OMXIsPaused(), m_OmxPlayerState.bOmxSentEOFs, not_accepts_data, m_playSpeed * (1.0f/DVD_PLAYSPEED_NORMAL),
       audio_pts == DVD_NOPTS_VALUE ? 0.0:audio_fifo, video_pts == DVD_NOPTS_VALUE ? 0.0:video_fifo, m_OmxPlayerState.threshold,
       audio_fifo_low, audio_fifo_high, video_fifo_low, video_fifo_high,
       m_VideoPlayerAudio->GetLevel(), 0);
-    #endif
-
+  }
     if(!m_Pause && (m_OmxPlayerState.bOmxSentEOFs || not_accepts_data || (audio_fifo_high && video_fifo_high) || m_playSpeed != DVD_PLAYSPEED_NORMAL))
     {
       if (m_OmxPlayerState.av_clock.OMXIsPaused())

@@ -20,6 +20,7 @@
 #include "utils/MathUtils.h"
 #include "settings/AdvancedSettings.h"
 #include "settings/Settings.h"
+#include "settings/SettingsComponent.h"
 #include "utils/TimeUtils.h"
 #include "cores/VideoPlayer/Interface/Addon/TimingConstants.h"
 
@@ -369,10 +370,9 @@ void OMXPlayerAudio::Process()
       DemuxPacket* pPacket = ((CDVDMsgDemuxerPacket*)pMsg)->GetPacket();
       bool bPacketDrop     = ((CDVDMsgDemuxerPacket*)pMsg)->GetPacketDrop();
 
-      #ifdef _DEBUG
-      CLog::Log(LOGINFO, "Audio: dts:%.0f pts:%.0f size:%d (s:%d f:%d d:%d l:%d) s:%d %d/%d late:%d,%d", pPacket->dts, pPacket->pts,
+      if (CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->CanLogComponent(LOGOMXPLAYER))
+        CLog::Log(LOGINFO, "Audio: dts:%.0f pts:%.0f size:%d (s:%d f:%d d:%d l:%d) s:%d %d/%d late:%d,%d", pPacket->dts, pPacket->pts,
            (int)pPacket->iSize, m_syncState, m_flush, bPacketDrop, m_stalled, m_speed, 0, 0, (int)m_omxAudio.GetAudioRenderingLatency(), (int)m_hints_current.samplerate);
-      #endif
       if(Decode(pPacket, bPacketDrop, m_speed > DVD_PLAYSPEED_NORMAL || m_speed < 0))
       {
         // we are not running until something is cached in output device
