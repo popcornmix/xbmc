@@ -23,6 +23,7 @@
 #include "DVDDemuxers/DVDDemuxUtils.h"
 #include "DVDCodecs/DVDCodecUtils.h"
 #include "settings/DisplaySettings.h"
+#include "settings/AdvancedSettings.h"
 #include "settings/MediaSettings.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
@@ -462,10 +463,10 @@ void OMXPlayerVideo::Process()
       DemuxPacket* pPacket = ((CDVDMsgDemuxerPacket*)pMsg)->GetPacket();
       bool bPacketDrop     = ((CDVDMsgDemuxerPacket*)pMsg)->GetPacketDrop();
 
-      #ifdef _DEBUG
-      CLog::Log(LOGINFO, "Video: dts:%.0f pts:%.0f size:%d (s:%d f:%d d:%d l:%d) s:%d %d/%d late:%d\n", pPacket->dts, pPacket->pts,
+      if (CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->CanLogComponent(LOGOMXPLAYER))
+        CLog::Log(LOGINFO, "Video: dts:%.0f pts:%.0f size:%d (s:%d f:%d d:%d l:%d) s:%d %d/%d late:%d\n", pPacket->dts, pPacket->pts,
           (int)pPacket->iSize, m_syncState, m_flush, bPacketDrop, m_stalled, m_speed, 0, 0, 0);
-      #endif
+
       if (m_messageQueue.GetDataSize() == 0
       ||  m_speed < 0)
       {
