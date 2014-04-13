@@ -848,7 +848,7 @@ void COMXVideo::SetVideoRect(const CRect& SrcRect, const CRect& DestRect)
 
   if (configDisplay.dest_rect.width == 0 || configDisplay.dest_rect.height == 0)
     configDisplay.fullscreen = OMX_TRUE;
-  else
+  if (configDisplay.src_rect.width != 0 && configDisplay.src_rect.height != 0)
     configDisplay.noaspect = OMX_TRUE;
 
   m_omx_render.SetConfig(OMX_IndexConfigDisplayRegion, &configDisplay);
