@@ -108,6 +108,7 @@ public:
   bool IsValidResolution(RESOLUTION res);
   void SetVideoResolution(RESOLUTION res, bool forceUpdate = false);
   RESOLUTION GetVideoResolution() const;
+  RESOLUTION Get3DVideoResolution(RESOLUTION resolution, RENDER_STEREO_MODE mode) const;
   void ResetOverscan(RESOLUTION res, OVERSCAN &overscan);
   void ResetOverscan(RESOLUTION_INFO &resinfo);
   void ResetScreenParameters(RESOLUTION res);

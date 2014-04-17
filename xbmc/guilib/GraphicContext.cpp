@@ -35,6 +35,7 @@
 #include "utils/JobManager.h"
 #include "video/VideoReferenceClock.h"
 #include "cores/IPlayer.h"
+#include <float.h>
 
 using namespace std;
 
@@ -482,6 +483,43 @@ void CGraphicContext::SetVideoResolution(RESOLUTION res, bool forceUpdate)
 RESOLUTION CGraphicContext::GetVideoResolution() const
 {
   return m_Resolution;
+}
+
+RESOLUTION CGraphicContext::Get3DVideoResolution(RESOLUTION resolution, RENDER_STEREO_MODE mode) const
+{
+  RESOLUTION best = resolution;
+  RESOLUTION_INFO curr = CDisplaySettings::Get().GetResolutionInfo(best);
+  // Find closest refresh rate
+  for (size_t i = (int)RES_DESKTOP; i < CDisplaySettings::Get().ResolutionInfoSize(); i++)
+  {
+    const RESOLUTION_INFO info = CDisplaySettings::Get().GetResolutionInfo((RESOLUTION)i);
+
+    //discard resolutions that are not the same width and height (and interlaced/3D flags)
+    //or have a too low refreshrate
+    if (info.iScreenWidth  != curr.iScreenWidth
+    ||  info.iScreenHeight != curr.iScreenHeight
+    ||  info.iScreen       != curr.iScreen
+    ||  (info.dwFlags & D3DPRESENTFLAG_INTERLACED) != (curr.dwFlags & D3DPRESENTFLAG_INTERLACED)
+    ||  fabs(info.fRefreshRate - curr.fRefreshRate) >= FLT_EPSILON)
+      continue;
+
+    if (mode == RENDER_STEREO_MODE_SPLIT_VERTICAL && info.dwFlags & D3DPRESENTFLAG_MODE3DSBS)
+    {
+      best = (RESOLUTION)i;
+      break;
+    }
+    else if (mode == RENDER_STEREO_MODE_SPLIT_HORIZONTAL && info.dwFlags & D3DPRESENTFLAG_MODE3DTB)
+    {
+      best = (RESOLUTION)i;
+      break;
+    }
+    else if ((mode == RENDER_STEREO_MODE_OFF || mode == RENDER_STEREO_MODE_MONO) && !(info.dwFlags & (D3DPRESENTFLAG_MODE3DSBS|D3DPRESENTFLAG_MODE3DTB)))
+    {
+      best = (RESOLUTION)i;
+      break;
+    }
+  }
+  return best;
 }
 
 void CGraphicContext::ResetOverscan(RESOLUTION_INFO &res)
@@ -1021,7 +1059,7 @@ void CGraphicContext::Flip(const CDirtyRegionList& dirty)
   if(m_stereoMode != m_nextStereoMode)
   {
     m_stereoMode = m_nextStereoMode;
-    SetVideoResolution(GetVideoResolution(), true);
+    SetVideoResolution(Get3DVideoResolution(m_Resolution, m_stereoMode), true);
     g_windowManager.SendMessage(GUI_MSG_NOTIFY_ALL, 0, 0, GUI_MSG_RENDERER_RESET);
   }
 }
