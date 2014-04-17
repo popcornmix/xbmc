@@ -222,10 +222,14 @@ void CBaseRenderer::FindResolutionFromFpsMatch(float fps, float& weight)
 RESOLUTION CBaseRenderer::FindClosestResolution(float fps, float multiplier, RESOLUTION current, float& weight)
 {
   RESOLUTION_INFO curr = g_graphicsContext.GetResInfo(current);
+  RENDER_STEREO_MODE stereo_mode = g_graphicsContext.GetStereoMode();
 
   float fRefreshRate = fps;
 
-  float last_diff = fRefreshRate;
+  int c_weight = MathUtils::round_int(RefreshWeight(curr.fRefreshRate, fRefreshRate * multiplier) * 1000.0);
+  if (!(stereo_mode == RENDER_STEREO_MODE_SPLIT_VERTICAL) != !(curr.dwFlags & D3DPRESENTFLAG_MODE3DSBS) ||
+      !(stereo_mode == RENDER_STEREO_MODE_SPLIT_HORIZONTAL) != !(curr.dwFlags & D3DPRESENTFLAG_MODE3DTB))
+    c_weight += 1000;
 
   // Find closest refresh rate
   for (size_t i = (int)RES_DESKTOP; i < CDisplaySettings::Get().ResolutionInfoSize(); i++)
@@ -241,40 +245,23 @@ RESOLUTION CBaseRenderer::FindClosestResolution(float fps, float multiplier, RES
     ||  info.fRefreshRate < (fRefreshRate * multiplier / 1.001) - 0.001)
       continue;
 
-    // For 3D choose the closest refresh rate 
-    if(CONF_FLAGS_STEREO_MODE_MASK(m_iFlags))
-    {
-      float diff = (info.fRefreshRate - fRefreshRate);
-      if(diff < 0)
-        diff *= -1.0f;
+    int i_weight = MathUtils::round_int(RefreshWeight(info.fRefreshRate, fRefreshRate * multiplier) * 1000.0);
 
-      if(diff < last_diff)
-      {
-        last_diff = diff;
-        current = (RESOLUTION)i;
-        curr = info;
-      }
-    }
-    else
-    {
-      int c_weight = MathUtils::round_int(RefreshWeight(curr.fRefreshRate, fRefreshRate * multiplier) * 1000.0);
-      int i_weight = MathUtils::round_int(RefreshWeight(info.fRefreshRate, fRefreshRate * multiplier) * 1000.0);
+    if (!(stereo_mode == RENDER_STEREO_MODE_SPLIT_VERTICAL) != !(info.dwFlags & D3DPRESENTFLAG_MODE3DSBS) ||
+        !(stereo_mode == RENDER_STEREO_MODE_SPLIT_HORIZONTAL) != !(info.dwFlags & D3DPRESENTFLAG_MODE3DTB))
+      i_weight += 1000;
 
-      // Closer the better, prefer higher refresh rate if the same
-      if ((i_weight <  c_weight)
-      ||  (i_weight == c_weight && info.fRefreshRate > curr.fRefreshRate))
-      {
-        current = (RESOLUTION)i;
-        curr    = info;
-      }
+    // Closer the better, prefer higher refresh rate if the same
+    if ((i_weight <  c_weight)
+    ||  (i_weight == c_weight && info.fRefreshRate > curr.fRefreshRate))
+    {
+      current  = (RESOLUTION)i;
+      curr     = info;
+      c_weight = i_weight;
     }
   }
 
-  // For 3D overwrite weight
-  if(CONF_FLAGS_STEREO_MODE_MASK(m_iFlags))
-    weight = 0;
-  else
-    weight = RefreshWeight(curr.fRefreshRate, fRefreshRate * multiplier);
+  weight = RefreshWeight(curr.fRefreshRate, fRefreshRate * multiplier);
 
   return current;
 }
