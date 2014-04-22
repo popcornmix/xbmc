@@ -449,15 +449,9 @@ bool CEGLNativeTypeRaspberryPI::ProbeResolutions(std::vector<RESOLUTION_INFO> &r
       m_desktopRes.fPixelRatio  = get_display_aspect_ratio((HDMI_ASPECT_T)tv_state.display.hdmi.display_options.aspect) / ((float)m_desktopRes.iScreenWidth / (float)m_desktopRes.iScreenHeight);
       // Also add 3D flags
       if (tv_state.display.hdmi.format_3d == HDMI_3D_FORMAT_SBS_HALF)
-      {
         m_desktopRes.dwFlags |= D3DPRESENTFLAG_MODE3DSBS;
-        m_desktopRes.fPixelRatio *= 2.0;
-      }
       else if (tv_state.display.hdmi.format_3d == HDMI_3D_FORMAT_TB_HALF)
-      {
         m_desktopRes.dwFlags |= D3DPRESENTFLAG_MODE3DTB;
-        m_desktopRes.fPixelRatio *= 0.5;
-      }
       HDMI_PROPERTY_PARAM_T property;
       property.property = HDMI_PROPERTY_PIXEL_CLOCK_TYPE;
       vc_tv_hdmi_get_property(&property);
@@ -600,7 +594,6 @@ void CEGLNativeTypeRaspberryPI::GetSupportedModes(HDMI_RES_GROUP_T group, std::v
         RESOLUTION_INFO res2 = res;
         res2.dwFlags |= D3DPRESENTFLAG_MODE3DSBS;
         res2.fPixelRatio    = get_display_aspect_ratio((HDMI_ASPECT_T)tv->aspect_ratio) / ((float)res2.iScreenWidth / (float)res2.iScreenHeight);
-        res2.fPixelRatio   *= 2.0f;
         res2.iSubtitles    = (int)(0.965 * res2.iHeight);
 
         AddUniqueResolution(res2, resolutions);
@@ -616,7 +609,6 @@ void CEGLNativeTypeRaspberryPI::GetSupportedModes(HDMI_RES_GROUP_T group, std::v
         RESOLUTION_INFO res2 = res;
         res2.dwFlags |= D3DPRESENTFLAG_MODE3DTB;
         res2.fPixelRatio    = get_display_aspect_ratio((HDMI_ASPECT_T)tv->aspect_ratio) / ((float)res2.iScreenWidth / (float)res2.iScreenHeight);
-        res2.fPixelRatio   *= 0.5f;
         res2.iSubtitles    = (int)(0.965 * res2.iHeight);
 
         AddUniqueResolution(res2, resolutions);

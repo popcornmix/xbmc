@@ -120,11 +120,15 @@ public:
   void GetAllowedResolutions(std::vector<RESOLUTION> &res);
 
   // output scaling
+  const RESOLUTION_INFO GetResInfo(RESOLUTION res) const
+  {
+    return GetResInfo(res, GetStereoMode());
+  }
   const RESOLUTION_INFO GetResInfo() const
   {
     return GetResInfo(m_Resolution);
   }
-  const RESOLUTION_INFO GetResInfo(RESOLUTION res) const;
+  const RESOLUTION_INFO GetResInfo(RESOLUTION res, RENDER_STEREO_MODE stereo_mode) const;
   void SetResInfo(RESOLUTION res, const RESOLUTION_INFO& info);
 
   /* \brief Get UI scaling information from a given resolution to the screen resolution.
@@ -161,9 +165,11 @@ public:
   void RestoreOrigin();
   void SetCameraPosition(const CPoint &camera);
   void SetStereoView(RENDER_STEREO_VIEW view);
-  RENDER_STEREO_VIEW GetStereoView()  { return m_stereoView; }
+  RENDER_STEREO_VIEW GetStereoView() const { return m_stereoView; }
   void SetStereoMode(RENDER_STEREO_MODE mode) { m_nextStereoMode = mode; }
-  RENDER_STEREO_MODE GetStereoMode()  { return m_stereoMode; }
+  RENDER_STEREO_MODE GetStereoMode() const { return m_stereoMode; }
+  RENDER_STEREO_MODE GetStereoMode(RESOLUTION res) const;
+
   void RestoreCameraPosition();
   /*! \brief Set a region in which to clip all rendering
    Anything that is rendered after setting a clip region will be clipped so that no part renders

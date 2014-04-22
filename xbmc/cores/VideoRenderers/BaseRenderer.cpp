@@ -119,7 +119,7 @@ bool CBaseRenderer::FindResolutionFromOverride(float fps, float& weight, bool fa
 
     for (size_t j = (int)RES_DESKTOP; j < CDisplaySettings::Get().ResolutionInfoSize(); j++)
     {
-      RESOLUTION_INFO info = g_graphicsContext.GetResInfo((RESOLUTION)j);
+      RESOLUTION_INFO info = g_graphicsContext.GetResInfo((RESOLUTION)j, g_graphicsContext.GetStereoMode((RESOLUTION)j));
 
       if (info.iScreenWidth  == curr.iScreenWidth
        && info.iScreenHeight == curr.iScreenHeight
@@ -179,7 +179,7 @@ void CBaseRenderer::FindResolutionFromFpsMatch(float fps, float& weight)
       //get the resolution with the refreshrate closest to 60 hertz
       for (size_t i = (int)RES_DESKTOP; i < CDisplaySettings::Get().ResolutionInfoSize(); i++)
       {
-        RESOLUTION_INFO info = g_graphicsContext.GetResInfo((RESOLUTION)i);
+        RESOLUTION_INFO info = g_graphicsContext.GetResInfo((RESOLUTION)i, g_graphicsContext.GetStereoMode((RESOLUTION)i));
 
         if (MathUtils::round_int(info.fRefreshRate) == 60
          && info.iScreenWidth  == curr.iScreenWidth
@@ -200,7 +200,7 @@ void CBaseRenderer::FindResolutionFromFpsMatch(float fps, float& weight)
         CLog::Log(LOGDEBUG, "60 hertz refreshrate not available, choosing highest");
         for (size_t i = (int)RES_DESKTOP; i < CDisplaySettings::Get().ResolutionInfoSize(); i++)
         {
-          RESOLUTION_INFO info = g_graphicsContext.GetResInfo((RESOLUTION)i);
+          RESOLUTION_INFO info = g_graphicsContext.GetResInfo((RESOLUTION)i, g_graphicsContext.GetStereoMode((RESOLUTION)i));
 
           if (info.fRefreshRate  >  curr.fRefreshRate
            && info.iScreenWidth  == curr.iScreenWidth
@@ -234,14 +234,14 @@ RESOLUTION CBaseRenderer::FindClosestResolution(float fps, float multiplier, RES
   // Find closest refresh rate
   for (size_t i = (int)RES_DESKTOP; i < CDisplaySettings::Get().ResolutionInfoSize(); i++)
   {
-    const RESOLUTION_INFO info = g_graphicsContext.GetResInfo((RESOLUTION)i);
+    const RESOLUTION_INFO info = g_graphicsContext.GetResInfo((RESOLUTION)i, g_graphicsContext.GetStereoMode((RESOLUTION)i));
 
     //discard resolutions that are not the same width and height (and interlaced/3D flags)
     //or have a too low refreshrate
     if (info.iScreenWidth  != curr.iScreenWidth
     ||  info.iScreenHeight != curr.iScreenHeight
     ||  info.iScreen       != curr.iScreen
-    ||  (info.dwFlags & D3DPRESENTFLAG_MODEMASK) != (curr.dwFlags & D3DPRESENTFLAG_MODEMASK)
+    ||  (info.dwFlags & D3DPRESENTFLAG_INTERLACED) != (curr.dwFlags & D3DPRESENTFLAG_INTERLACED)
     ||  info.fRefreshRate < (fRefreshRate * multiplier / 1.001) - 0.001)
       continue;
 
