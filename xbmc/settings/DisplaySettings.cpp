@@ -737,6 +737,9 @@ void CDisplaySettings::SettingOptionsResolutionsFiller(SettingConstPtr setting, 
     std::vector<RESOLUTION_WHR> resolutions = CServiceBroker::GetWinSystem()->ScreenResolutions(info.fRefreshRate);
     for (std::vector<RESOLUTION_WHR>::const_iterator resolution = resolutions.begin(); resolution != resolutions.end(); ++resolution)
     {
+if (resolution->ResInfo_Index == RES_DESKTOP)
+      list.push_back(std::make_pair(StringUtils::Format("DESKTOP"), resolution->ResInfo_Index));
+else
       list.push_back(std::make_pair(
         StringUtils::Format("%dx%d%s", resolution->width, resolution->height,
                             ModeFlagsToString(resolution->flags, false).c_str()),
