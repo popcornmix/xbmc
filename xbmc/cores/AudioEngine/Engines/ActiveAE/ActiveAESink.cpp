@@ -870,6 +870,7 @@ void CActiveAESink::SwapInit(CSampleBuffer* samples)
 
 void CActiveAESink::GenerateNoise()
 {
+#ifndef TARGET_RASPBERRY_PI
   int nb_floats = m_sampleOfSilence.pkt->max_nb_samples;
   nb_floats *= m_sampleOfSilence.pkt->config.channels;
 
@@ -907,6 +908,7 @@ void CActiveAESink::GenerateNoise()
                      (uint8_t**)&noise, m_sampleOfSilence.pkt->max_nb_samples, 1.0);
 
   _aligned_free(noise);
+#endif
 }
 
 void CActiveAESink::SetSilenceTimer()
