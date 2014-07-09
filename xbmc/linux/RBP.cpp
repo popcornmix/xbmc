@@ -22,6 +22,7 @@
 #if defined(TARGET_RASPBERRY_PI)
 
 #include "settings/Settings.h"
+#include "settings/AdvancedSettings.h"
 #include "utils/log.h"
 
 #include "cores/omxplayer/OMXImage.h"
@@ -84,6 +85,9 @@ bool CRBP::Initialize()
   if (!m_gui_resolution_limit)
     m_gui_resolution_limit = m_gpu_mem < 128 ? 720:1080;
 
+  if (g_advancedSettings.m_cacheMemBufferSize == ~0)
+    g_advancedSettings.m_cacheMemBufferSize = m_arm_mem < 256 ? 1024 * 1024 * 2 : 1024 * 1024 * 20;
+
   g_OMXImage.Initialize();
   m_omx_image_init = true;
   return true;
@@ -96,6 +100,7 @@ void CRBP::LogFirmwareVerison()
   response[sizeof(response) - 1] = '\0';
   CLog::Log(LOGNOTICE, "Raspberry PI firmware version: %s", response);
   CLog::Log(LOGNOTICE, "ARM mem: %dMB GPU mem: %dMB MPG2:%d WVC1:%d", m_arm_mem, m_gpu_mem, m_codec_mpg2_enabled, m_codec_wvc1_enabled);
+  CLog::Log(LOGNOTICE, "cacheMemBufferSize: %dMB",  g_advancedSettings.m_cacheMemBufferSize >> 20);
   m_DllBcmHost->vc_gencmd(response, sizeof response, "get_config int");
   response[sizeof(response) - 1] = '\0';
   CLog::Log(LOGNOTICE, "Config:\n%s", response);

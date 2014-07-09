@@ -363,7 +363,12 @@ void CAdvancedSettings::Initialize()
 
   m_measureRefreshrate = false;
 
+#ifdef TARGET_RASPBERRY_PI
+  // want default to be memory dependent, but interface to gpu not available yet, so set in RBP.cpp
+  m_cacheMemBufferSize = ~0;
+#else
   m_cacheMemBufferSize = 1024 * 1024 * 20;
+#endif
   m_networkBufferMode = 0; // Default (buffer all internet streams/filesystems)
   // the following setting determines the readRate of a player data
   // as multiply of the default data read rate
