@@ -50,6 +50,9 @@
   #endif
   #include "windowing/WindowingFactory.h"
   #include "settings/AdvancedSettings.h"
+#elif defined(TARGET_RASPBERRY_PI)
+  #include "guilib/GraphicContext.h"
+  #include "linux/RBP.h"
 #endif
 
 using namespace std;
@@ -177,6 +180,8 @@ void CVideoReferenceClock::Process()
     CLog::Log(LOGDEBUG, "CVideoReferenceClock: compiled without RandR support");
 #elif defined(TARGET_WINDOWS)
     CLog::Log(LOGDEBUG, "CVideoReferenceClock: only available on directx build");
+#elif defined(TARGET_RASPBERRY_PI)
+    SetupSuccess = SetupOMX();
 #else
     CLog::Log(LOGDEBUG, "CVideoReferenceClock: no implementation available");
 #endif
@@ -205,6 +210,8 @@ void CVideoReferenceClock::Process()
       RunD3D();
 #elif defined(TARGET_DARWIN)
       RunCocoa();
+#elif defined(TARGET_RASPBERRY_PI)
+      RunOMX();
 #endif
 
     }
@@ -237,6 +244,8 @@ void CVideoReferenceClock::Process()
     CleanupD3D();
 #elif defined(TARGET_DARWIN)
     CleanupCocoa();
+#elif defined(TARGET_RASPBERRY_PI)
+    CleanupOMX();
 #endif
     if (!SetupSuccess) break;
   }
@@ -862,6 +871,50 @@ void CVideoReferenceClock::VblankHandler(int64_t nowtime, double fps)
 
   SendVblankSignal();
   UpdateRefreshrate();
+}
+#elif defined(TARGET_RASPBERRY_PI)
+bool CVideoReferenceClock::SetupOMX()
+{
+  CLog::Log(LOGDEBUG, "CVideoReferenceClock: setting up OMX");
+
+  //init the vblank timestamp
+  m_MissedVblanks = 0;
+  m_RefreshRate = g_graphicsContext.GetFPS();
+
+  UpdateRefreshrate(true);
+  return true;
+}
+
+void CVideoReferenceClock::RunOMX()
+{
+  CSingleLock SingleLock(m_CritSection);
+  SingleLock.Leave();
+
+  while(!m_bStop)
+  {
+    g_RBP.WaitVsync();
+
+    m_RefreshRate = g_graphicsContext.GetFPS();
+    CLog::Log(LOGDEBUG, "CVideoReferenceClock:%s fps:%.2f missed:%d Time:%.3f", __func__, m_RefreshRate, m_TotalMissedVblanks, m_CurrTime * 1e-6);
+    //update the vblank timestamp, update the clock and send a signal that we got a vblank
+    SingleLock.Enter();
+    m_VblankTime = CurrentHostCounter();
+    UpdateClock(1, true);
+    SingleLock.Leave();
+    SendVblankSignal();
+
+    if (UpdateRefreshrate())
+    {
+      //we have to measure the refreshrate again
+      CLog::Log(LOGDEBUG, "CVideoReferenceClock: Displaymode changed");
+      return;
+    }
+  }
+}
+
+void CVideoReferenceClock::CleanupOMX()
+{
+  CLog::Log(LOGDEBUG, "CVideoReferenceClock: cleaning up OMX");
 }
 #endif
 
