@@ -41,7 +41,7 @@
 			<top>0</top>
 			<width>1280</width>
 			<height>720</height>
-			<texture>special://skin/backgrounds/media-overlay.jpg</texture>
+			<!--texture>special://skin/backgrounds/media-overlay.jpg</texture-->
 			<visible>[Player.HasVideo + !Skin.HasSetting(ShowBackgroundVideo)] + !Window.IsVisible(TVChannels) + !Window.IsVisible(RadioChannels)</visible>
 			<include>VisibleFadeEffect</include>
 		</control>
