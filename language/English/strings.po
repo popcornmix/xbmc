@@ -15905,3 +15905,13 @@ msgstr ""
 msgctxt "#37030"
 msgid "Unlimited"
 msgstr ""
+
+#: system/settings/settings.xml
+msgctxt "#37031"
+msgid "Support browsing into archives"
+msgstr ""
+
+#: system/settings/settings.xml
+msgctxt "#37032"
+msgid "Allow viewing and playing files in archives (e.g. zip, rar)"
+msgstr ""
