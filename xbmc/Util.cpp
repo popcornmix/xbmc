@@ -1899,7 +1899,7 @@ void CUtil::ScanPathsForAssociatedItems(const std::string& videoName,
     URIUtils::RemoveExtension(strCandidate);
     if (StringUtils::StartsWithNoCase(strCandidate, videoName))
     {
-      if (URIUtils::IsRAR(pItem->GetPath()) || URIUtils::IsZIP(pItem->GetPath()))
+      if (CSettings::GetInstance().GetBool("filelists.browsearchives") && (URIUtils::IsRAR(pItem->GetPath()) || URIUtils::IsZIP(pItem->GetPath())))
         CUtil::ScanArchiveForAssociatedItems(pItem->GetPath(), "", item_exts, associatedFiles);
       else
       {
@@ -1909,7 +1909,7 @@ void CUtil::ScanPathsForAssociatedItems(const std::string& videoName,
     }
     else
     {
-      if (URIUtils::IsRAR(pItem->GetPath()) || URIUtils::IsZIP(pItem->GetPath()))
+      if (CSettings::GetInstance().GetBool("filelists.browsearchives") && (URIUtils::IsRAR(pItem->GetPath()) || URIUtils::IsZIP(pItem->GetPath())))
         CUtil::ScanArchiveForAssociatedItems(pItem->GetPath(), videoName, item_exts, associatedFiles);
     }
   }
