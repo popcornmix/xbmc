@@ -102,4 +102,15 @@
       </group>
     </category>
   </section>
+  <section id="library">
+    <category id="filelists">
+      <group id="1">
+        <setting id="filelists.browsearchives" type="boolean" label="38040" help="38041">
+          <level>1</level>
+          <default>true</default>
+          <control type="toggle" />
+        </setting>
+      </group>
+    </category>
+  </section>
 </settings>
