@@ -751,6 +751,15 @@
           <default>true</default>
           <control type="toggle" />
         </setting>
+        <setting id="videoplayer.autoomxplayer" type="boolean" label="37033" help="37033">
+          <requirement>HAS_OMXPLAYER</requirement>
+          <dependencies>
+            <dependency type="enable" setting="videoplayer.decodingmethod" operator="is">1</dependency>
+          </dependencies>
+          <level>2</level>
+          <default>true</default>
+          <control type="toggle" />
+        </setting>
         <setting id="videoplayer.useomxplayer" type="boolean" label="13458" help="13459">
           <requirement>HAS_OMXPLAYER</requirement>
           <dependencies>

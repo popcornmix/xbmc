@@ -490,6 +490,62 @@ void CSelectionStreams::Update(CDVDInputStream* input, CDVDDemux* demuxer)
 
 void CDVDPlayer::CreatePlayers()
 {
+#ifdef HAS_OMXPLAYER
+  bool omxplayer_mode = m_omxplayer_mode;
+  bool autoomx = CSettings::Get().GetBool("videoplayer.autoomxplayer");
+  // omxplayer only handles Pi sink
+  if (autoomx && m_omxplayer_mode &&
+      CSettings::Get().GetString("audiooutput.audiodevice") != "PI:Analogue" &&
+      CSettings::Get().GetString("audiooutput.audiodevice") != "PI:HDMI")
+  {
+    CLog::Log(LOGNOTICE, "COMXPlayer::%s OMXPlayer unsuitable due to audio sink", __func__);
+    m_omxplayer_mode = false;
+  }
+  if (autoomx && m_pDemuxer && m_omxplayer_mode)
+  {
+    // find video stream
+    int num_supported = 0, num_unsupported = 0;
+    AVCodecID codec = AV_CODEC_ID_NONE;
+    SelectionStreams streams = m_SelectionStreams.Get(STREAM_VIDEO, PredicateVideoPriority);
+    for(SelectionStreams::iterator it = streams.begin(); it != streams.end(); ++it)
+    {
+      int iStream = it->id;
+      CDemuxStream *stream = m_pDemuxer->GetStream(iStream);
+      if(!stream || stream->disabled)
+        continue;
+      CDVDStreamInfo hint(*stream, true);
+
+      bool supported = false;
+      if ((hint.codec == AV_CODEC_ID_MPEG1VIDEO || hint.codec == AV_CODEC_ID_MPEG2VIDEO) && g_RBP.GetCodecMpg2())
+        supported = true;
+      else if ((hint.codec == AV_CODEC_ID_VC1 || hint.codec == AV_CODEC_ID_WMV3) && g_RBP.GetCodecWvc1())
+        supported = true;
+      else if (hint.codec == AV_CODEC_ID_H264 || hint.codec == AV_CODEC_ID_MPEG4 || hint.codec == AV_CODEC_ID_H263 ||
+          hint.codec == AV_CODEC_ID_VP6 || hint.codec == AV_CODEC_ID_VP6F || hint.codec == AV_CODEC_ID_VP6A || hint.codec == AV_CODEC_ID_VP8 ||
+          hint.codec == AV_CODEC_ID_THEORA || hint.codec == AV_CODEC_ID_MJPEG || hint.codec == AV_CODEC_ID_MJPEGB)
+        supported = true;
+      codec = hint.codec;
+      if (supported)
+        num_supported++;
+      else
+        num_unsupported++;
+    }
+    if (num_unsupported > 0 && num_supported == 0)
+    {
+      CLog::Log(LOGNOTICE, "COMXPlayer::%s OMXPlayer unsuitable due to video codec (%x:%d/%d)", __func__, codec, num_supported, num_unsupported);
+      m_omxplayer_mode = false;
+    }
+  }
+  if (autoomx && m_pInputStream && m_pInputStream->IsStreamType(DVDSTREAM_TYPE_DVD))
+  {
+    CLog::Log(LOGNOTICE, "COMXPlayer::%s OMXPlayer unsuitable due to dvd menus", __func__);
+    m_omxplayer_mode = false;
+  }
+
+  if (m_omxplayer_mode != omxplayer_mode)
+    DestroyPlayers();
+#endif
+
   if (m_players_created)
     return;
 
@@ -1187,6 +1243,8 @@ void CDVDPlayer::Process()
     m_bAbortRequest = true;
     return;
   }
+  // give players a chance to reconsider now codecs are known
+  CreatePlayers();
 
   // allow renderer to switch to fullscreen if requested
   m_dvdPlayerVideo->EnableFullscreen(m_PlayerOptions.fullscreen);

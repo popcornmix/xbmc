@@ -15915,3 +15915,13 @@ msgstr ""
 msgctxt "#37032"
 msgid "Allow viewing and playing files in archives (e.g. zip, rar)"
 msgstr ""
+
+#: system/settings/settings.xml
+msgctxt "#37033"
+msgid "Select omxplayer or dvdplayer automatically"
+msgstr ""
+
+#: system/settings/settings.xml
+msgctxt "#37034"
+msgid "Uses codec information and audio setting to choose dvdplayer or omxplayer as appropriate"
+msgstr ""
