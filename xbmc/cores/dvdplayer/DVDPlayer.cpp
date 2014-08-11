@@ -3276,7 +3276,7 @@ bool CDVDPlayer::OpenVideoStream(CDVDStreamInfo& hint, bool reset)
       hint.aspect = aspect;
       hint.forced_aspect = true;
     }
-    hint.software = true;
+    //hint.software = true;
   }
 
   CDVDInputStream::IMenus* pMenus = dynamic_cast<CDVDInputStream::IMenus*>(m_pInputStream);

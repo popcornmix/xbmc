@@ -133,6 +133,7 @@ protected:
 #endif
   void ProcessVideoUserData(DVDVideoUserData* pVideoUserData, double pts);
   void OpenStream(CDVDStreamInfo &hint, CDVDVideoCodec* codec);
+  void HandleDemuxerPacket(DemuxPacket* pPacket, bool bPacketDrop, int &iDropped, double &pts, CDVDMsg* pMsg, DVDVideoPicture &picture);
 
   CDVDMessageQueue m_messageQueue;
   CDVDMessageQueue& m_messageParent;
