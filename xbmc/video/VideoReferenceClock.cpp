@@ -157,6 +157,9 @@ void CVideoReferenceClock::Process()
   bool SetupSuccess = false;
   int64_t Now;
 
+  /* This shouldn't be very busy and timing is important so increase priority */
+  SetPriority(GetPriority()+1);
+
 #if defined(TARGET_WINDOWS) && defined(HAS_DX)
   //register callback
   m_D3dCallback.Reset();
