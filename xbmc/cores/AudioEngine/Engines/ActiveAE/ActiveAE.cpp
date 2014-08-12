@@ -347,6 +347,7 @@ void CActiveAE::StateMachine(int signal, Protocol *port, Message *msg)
         switch (signal)
         {
         case CActiveAEControlProtocol::INIT:
+          CLog::Log(LOGNOTICE, "CActiveAE::%s - AE_TOP_UNCONFIGURED/CActiveAEControlProtocol::INIT", __func__);
           m_extError = false;
           m_sink.EnumerateSinkList(false);
           LoadSettings();
@@ -432,6 +433,7 @@ void CActiveAE::StateMachine(int signal, Protocol *port, Message *msg)
           m_extDeferData = true;
           return;
         case CActiveAEControlProtocol::SUSPEND:
+          CLog::Log(LOGNOTICE, "CActiveAE::%s - AE_TOP_CONFIGURED/CActiveAEControlProtocol::SUSPEND", __func__);
           UnconfigureSink();
           m_stats.SetSuspended(true);
           m_state = AE_TOP_CONFIGURED_SUSPEND;
@@ -657,6 +659,7 @@ void CActiveAE::StateMachine(int signal, Protocol *port, Message *msg)
           CLog::Log(LOGDEBUG,"CActiveAE - display reset event");
           displayReset = true;
         case CActiveAEControlProtocol::INIT:
+          CLog::Log(LOGNOTICE, "CActiveAE::%s - AE_TOP_CONFIGURED_SUSPEND/CActiveAEControlProtocol::INIT", __func__);
           m_extError = false;
           if (!displayReset)
           {
@@ -2334,12 +2337,14 @@ void CActiveAE::Shutdown()
 
 bool CActiveAE::Suspend()
 {
+  CLog::Log(LOGNOTICE, "ActiveAE::%s", __FUNCTION__);
   return m_controlPort.SendOutMessage(CActiveAEControlProtocol::SUSPEND);
 }
 
 bool CActiveAE::Resume()
 {
   Message *reply;
+  CLog::Log(LOGNOTICE, "ActiveAE::%s", __FUNCTION__);
   if (m_controlPort.SendOutMessageSync(CActiveAEControlProtocol::INIT,
                                                  &reply,
                                                  5000))

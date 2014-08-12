@@ -932,6 +932,7 @@ bool COMXAudio::Initialize(AEAudioFormat format, OMXClock *clock, CDVDStreamInfo
 //***********************************************************************************************
 bool COMXAudio::Deinitialize()
 {
+  CLog::Log(LOGNOTICE, "COMXAudio::%s start", __func__);
   CSingleLock lock (m_critSection);
 
   if ( m_omx_tunnel_clock_analog.IsInitialized() )
@@ -992,6 +993,7 @@ bool COMXAudio::Deinitialize()
   m_submitted     = 0.0f;
   m_maxLevel      = 0.0f;
 
+  CLog::Log(LOGNOTICE, "COMXAudio::%s end", __func__);
   return true;
 }
 
