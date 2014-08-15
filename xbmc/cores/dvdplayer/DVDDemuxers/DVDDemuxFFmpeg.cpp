@@ -1468,6 +1468,9 @@ bool CDVDDemuxFFmpeg::IsProgramChange()
   if (m_program == UINT_MAX)
     return false;
 
+  if (m_program == 0 && !m_pFormatContext->nb_programs)
+    return false;
+
   if(m_pFormatContext->programs[m_program]->nb_stream_indexes != m_streams.size())
     return true;
 
