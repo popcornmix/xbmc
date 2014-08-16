@@ -1606,6 +1606,9 @@ bool CDVDDemuxFFmpeg::IsVideoReady()
   if(!m_checkvideo)
     return true;
 
+  if (m_program == 0 && !m_pFormatContext->nb_programs)
+    return false;
+
   if(m_program != UINT_MAX)
   {
     for (unsigned int i = 0; i < m_pFormatContext->programs[m_program]->nb_stream_indexes; i++)
