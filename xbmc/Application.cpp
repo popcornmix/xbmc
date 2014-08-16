@@ -2168,6 +2168,23 @@ void CApplication::Render()
   if (m_bStop)
     return;
 
+#ifdef TARGET_RASPBERRY_PI
+  if (g_graphicsContext.IsFullScreenVideo() && !m_pPlayer->IsPausedPlayback())
+  {
+    int fps = CSettings::Get().GetInt("videoplayer.limitguiupdate");
+    unsigned int now = XbmcThreads::SystemClockMillis();
+    unsigned int frameTime = now - m_lastFrameTime;
+    if (fps > 0 && frameTime * fps < 1000)
+    {
+      g_renderManager.FrameWait(100);
+      g_infoManager.UpdateFPS();
+      g_renderManager.FrameMove();
+      g_renderManager.FrameFinish();
+      return;
+    }
+  }
+#endif
+
   MEASURE_FUNCTION;
 
   int vsync_mode = CSettings::Get().GetInt("videoscreen.vsync");

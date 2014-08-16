@@ -25,6 +25,22 @@
           <control type="toggle" />
         </setting>
       </group>
+      <group id="3">
+        <setting id="videoplayer.limitguiupdate" type="integer" label="38000" help="38001">
+          <level>2</level>
+          <default>10</default>
+          <constraints>
+            <options>
+              <option label="38002">0</option>   <!-- off -->
+              <option label="38003">5</option>   <!-- 5 fps -->
+              <option label="38004">10</option>  <!-- 10 fps -->
+              <option label="38005">24</option>  <!-- 24 fps -->
+            </options>
+          </constraints>
+          <control type="spinner" format="string" />
+          <control type="edit" format="integer" />
+        </setting>
+      </group>
     </category>
   </section>
 

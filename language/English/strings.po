@@ -15925,3 +15925,30 @@ msgstr ""
 msgctxt "#37034"
 msgid "Uses codec information and audio setting to choose dvdplayer or omxplayer as appropriate"
 msgstr ""
+
+#: system/settings/settings.xml
+msgctxt "#38000"
+msgid "Limit GUI updates when playing video"
+msgstr ""
+
+#: system/settings/settings.xml
+msgctxt "#38001"
+msgid "This can reduce CPU when playing video by updating the overlays less often"
+msgstr ""
+
+#: system/settings/settings.xml
+msgctxt "#38002"
+msgid "Off"
+msgstr ""
+
+msgctxt "#38003"
+msgid "5 fps"
+msgstr ""
+
+msgctxt "#38004"
+msgid "10 fps"
+msgstr ""
+
+msgctxt "#38005"
+msgid "24 fps"
+msgstr ""
