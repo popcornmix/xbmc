@@ -466,7 +466,13 @@ bool CDVDDemuxFFmpeg::Open(CDVDInputStream* pInput, bool streaminfo)
 
   UpdateCurrentPTS();
 
-  CreateStreams();
+  // in case of mpegts and we have not seen pat/pmt, defer creation of streams
+  if (!m_checkvideo || m_pFormatContext->nb_programs > 0)
+    CreateStreams();
+
+  // allow IsProgramChange to return true
+  if (m_checkvideo && GetNrOfStreams() == 0)
+    m_program = 0;
 
   return true;
 }
