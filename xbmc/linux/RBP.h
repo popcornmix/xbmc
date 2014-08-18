@@ -53,6 +53,8 @@ public:
   bool GetCodecMpg2() { return m_codec_mpg2_enabled; }
   bool GetCodecWvc1() { return m_codec_wvc1_enabled; }
   void GetDisplaySize(int &width, int &height);
+  DISPMANX_DISPLAY_HANDLE_T OpenDisplay(uint32_t device);
+  void CloseDisplay(DISPMANX_DISPLAY_HANDLE_T display);
   int GetGUIResolutionLimit() { return m_gui_resolution_limit; }
   // stride can be null for packed output
   unsigned char *CaptureDisplay(int width, int height, int *stride, bool swap_red_blue, bool video_only = true);
@@ -73,10 +75,9 @@ private:
   bool       m_codec_mpg2_enabled;
   bool       m_codec_wvc1_enabled;
   COMXCore   *m_OMX;
-  DISPMANX_RESOURCE_HANDLE_T m_resource;
-  DISPMANX_ELEMENT_HANDLE_T m_element;
   class DllLibOMXCore;
   CCriticalSection m_critSection;
+  DISPMANX_DISPLAY_HANDLE_T m_display;
 };
 
 extern CRBP g_RBP;
