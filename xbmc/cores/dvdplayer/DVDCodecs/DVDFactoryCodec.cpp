@@ -192,6 +192,10 @@ CDVDVideoCodec* CDVDFactoryCodec::CreateVideoCodec(CDVDStreamInfo &hint, unsigne
 #endif
   CLog::Log(LOGDEBUG, "CDVDFactoryCodec: compiled in hardware support: %s", hwSupport.c_str());
 
+#if defined(HAS_MMAL)
+  // mmal can handle dvd playback including stills
+  if (!CSettings::Get().GetBool("videoplayer.usemmal"))
+#endif
   if (hint.stills && (hint.codec == AV_CODEC_ID_MPEG2VIDEO || hint.codec == AV_CODEC_ID_MPEG1VIDEO))
   {
      // If dvd is an mpeg2 and hint.stills
