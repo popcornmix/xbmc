@@ -392,6 +392,8 @@ public:
    */
   void UnregisterActionListener(IActionListener *listener);
 
+  bool ScreenSaverDisablesAutoScrolling();
+
   std::unique_ptr<CServiceManager> m_ServiceManager;
 
   /*!
