@@ -23,6 +23,9 @@
 #include "utils/XBMCTinyXML.h"
 #include "utils/MathUtils.h"
 #include "utils/StringUtils.h"
+#ifdef TARGET_RASPBERRY_PI
+#include "Application.h"
+#endif
 
 using namespace std;
 
@@ -132,7 +135,11 @@ void CGUITextBox::Process(unsigned int currentTime, CDirtyRegionList &dirtyregio
   // update our auto-scrolling as necessary
   if (m_autoScrollTime && m_lines.size() > m_itemsPerPage)
   {
+#ifdef TARGET_RASPBERRY_PI
+    if ((!m_autoScrollCondition || m_autoScrollCondition->Get()) && !g_application.IsInScreenSaver())
+#else
     if (!m_autoScrollCondition || m_autoScrollCondition->Get())
+#endif
     {
       if (m_lastRenderTime)
         m_autoScrollDelayTime += currentTime - m_lastRenderTime;
