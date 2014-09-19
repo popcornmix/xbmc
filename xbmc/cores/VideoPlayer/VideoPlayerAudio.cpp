@@ -82,6 +82,7 @@ bool CVideoPlayerAudio::OpenStream(CDVDStreamInfo hints)
     allowpassthrough = false;
 
   CAEStreamInfo::DataType streamType = m_audioSink.GetPassthroughStreamType(hints.codec, hints.samplerate);
+  allowpassthrough |= CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt("audiooutput.plladjust") > 0;
   CDVDAudioCodec* codec = CDVDFactoryCodec::CreateAudioCodec(hints, m_processInfo,
                                                              allowpassthrough, m_processInfo.AllowDTSHDDecode(),
                                                              streamType);
@@ -204,8 +205,12 @@ void CVideoPlayerAudio::UpdatePlayerInfo()
 
   //print the inverse of the resample ratio, since that makes more sense
   //if the resample ratio is 0.5, then we're playing twice as fast
+#ifdef TARGET_RASPBERRY_PI
+  s << ", rr:" << std::fixed << std::setprecision(5) << 1.0 / m_audioSink.GetResampleRatio() << ", pll:" << std::fixed << std::setprecision(5) << g_RBP.GetAdjustHDMIClock() << ", err:" << std::fixed << std::setprecision(1) << m_audioSink.GetSyncError() * 1e-3 << "ms";
+#else
   if (m_synctype == SYNC_RESAMPLE)
     s << ", rr:" << std::fixed << std::setprecision(5) << 1.0 / m_audioSink.GetResampleRatio();
+#endif
 
   SInfo info;
   info.info        = s.str();
@@ -566,10 +571,12 @@ void CVideoPlayerAudio::SetSyncType(bool passthrough)
     int synctype = (m_synctype >= 0 && m_synctype <= 1) ? m_synctype : 2;
     CLog::Log(LOGDEBUG, "CVideoPlayerAudio:: synctype set to %i: %s", m_synctype, synctypes[synctype]);
     m_prevsynctype = m_synctype;
+    const float plladjusts[] = { 0.0f, 0.00001f, 0.0001f, 0.001f, 0.01f };
+    float plladjust = plladjusts[CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt("audiooutput.plladjust")];
     if (m_synctype == SYNC_RESAMPLE)
-      m_audioSink.SetResampleMode(1);
+      m_audioSink.SetResampleMode(1, plladjust);
     else
-      m_audioSink.SetResampleMode(0);
+      m_audioSink.SetResampleMode(0, plladjust);
   }
 }
 
@@ -612,6 +619,7 @@ bool CVideoPlayerAudio::SwitchCodecIfNeeded()
     allowpassthrough = false;
 
   CAEStreamInfo::DataType streamType = m_audioSink.GetPassthroughStreamType(m_streaminfo.codec, m_streaminfo.samplerate);
+  allowpassthrough |= CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt("audiooutput.plladjust") > 0;
   CDVDAudioCodec *codec = CDVDFactoryCodec::CreateAudioCodec(m_streaminfo, m_processInfo,
                                                              allowpassthrough, m_processInfo.AllowDTSHDDecode(),
                                                              streamType);
