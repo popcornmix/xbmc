@@ -11,6 +11,26 @@
   </section>
 
   <section id="videos">
+    <category id="videoplayer" label="14086" help="36151">
+      <group id="2">
+        <setting id="videoplayer.synctype" type="integer" parent="videoplayer.usedisplayasclock" label="13500" help="36167">
+          <level>2</level>
+          <default>4</default> <!-- SYNC_PLL -->
+          <constraints>
+            <options>
+              <option label="13501">0</option> <!-- SYNC_DISCON -->
+              <option label="13502">1</option> <!-- SYNC_SKIPDUP -->
+              <option label="13503">2</option> <!-- SYNC_RESAMPLE -->
+              <option label="38006">3</option> <!-- SYNC_PLLADJUST -->
+            </options>
+          </constraints>
+          <dependencies>
+            <dependency type="enable" setting="videoplayer.usedisplayasclock" operator="is">true</dependency>
+          </dependencies>
+          <control type="spinner" format="string" />
+        </setting>
+      </group>
+    </category>
     <category id="videoacceleration">
       <group id="1">
         <visible>false</visible>

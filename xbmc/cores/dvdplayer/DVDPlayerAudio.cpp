@@ -112,6 +112,7 @@ CDVDPlayerAudio::CDVDPlayerAudio(CDVDClock* pClock, CDVDMessageQueue& parent)
   m_started = false;
   m_silence = false;
   m_resampleratio = 1.0;
+  m_plladjust = 1.0f;
   m_synctype = SYNC_DISCON;
   m_setsynctype = SYNC_DISCON;
   m_prevsynctype = -1;
@@ -472,6 +473,8 @@ void CDVDPlayerAudio::UpdatePlayerInfo()
   //if the resample ratio is 0.5, then we're playing twice as fast
   if (m_synctype == SYNC_RESAMPLE)
     s << ", rr:" << fixed << setprecision(5) << 1.0 / m_resampleratio;
+  if (m_synctype == SYNC_PLLADJUST)
+    s << ", pll:" << fixed << setprecision(5) << 1.0 / m_plladjust;
 
   s << ", att:" << fixed << setprecision(1) << log(GetCurrentAttenuation()) * 20.0f << " dB";
 
@@ -622,8 +625,8 @@ void CDVDPlayerAudio::SetSyncType(bool passthrough)
 
   if (m_synctype != m_prevsynctype)
   {
-    const char *synctypes[] = {"clock feedback", "skip/duplicate", "resample", "invalid"};
-    int synctype = (m_synctype >= 0 && m_synctype <= 2) ? m_synctype : 3;
+    const char *synctypes[] = {"clock feedback", "skip/duplicate", "resample", "pll adjust", "invalid"};
+    int synctype = (m_synctype >= 0 && m_synctype <= 3) ? m_synctype : 4;
     CLog::Log(LOGDEBUG, "CDVDPlayerAudio:: synctype set to %i: %s", m_synctype, synctypes[synctype]);
     m_prevsynctype = m_synctype;
   }
@@ -697,6 +700,29 @@ void CDVDPlayerAudio::HandleSyncError(double duration)
       }
       m_resampleratio = 1.0 / m_pClock->GetClockSpeed() + proportional + m_integral;
     }
+    else if (m_synctype == SYNC_PLLADJUST)
+    {
+      //reset the integral on big errors, failsafe
+      if (fabs(m_error) > DVD_TIME_BASE)
+        m_integral = 0;
+      else if (fabs(m_error) > DVD_MSEC_TO_TIME(5))
+        m_integral += m_error / DVD_TIME_BASE / INTEGRAL;
+
+      double proportional = 0.0;
+
+      //on big errors use more proportional
+      if (fabs(m_error / DVD_TIME_BASE) > 0.0)
+      {
+        double proportionaldiv = PROPORTIONAL * (PROPREF / fabs(m_error / DVD_TIME_BASE));
+        if (proportionaldiv < PROPDIVMIN) proportionaldiv = PROPDIVMIN;
+        else if (proportionaldiv > PROPDIVMAX) proportionaldiv = PROPDIVMAX;
+
+        proportional = m_error / DVD_TIME_BASE / proportionaldiv;
+      }
+      m_plladjust = 1.0 / m_pClock->GetClockSpeed() + proportional + m_integral;
+      double new_adjust = g_RBP.AdjustHDMIClock(m_plladjust);
+      CLog::Log(LOGDEBUG, "CDVDPlayerAudio::%s pll:%.4f (%.4f) proportional:%.4f integral:%.4f", __FUNCTION__, m_plladjust, new_adjust, proportional, m_integral);
+    }
   }
 }
 
@@ -733,6 +759,10 @@ bool CDVDPlayerAudio::OutputPacket(DVDAudioFrame &audioframe)
   else if (m_synctype == SYNC_RESAMPLE)
   {
     m_dvdAudio.SetResampleRatio(m_resampleratio);
+    m_dvdAudio.AddPackets(audioframe);
+  }
+  else if (m_synctype == SYNC_PLLADJUST)
+  {
     m_dvdAudio.AddPackets(audioframe);
   }
 

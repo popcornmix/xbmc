@@ -58,6 +58,7 @@ public:
   unsigned char *CaptureDisplay(int width, int height, int *stride, bool swap_red_blue, bool video_only = true);
   DllOMX *GetDllOMX() { return m_OMX ? m_OMX->GetDll() : NULL; }
   void WaitVsync();
+  double AdjustHDMIClock(double adjust);
 
   void SuspendVideoOutput();
   void ResumeVideoOutput();

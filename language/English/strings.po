@@ -15952,3 +15952,8 @@ msgstr ""
 msgctxt "#38005"
 msgid "24 fps"
 msgstr ""
+
+#: system/settings/settings.xml
+msgctxt "#38006"
+msgid "Adjust PLL"
+msgstr ""
