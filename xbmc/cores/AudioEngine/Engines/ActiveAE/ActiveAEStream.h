@@ -100,7 +100,8 @@ public:
   void Flush();
   void SetDrain(bool drain);
   bool IsDrained();
-  void SetRR(double rr, double atempoThreshold);
+  void SetRR(double rr, double atempoThreshold, double pllAdjustRequest, double pllThreshold, double &pllAdjustActual);
+  void SetRR(double rr, double atempoThreshold) { double pllAdjustActual; SetRR(rr, atempoThreshold, 0.0, 0.0, pllAdjustActual); }
   double GetRR();
   void FillBuffer();
   bool DoesNormalize();
@@ -171,7 +172,7 @@ public:
 
   double GetResampleRatio() override;
   void SetResampleRatio(double ratio) override;
-  void SetResampleMode(int mode) override;
+  void SetResampleMode(int mode, float plladjust) override;
   void RegisterAudioCallback(IAudioCallback* pCallback) override;
   void UnRegisterAudioCallback() override;
   void FadeVolume(float from, float to, unsigned int time) override;
@@ -188,6 +189,7 @@ protected:
   float m_streamAmplify;
   double m_streamResampleRatio;
   int m_streamResampleMode;
+  float m_streamPllAdjust;
   unsigned int m_streamSpace;
   bool m_streamDraining;
   bool m_streamDrained;
@@ -227,6 +229,7 @@ protected:
   int m_fadingTime;
   int m_profile;
   int m_resampleMode;
+  float m_pllAdjust;
   double m_resampleIntegral;
   double m_clockSpeed;
   enum AVMatrixEncoding m_matrixEncoding;

@@ -99,6 +99,8 @@ public:
   void VSyncCallback();
   int GetMBox() { return m_mb; }
   AVRpiZcFrameGeometry GetFrameGeometry(uint32_t encoding, unsigned short video_width, unsigned short video_height);
+  double AdjustHDMIClock(double adjust);
+  double GetAdjustHDMIClock() { return m_actual_pll_adjust; }
 
 private:
   DllBcmHost *m_DllBcmHost;
@@ -120,6 +122,9 @@ private:
   CCriticalSection m_critSection;
 
   int m_mb;
+  double m_requested_pll_adjust;
+  double m_actual_pll_adjust;
+  public:
 };
 
 extern CRBP g_RBP;
