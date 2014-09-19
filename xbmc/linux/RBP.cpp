@@ -46,6 +46,8 @@ CRBP::CRBP()
   m_DllBcmHost      = new DllBcmHost();
   m_OMX             = new COMXCore();
   m_display = DISPMANX_NO_HANDLE;
+  m_requested_pll_adjust = -1.0;
+  m_actual_pll_adjust = -1.0;
   m_mb = mbox_open();
   vcsm_init();
   m_vsync_count = 0;
@@ -153,6 +155,8 @@ void CRBP::CloseDisplay(DISPMANX_DISPLAY_HANDLE_T display)
   assert(s == 0);
   vc_dispmanx_display_close(m_display);
   m_display = DISPMANX_NO_HANDLE;
+  m_requested_pll_adjust = -1.0;
+  m_actual_pll_adjust = -1.0;
 }
 
 void CRBP::GetDisplaySize(int &width, int &height)
@@ -364,6 +368,22 @@ void CGPUMEM::Flush()
   iocache.s[0].addr = (int) m_arm;
   iocache.s[0].size  = m_numbytes;
   vcsm_clean_invalid( &iocache );
+}
+
+double CRBP::AdjustHDMIClock(double adjust)
+{
+  char response[80];
+
+  if (adjust == m_requested_pll_adjust)
+    return m_actual_pll_adjust;
+
+  m_requested_pll_adjust = adjust;
+  vc_gencmd(response, sizeof response, "hdmi_adjust_clock %f", adjust);
+  char *p = strchr(response, '=');
+  if (p)
+    m_actual_pll_adjust = atof(p+1);
+  CLog::Log(LOGDEBUG, "CRBP::%s(%.5f) = %.5f", __func__, adjust, m_actual_pll_adjust);
+  return m_actual_pll_adjust;
 }
 
 #endif

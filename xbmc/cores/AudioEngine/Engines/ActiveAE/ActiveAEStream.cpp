@@ -29,6 +29,10 @@
 #include "ActiveAE.h"
 #include "ActiveAEStream.h"
 
+#if defined(TARGET_RASPBERRY_PI)
+#include "linux/RBP.h"
+#endif
+
 using namespace ActiveAE;
 
 /* typecast AE to CActiveAE */
@@ -71,6 +75,7 @@ CActiveAEStream::CActiveAEStream(AEAudioFormat *format, unsigned int streamid)
   m_lastPtsJump = 0;
   m_errorInterval = 1000;
   m_clockSpeed = 1.0;
+  m_pllAdjust = 0.0f;
 }
 
 CActiveAEStream::~CActiveAEStream()
@@ -509,11 +514,12 @@ void CActiveAEStream::SetResampleRatio(double ratio)
   m_streamResampleRatio = ratio;
 }
 
-void CActiveAEStream::SetResampleMode(int mode)
+void CActiveAEStream::SetResampleMode(int mode, float plladjust)
 {
-  if (mode != m_streamResampleMode)
-    AE.SetStreamResampleMode(this, mode);
+  if (mode != m_streamResampleMode || plladjust != m_streamPllAdjust)
+    AE.SetStreamResampleMode(this, mode, plladjust);
   m_streamResampleMode = mode;
+  m_streamPllAdjust = plladjust;
 }
 
 void CActiveAEStream::SetFFmpegInfo(int profile, enum AVMatrixEncoding matrix_encoding, enum AVAudioServiceType audio_service_type)
@@ -714,8 +720,18 @@ bool CActiveAEStreamBuffers::IsDrained()
     return false;
 }
 
-void CActiveAEStreamBuffers::SetRR(double rr, double atempoThreshold)
+void CActiveAEStreamBuffers::SetRR(double rr, double atempoThreshold, double pllAdjustRequest, double pllThreshold, double &pllAdjustActual)
 {
+#if defined(TARGET_RASPBERRY_PI)
+  if (pllAdjustRequest > 0.0f)  // pll adjust
+  {
+    pllAdjustActual = g_RBP.AdjustHDMIClock(pllAdjustRequest);
+    rr = 1.0;
+  }
+  else
+    pllAdjustActual = g_RBP.AdjustHDMIClock(1.0);
+#endif
+
   if (fabs(rr - 1.0) < atempoThreshold)
   {
     m_resampleBuffers->SetRR(rr);

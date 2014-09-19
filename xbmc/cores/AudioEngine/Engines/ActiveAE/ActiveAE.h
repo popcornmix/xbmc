@@ -177,6 +177,13 @@ struct MsgStreamFFmpegInfo
   enum AVAudioServiceType audio_service_type;
 };
 
+struct MsgStreamResample
+{
+  CActiveAEStream *stream;
+  int mode;
+  float plladjust;
+};
+
 class CEngineStats
 {
 public:
@@ -293,7 +300,7 @@ protected:
   void SetStreamReplaygain(CActiveAEStream *stream, float rgain);
   void SetStreamVolume(CActiveAEStream *stream, float volume);
   void SetStreamResampleRatio(CActiveAEStream *stream, double ratio);
-  void SetStreamResampleMode(CActiveAEStream *stream, int mode);
+  void SetStreamResampleMode(CActiveAEStream *stream, int mode, float plladjust);
   void SetStreamFFmpegInfo(CActiveAEStream *stream, int profile, enum AVMatrixEncoding matrix_encoding, enum AVAudioServiceType audio_service_type);
   void SetStreamFade(CActiveAEStream *stream, float from, float target, unsigned int millis);
 
