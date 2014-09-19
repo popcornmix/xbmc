@@ -363,11 +363,12 @@ void CActiveAE::StateMachine(int signal, Protocol *port, Message *msg)
           m_sink.m_controlPort.SendOutMessage(CSinkControlProtocol::APPFOCUSED, msg->data, sizeof(bool));
           return;
         case CActiveAEControlProtocol::STREAMRESAMPLEMODE:
-          MsgStreamParameter *par;
-          par = (MsgStreamParameter*)msg->data;
+          MsgStreamResample *par;
+          par = (MsgStreamResample*)msg->data;
           if (par->stream)
           {
-            par->stream->m_resampleMode = par->parameter.int_par;
+            par->stream->m_resampleMode = par->mode;
+            par->stream->m_pllAdjust = par->plladjust;
             par->stream->m_resampleIntegral = 0.0;
           }
           return;
@@ -2456,7 +2457,14 @@ CSampleBuffer* CActiveAE::SyncStream(CActiveAEStream *stream)
   {
     if (stream->m_processingBuffers)
     {
-      stream->m_processingBuffers->SetRR(stream->CalcResampleRatio(error), m_settings.atempoThreshold);
+      double pllAdjustRequest = 0.0, pllAdjustActual = 0.0, e = 0.0;
+      if (stream->m_pllAdjust > 0.0)
+      {
+        e = std::max(std::min(error / 50.0, 1.0), - 1.0);
+        pllAdjustRequest = 1.0 + e * stream->m_pllAdjust;
+      }
+      stream->m_processingBuffers->SetRR(stream->CalcResampleRatio(error), m_settings.atempoThreshold, pllAdjustRequest, stream->m_pllAdjust, pllAdjustActual);
+      CLog::Log(LOGDEBUG, "ActiveAE::%s pll:%.5f (act:%.5f lim:%.5f) rr:%.5f threshold:%.3f error:%.6f", __FUNCTION__, pllAdjustRequest, pllAdjustActual, stream->m_pllAdjust, stream->m_processingBuffers->GetRR(), m_settings.atempoThreshold, error );
     }
   }
   else if (stream->m_processingBuffers)
@@ -3322,13 +3330,14 @@ void CActiveAE::SetStreamResampleRatio(CActiveAEStream *stream, double ratio)
                                      &msg, sizeof(MsgStreamParameter));
 }
 
-void CActiveAE::SetStreamResampleMode(CActiveAEStream *stream, int mode)
+void CActiveAE::SetStreamResampleMode(CActiveAEStream *stream, int mode, float plladjust)
 {
-  MsgStreamParameter msg;
+  MsgStreamResample msg;
   msg.stream = stream;
-  msg.parameter.int_par = mode;
+  msg.mode = mode;
+  msg.plladjust = plladjust;
   m_controlPort.SendOutMessage(CActiveAEControlProtocol::STREAMRESAMPLEMODE,
-                               &msg, sizeof(MsgStreamParameter));
+                               &msg, sizeof(MsgStreamResample));
 }
 
 void CActiveAE::SetStreamFFmpegInfo(CActiveAEStream *stream, int profile, enum AVMatrixEncoding matrix_encoding, enum AVAudioServiceType audio_service_type)
