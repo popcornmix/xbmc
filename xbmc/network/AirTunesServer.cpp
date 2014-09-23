@@ -389,9 +389,23 @@ bool CAirTunesServer::StartServer(int port, bool nonlocal, bool usePassword, con
     txt.push_back(std::make_pair("pw",  usePassword?"true":"false"));
     txt.push_back(std::make_pair("vn",  "3"));
     txt.push_back(std::make_pair("da",  "true"));
-    txt.push_back(std::make_pair("vs",  "130.14"));
     txt.push_back(std::make_pair("md",  "0,1,2"));
     txt.push_back(std::make_pair("am",  "Xbmc,1"));
+
+    if (CSettings::Get().GetBool("services.airplayios8compat"))
+    {
+      // for ios8 clients we need to announce a newer srcvers then
+      // we really understand. Its important to send our real
+      // version in the server-info message during commincation
+      // thats why this version number is hardcoded here!
+      // also the feature bitmask is needed for getting airtunes to
+      // work without fairplay encryption aswell.
+      txt.push_back(std::make_pair("vs", "150.33"));
+    }
+    else
+    {
+      txt.push_back(std::make_pair("vs",  "130.14"));
+    }
 
     CZeroconf::GetInstance()->PublishService("servers.airtunes", "_raop._tcp", appName, port, txt);
   }

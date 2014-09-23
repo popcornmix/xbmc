@@ -530,9 +530,25 @@ bool CNetworkServices::StartAirPlayServer()
   std::vector<std::pair<std::string, std::string> > txt;
   CNetworkInterface* iface = g_application.getNetwork().GetFirstConnectedInterface();
   txt.push_back(make_pair("deviceid", iface != NULL ? iface->GetMacAddress() : "FF:FF:FF:FF:FF:F2"));
-  txt.push_back(make_pair("features", "0x77"));
   txt.push_back(make_pair("model", "Xbmc,1"));
-  txt.push_back(make_pair("srcvers", AIRPLAY_SERVER_VERSION_STR));
+
+  if (CSettings::Get().GetBool("services.airplayios8compat"))
+  {
+    // for ios8 clients we need to announce a newer srcvers then
+    // we really understand. Its important to send our real
+    // version in the server-info message during commincation
+    // thats why this version number is hardcoded here!
+    // also the feature bitmask is needed for getting airtunes to
+    // work without fairplay encryption aswell.
+    txt.push_back(make_pair("features", "0x100029FF"));
+    txt.push_back(make_pair("srcvers", "150.33"));
+  }
+  else
+  {
+    txt.push_back(make_pair("features", "0x77"));
+    txt.push_back(make_pair("srcvers", AIRPLAY_SERVER_VERSION_STR));
+  }
+
   CZeroconf::GetInstance()->PublishService("servers.airplay", "_airplay._tcp", g_infoManager.GetLabel(SYSTEM_FRIENDLY_NAME), g_advancedSettings.m_airPlayPort, txt);
 #endif // HAS_ZEROCONF
 
