@@ -745,8 +745,8 @@ void dumpPlist(DllLibPlist *pLibPlist, plist_t *dict)
 {
   char *plist = NULL;
   uint32_t len = 0;
-  pLibPlist->plist_to_xml(dict,&plist, &len);
-  CLog::Log(LOGDEBUG, "%s", plist);
+  pLibPlist->plist_to_xml(*dict,&plist, &len);
+  CLog::Log(LOGDEBUG, "AIRPLAY-DUMP: %s", plist);
 
 }
 
