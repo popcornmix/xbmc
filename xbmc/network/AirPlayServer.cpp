@@ -868,6 +868,7 @@ int CAirPlayServer::CTCPClient::ProcessRequest( std::string& responseHeader,
   {
     std::string location;
     float position = 0.0;
+    bool startPlayback = true;
     m_lastEvent = EVENT_NONE;
 
     CLog::Log(LOGDEBUG, "AIRPLAY: got request %s", uri.c_str());
@@ -907,6 +908,18 @@ int CAirPlayServer::CTCPClient::ProcessRequest( std::string& responseHeader,
           if (tmpNode)
           {
             location = getStringFromPlist(m_pLibPlist, tmpNode);
+            tmpNode = NULL;
+          }
+
+          tmpNode = m_pLibPlist->plist_dict_get_item(dict, "rate");
+          if (tmpNode)
+          {
+            double rate = 0;
+            m_pLibPlist->plist_get_real_val(tmpNode, &rate);
+            if (rate == 0.0)
+            {
+              startPlayback = false;
+            }
             tmpNode = NULL;
           }
 
@@ -951,6 +964,12 @@ int CAirPlayServer::CTCPClient::ProcessRequest( std::string& responseHeader,
       // one who will work well with airplay
       g_application.m_eForcedNextPlayer = EPC_DVDPLAYER;
       CApplicationMessenger::Get().MediaPlay(fileToPlay);
+      if (!startPlayback)
+      {
+        CApplicationMessenger::Get().MediaPause();
+        g_application.m_pPlayer->SeekPercentage(position * 100.0f);
+      }
+
     }
   }
 
