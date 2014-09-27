@@ -346,7 +346,9 @@ void CMMALRenderer::Flush()
 
 void CMMALRenderer::Update()
 {
+#if defined(MMAL_DEBUG_VERBOSE)
   CLog::Log(LOGDEBUG, "%s::%s", CLASSNAME, __func__);
+#endif
   if (!m_bConfigured) return;
   ManageDisplay();
 }
