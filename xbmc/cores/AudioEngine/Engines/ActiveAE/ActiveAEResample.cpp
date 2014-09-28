@@ -23,6 +23,7 @@
 #if !defined(TARGET_RASPBERRY_PI)
 
 #include "ActiveAEResample.h"
+#include "settings/Settings.h"
 #include "utils/log.h"
 
 extern "C" {
