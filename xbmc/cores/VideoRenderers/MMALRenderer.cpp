@@ -100,10 +100,7 @@ bool CMMALRenderer::init_vout(MMAL_ES_FORMAT_T *format)
     return false;
   }
 
-  if (m_format == RENDER_FMT_YUV420P)
-    m_vout_input->buffer_num = NUM_BUFFERS;
-  else
-    m_vout_input->buffer_num = m_vout_input->buffer_num_min;
+  m_vout_input->buffer_num = NUM_BUFFERS;
   m_vout_input->buffer_size = m_vout_input->buffer_size_recommended;
 
   status = mmal_port_enable(m_vout_input, vout_input_port_cb_static);
