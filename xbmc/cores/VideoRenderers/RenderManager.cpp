@@ -270,7 +270,8 @@ bool CXBMCRenderManager::Configure(unsigned int width, unsigned int height, unsi
     if(m_QueueSize < 2)
     {
       m_QueueSize = 2;
-      CLog::Log(LOGWARNING, "CXBMCRenderManager::Configure - queue size too small (%d, %d, %d)", m_QueueSize, renderbuffers, buffers);
+      if (m_format != RENDER_FMT_BYPASS)
+        CLog::Log(LOGWARNING, "CXBMCRenderManager::Configure - queue size too small (%d, %d, %d)", m_QueueSize, renderbuffers, buffers);
     }
 
     m_pRenderer->SetBufferSize(m_QueueSize);
