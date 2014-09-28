@@ -139,6 +139,7 @@ protected:
   unsigned int      m_decode_frame_number;
   double            m_decoderPts;
   unsigned int      m_droppedPics;
+  bool              m_preroll;
 
   MMAL_COMPONENT_T *m_dec;
   MMAL_PORT_T *m_dec_input;

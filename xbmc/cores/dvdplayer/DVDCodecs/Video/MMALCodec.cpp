@@ -135,6 +135,7 @@ CMMALVideo::CMMALVideo()
   m_output_busy = 0;
   m_demux_queue_length = 0;
   m_es_format = mmal_format_alloc();
+  m_preroll = true;
 }
 
 CMMALVideo::~CMMALVideo()
@@ -689,6 +690,7 @@ bool CMMALVideo::Open(CDVDStreamInfo &hints, CDVDCodecOptions &options, MMALVide
 
   m_drop_state = false;
   m_startframe = false;
+  m_preroll = !m_hints.stills;
 
   return true;
 }
@@ -899,13 +901,6 @@ int CMMALVideo::Decode(uint8_t* pData, int iSize, double dts, double pts)
       break;
   }
   int ret = 0;
-  if (!m_output_ready.empty())
-  {
-    #if defined(MMAL_DEBUG_VERBOSE)
-    CLog::Log(LOGDEBUG, "%s::%s -  got output picture:%d", CLASSNAME, __func__, m_output_ready.size());
-    #endif
-    ret |= VC_PICTURE;
-  }
   if (mmal_queue_length(m_dec_input_pool->queue) > 0 && !m_demux_queue_length)
   {
     #if defined(MMAL_DEBUG_VERBOSE)
@@ -913,10 +908,19 @@ int CMMALVideo::Decode(uint8_t* pData, int iSize, double dts, double pts)
     #endif
     ret |= VC_BUFFER;
   }
+  else
+    m_preroll = false;
+  if (!m_output_ready.empty() && !m_preroll)
+  {
+    #if defined(MMAL_DEBUG_VERBOSE)
+    CLog::Log(LOGDEBUG, "%s::%s -  got output picture:%d", CLASSNAME, __func__, m_output_ready.size());
+    #endif
+    ret |= VC_PICTURE;
+  }
   if (!ret)
   {
-    CLog::Log(LOGDEBUG, "%s::%s - Nothing to do: dts_queue(%d) ready_queue(%d) busy_queue(%d) demux_queue(%d) space(%d)",
-        CLASSNAME, __func__, m_dts_queue.size(), m_output_ready.size(), m_output_busy, m_demux_queue_length, mmal_queue_length(m_dec_input_pool->queue) * m_dec_input->buffer_size);
+    CLog::Log(LOGDEBUG, "%s::%s - Nothing to do: dts_queue(%d) ready_queue(%d) busy_queue(%d) demux_queue(%d) space(%d) preroll(%d)",
+        CLASSNAME, __func__, m_dts_queue.size(), m_output_ready.size(), m_output_busy, m_demux_queue_length, mmal_queue_length(m_dec_input_pool->queue) * m_dec_input->buffer_size, m_preroll);
     Sleep(10); // otherwise we busy spin
   }
   return ret;
@@ -960,6 +964,7 @@ void CMMALVideo::Reset(void)
   m_decoderPts = DVD_NOPTS_VALUE;
   m_droppedPics = 0;
   m_decode_frame_number = 1;
+  m_preroll = !m_hints.stills;
 }
 
 
