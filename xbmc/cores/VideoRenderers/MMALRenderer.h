@@ -87,7 +87,6 @@ public:
 
   virtual void         SetBufferSize(int numBuffers) { m_NumYV12Buffers = numBuffers; }
   virtual unsigned int GetMaxBufferSize() { return NUM_BUFFERS; }
-  virtual unsigned int GetProcessorSize();
   virtual void SetVideoRect(const CRect& SrcRect, const CRect& DestRect);
 
   void vout_input_port_cb(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer);

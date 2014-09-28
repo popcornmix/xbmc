@@ -577,14 +577,6 @@ EINTERLACEMETHOD CMMALRenderer::AutoInterlaceMethod()
   return VS_INTERLACEMETHOD_DEINTERLACE_HALF;
 }
 
-unsigned int CMMALRenderer::GetProcessorSize()
-{
-  if (m_format == RENDER_FMT_MMAL)
-    return 1;
-  else
-    return 0;
-}
-
 void CMMALRenderer::SetVideoRect(const CRect& InSrcRect, const CRect& InDestRect)
 {
   // we get called twice a frame for left/right. Can ignore the rights.
