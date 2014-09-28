@@ -619,7 +619,7 @@ bool CMMALVideo::Open(CDVDStreamInfo &hints, CDVDCodecOptions &options, MMALVide
   if (status != MMAL_SUCCESS)
     CLog::Log(LOGERROR, "%s::%s Failed to disable error concealment on %s (status=%x %s)", CLASSNAME, __func__, m_dec_input->name, status, mmal_status_to_string(status));
 
-  status = mmal_port_parameter_set_uint32(m_dec_input, MMAL_PARAMETER_EXTRA_BUFFERS, 5);
+  status = mmal_port_parameter_set_uint32(m_dec_input, MMAL_PARAMETER_EXTRA_BUFFERS, NUM_BUFFERS);
   if (status != MMAL_SUCCESS)
     CLog::Log(LOGERROR, "%s::%s Failed to enable extra buffers on %s (status=%x %s)", CLASSNAME, __func__, m_dec_input->name, status, mmal_status_to_string(status));
 

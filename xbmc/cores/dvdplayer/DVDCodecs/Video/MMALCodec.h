@@ -39,6 +39,7 @@
 #include "utils/StdString.h"
 #include "guilib/Geometry.h"
 #include "rendering/RenderSystem.h"
+#include "cores/VideoRenderers/BaseRenderer.h"
 
 class CMMALVideo;
 typedef boost::shared_ptr<CMMALVideo> MMALVideoPtr;
@@ -85,7 +86,7 @@ public:
   virtual void Reset(void);
   virtual bool GetPicture(DVDVideoPicture *pDvdVideoPicture);
   virtual bool ClearPicture(DVDVideoPicture* pDvdVideoPicture);
-  virtual unsigned GetAllowedReferences() { return 2; }
+  virtual unsigned GetAllowedReferences() { return NUM_BUFFERS; }
   virtual void SetDropState(bool bDrop);
   virtual const char* GetName(void) { return (const char*)m_pFormatName; }
   virtual bool GetCodecStats(double &pts, int &droppedPics);
