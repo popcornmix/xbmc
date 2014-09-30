@@ -702,6 +702,7 @@ void CDVDPlayerAudio::HandleSyncError(double duration)
     }
     else if (m_synctype == SYNC_PLLADJUST)
     {
+#if defined(TARGET_RASPBERRY_PI)
       //reset the integral on big errors, failsafe
       if (fabs(m_error) > DVD_TIME_BASE)
         m_integral = 0;
@@ -722,6 +723,7 @@ void CDVDPlayerAudio::HandleSyncError(double duration)
       m_plladjust = 1.0 / m_pClock->GetClockSpeed() + proportional + m_integral;
       double new_adjust = g_RBP.AdjustHDMIClock(m_plladjust);
       CLog::Log(LOGDEBUG, "CDVDPlayerAudio::%s pll:%.4f (%.4f) proportional:%.4f integral:%.4f", __FUNCTION__, m_plladjust, new_adjust, proportional, m_integral);
+#endif
     }
   }
 }
