@@ -21649,3 +21649,17 @@ msgctxt "#38206"
 msgid "Max"
 >>>>>>> [videoplayer/rbp] Add pi specific option to maintain vsync with pll adjustment
 msgstr ""
+
+msgctxt "#38191"
+msgid "Audio output latency"
+msgstr ""
+
+#: system/settings/rbp.xml
+msgctxt "#38192"
+msgid "Increase this to protect against underruns, reduce to have lower latency gui sounds"
+msgstr ""
+
+#: system/settings/rbp.xml
+msgctxt "#38193"
+msgid "%i ms"
+msgstr ""
