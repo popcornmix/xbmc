@@ -41,6 +41,7 @@ private:
   AEAudioFormat        m_initFormat;
   AEAudioFormat        m_format;
   double               m_sinkbuffer_sec_per_byte;
+  double               m_latency;
   static CAEDeviceInfo m_info;
   bool                 m_Initialized;
   uint32_t             m_submitted;
