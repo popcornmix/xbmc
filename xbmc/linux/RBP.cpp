@@ -23,6 +23,7 @@
 
 #include <assert.h>
 #include "settings/Settings.h"
+#include "settings/AdvancedSettings.h"
 #include "utils/log.h"
 
 #include "cores/omxplayer/OMXImage.h"
@@ -56,6 +57,12 @@ CRBP::~CRBP()
   Deinitialize();
   delete m_OMX;
   delete m_DllBcmHost;
+}
+
+void CRBP::InitializeSettings()
+{
+  if (m_initialized && g_advancedSettings.m_cacheMemSize == ~0U)
+    g_advancedSettings.m_cacheMemSize = m_arm_mem < 256 ? 1024 * 1024 * 2 : 1024 * 1024 * 20;
 }
 
 bool CRBP::Initialize()
@@ -97,6 +104,8 @@ bool CRBP::Initialize()
   if (!m_gui_resolution_limit)
     m_gui_resolution_limit = m_gpu_mem < 128 ? 720:1080;
 
+  InitializeSettings();
+
   g_OMXImage.Initialize();
   m_omx_image_init = true;
   return true;
@@ -109,6 +118,7 @@ void CRBP::LogFirmwareVerison()
   response[sizeof(response) - 1] = '\0';
   CLog::Log(LOGNOTICE, "Raspberry PI firmware version: %s", response);
   CLog::Log(LOGNOTICE, "ARM mem: %dMB GPU mem: %dMB MPG2:%d WVC1:%d", m_arm_mem, m_gpu_mem, m_codec_mpg2_enabled, m_codec_wvc1_enabled);
+  CLog::Log(LOGNOTICE, "cache.memorysize: %dMB",  g_advancedSettings.m_cacheMemSize >> 20);
   m_DllBcmHost->vc_gencmd(response, sizeof response, "get_config int");
   response[sizeof(response) - 1] = '\0';
   CLog::Log(LOGNOTICE, "Config:\n%s", response);
