@@ -43,6 +43,12 @@
         <setting id="myvideos.extractchapterthumbs">
           <default>false</default>
         </setting>
+        <setting id="myvideos.extractflags">
+          <default>false</default>
+        </setting>
+        <setting id="myvideos.extractthumb">
+          <default>false</default>
+        </setting>
       </group>
     </category>
   </section>
