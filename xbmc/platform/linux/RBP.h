@@ -78,6 +78,7 @@ public:
   ~CRBP();
 
   bool Initialize();
+  void InitializeSettings();
   void LogFirmwareVersion();
   void Deinitialize();
   int GetArmMem() { return m_arm_mem; }
