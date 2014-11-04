@@ -800,12 +800,15 @@ void CPeripheralCecAdapter::GetNextKey(void)
 
 void CPeripheralCecAdapter::PushCecKeypress(const CecButtonPress &key)
 {
-  CLog::Log(LOGDEBUG, "%s - received key %2x duration %d", __FUNCTION__, key.iButton, key.iDuration);
+  CLog::Log(LOGDEBUG, "%s - received key %2x duration %d (rep:%d size:%d)", __FUNCTION__, key.iButton, key.iDuration, m_configuration.iButtonRepeatRateMs, m_buttonQueue.size());
 
   CSingleLock lock(m_critSection);
   // avoid the queue getting too long
   if (m_configuration.iButtonRepeatRateMs && m_buttonQueue.size() > 5)
+  {
+    CLog::Log(LOGDEBUG, "%s - discarded key %2x", __FUNCTION__, key.iButton);
     return;
+  }
   if (m_configuration.iButtonRepeatRateMs == 0 && key.iDuration > 0)
   {
     if (m_currentButton.iButton == key.iButton && m_currentButton.iDuration == 0)
@@ -814,6 +817,7 @@ void CPeripheralCecAdapter::PushCecKeypress(const CecButtonPress &key)
       if (m_bHasButton)
         m_currentButton.iDuration = key.iDuration;
       // ignore this one, since it's already been handled by xbmc
+      CLog::Log(LOGDEBUG, "%s - ignored key %2x", __FUNCTION__, key.iButton);
       return;
     }
     // if we received a keypress with a duration set, try to find the same one without a duration set, and replace it
@@ -824,6 +828,7 @@ void CPeripheralCecAdapter::PushCecKeypress(const CecButtonPress &key)
         if ((*it).iDuration == 0)
         {
           // replace this entry
+          CLog::Log(LOGDEBUG, "%s - replaced key %2x", __FUNCTION__, key.iButton);
           (*it).iDuration = key.iDuration;
           return;
         }
@@ -833,6 +838,7 @@ void CPeripheralCecAdapter::PushCecKeypress(const CecButtonPress &key)
     }
   }
 
+  CLog::Log(LOGDEBUG, "%s - added key %2x", __FUNCTION__, key.iButton);
   m_buttonQueue.push_back(key);
 }
 
