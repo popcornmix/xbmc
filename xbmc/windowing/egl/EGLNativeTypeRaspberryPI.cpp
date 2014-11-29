@@ -32,6 +32,9 @@
 #include "guilib/StereoscopicsManager.h"
 #include "rendering/RenderSystem.h"
 #include <cassert>
+#ifdef TARGET_POSIX
+#include "linux/XTimeUtils.h"
+#endif
 
 #ifndef __VIDEOCORE4__
 #define __VIDEOCORE4__
@@ -221,11 +224,60 @@ int CEGLNativeTypeRaspberryPI::AddUniqueResolution(RESOLUTION_INFO &res, std::ve
 }
 #endif
 
+#include <dirent.h>
+
+pid_t proc_find(const char* name)
+{
+    DIR* dir;
+    struct dirent* ent;
+    char buf[512];
+
+    long  pid;
+    char pname[100] = {0,};
+    char state;
+    FILE *fp=NULL;
+
+    if (!(dir = opendir("/proc"))) {
+        perror("can't open /proc");
+        return -1;
+    }
+
+    while((ent = readdir(dir)) != NULL) {
+        long lpid = atol(ent->d_name);
+        if(lpid < 0)
+            continue;
+        snprintf(buf, sizeof(buf), "/proc/%ld/stat", lpid);
+        fp = fopen(buf, "r");
+
+        if (fp) {
+            if ( (fscanf(fp, "%ld (%[^)]) %c", &pid, pname, &state)) != 3 ){
+                printf("fscanf failed \n");
+                fclose(fp);
+                closedir(dir);
+                return -1;
+            }
+            if (!strcmp(pname, name)) {
+                fclose(fp);
+                closedir(dir);
+                return (pid_t)lpid;
+            }
+            fclose(fp);
+        }
+    }
+
+    closedir(dir);
+    return -1;
+}
+
+
 bool CEGLNativeTypeRaspberryPI::SetNativeResolution(const RESOLUTION_INFO &res)
 {
 #if defined(TARGET_RASPBERRY_PI)
   if(!m_DllBcmHost || !m_nativeWindow)
     return false;
+
+  while (proc_find("hello_video.bin") >= 0)
+    Sleep(100);
 
   DestroyDispmaxWindow();
 
