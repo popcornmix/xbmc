@@ -103,7 +103,7 @@ CGUIDialogSubtitles::CGUIDialogSubtitles(void)
     , m_pausedOnRun(false)
     , m_updateSubsList(false)
 {
-  m_loadType = KEEP_IN_MEMORY;
+  m_loadType  = LOAD_ON_GUI_INIT;
 }
 
 CGUIDialogSubtitles::~CGUIDialogSubtitles(void)

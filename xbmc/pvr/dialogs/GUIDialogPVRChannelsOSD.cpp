@@ -49,6 +49,7 @@ using namespace KODI::MESSAGING;
 CGUIDialogPVRChannelsOSD::CGUIDialogPVRChannelsOSD() :
     CGUIDialog(WINDOW_DIALOG_PVR_OSD_CHANNELS, "DialogPVRChannelsOSD.xml")
 {
+  m_loadType = LOAD_ON_GUI_INIT;
   m_vecItems = new CFileItemList;
 }
 
