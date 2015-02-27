@@ -1,7 +1,8 @@
 include ../../Makefile.include
 include FFMPEG-VERSION
 DEPS= ../../Makefile.include FFMPEG-VERSION Makefile \
-  0001-mpeg4video-Signal-unsupported-GMC-with-more-than-one.patch
+  0001-mpeg4video-Signal-unsupported-GMC-with-more-than-one.patch \
+  hevcdsp_ARM_NEON_optimized_epel_functions.patch added_ARM_NEON_optimized_SAO_patches.patch
 
 # set to "yes" to enable patching
 # we don't apply patches until we move to a vanilla ffmpeg tarball
@@ -82,6 +83,9 @@ $(PLATFORM): $(TARBALLS_LOCATION)/$(ARCHIVE) $(DEPS)
 	cd $(PLATFORM); $(ARCHIVE_TOOL) $(ARCHIVE_TOOL_FLAGS) $(TARBALLS_LOCATION)/$(ARCHIVE)
 	cd $(PLATFORM); sed -i".bak" -e "s%pkg_config_default=pkg-config%export PKG_CONFIG_LIBDIR=$(PREFIX)/lib/pkgconfig \&\& pkg_config_default=$(NATIVEPREFIX)/bin/pkg-config%" configure
 	cd $(PLATFORM); patch -p1 < ../0001-mpeg4video-Signal-unsupported-GMC-with-more-than-one.patch
+	cd $(PLATFORM); patch -p1 < ../hevcdsp_ARM_NEON_optimized_epel_functions.patch
+	cd $(PLATFORM); patch -p1 < ../added_ARM_NEON_optimized_SAO_patches.patch
+
 	cd $(PLATFORM);\
 	CFLAGS="$(CFLAGS)" CXXFLAGS="$(CXXFLAGS)" CPPFLAGS="$(CPPFLAGS)" LDFLAGS="$(LDFLAGS)" \
 	./configure $(ffmpg_config)
