@@ -33,6 +33,7 @@ extern "C" {
 #include "settings/Settings.h"
 #include "cores/AudioEngine/Utils/AEUtil.h"
 #endif
+#include "settings/Settings.h"
 
 CDVDAudioCodecFFmpeg::CDVDAudioCodecFFmpeg() : CDVDAudioCodec()
 {
@@ -54,10 +55,17 @@ CDVDAudioCodecFFmpeg::~CDVDAudioCodecFFmpeg()
 
 bool CDVDAudioCodecFFmpeg::Open(CDVDStreamInfo &hints, CDVDCodecOptions &options)
 {
-  AVCodec* pCodec;
+  AVCodec* pCodec = NULL;
   m_bOpenedCodec = false;
 
-  pCodec = avcodec_find_decoder(hints.codec);
+#if defined(TARGET_RASPBERRY_PI) || defined(HAS_IMXVPU)
+  if (hints.codec == AV_CODEC_ID_DTS && CSettings::Get().GetBool("audiooutput.supportdtshdcpudecoding"))
+    pCodec = avcodec_find_decoder_by_name("libdcadec");
+#endif
+
+  if (!pCodec)
+    pCodec = avcodec_find_decoder(hints.codec);
+
   if (!pCodec)
   {
     CLog::Log(LOGDEBUG,"CDVDAudioCodecFFmpeg::Open() Unable to find codec %d", hints.codec);

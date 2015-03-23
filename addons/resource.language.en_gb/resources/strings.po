@@ -16541,3 +16541,13 @@ msgstr ""
 msgctxt "#38016"
 msgid "%d fps"
 msgstr ""
+
+#: system/settings/rbp.xml system/settings/imx6.xml
+msgctxt "#38120"
+msgid "Support 8 channel DTS HD audio decoding"
+msgstr ""
+
+#: system/settings/rbp.xml system/settings/imx6.xml
+msgctxt "#38121"
+msgid "This option supports 8 channel DTS HD decoding, but may use more CPU. It is only available when DTS and DTS-HD audio passthrough is disabled"
+msgstr ""
