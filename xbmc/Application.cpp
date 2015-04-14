@@ -2762,7 +2762,7 @@ void CApplication::FrameMove(bool processEvents, bool processGUI)
 #if defined(TARGET_RASPBERRY_PI) || defined(HAS_IMXVPU)
     // This code reduces rendering fps of the GUI layer when playing videos in fullscreen mode
     // it makes only sense on architectures with multiple layers
-    if (g_graphicsContext.IsFullScreenVideo() && !m_pPlayer->IsPausedPlayback() && m_pPlayer->IsRenderingVideoLayer())
+    if (m_pPlayer->IsPlayingVideo() && !m_pPlayer->IsPausedPlayback() && m_pPlayer->IsRenderingVideoLayer())
       fps = CSettings::GetInstance().GetInt(CSettings::SETTING_VIDEOPLAYER_LIMITGUIUPDATE);
 #endif
 
@@ -2775,6 +2775,8 @@ void CApplication::FrameMove(bool processEvents, bool processGUI)
     {
       if (!m_skipGuiRender)
         g_windowManager.Process(CTimeUtils::GetFrameTime());
+      else if (!g_graphicsContext.IsFullScreenVideo())
+        g_windowManager.FrameMove();
     }
     g_windowManager.FrameMove();
   }
