@@ -298,8 +298,9 @@ CDVDVideoCodec::VCReturn CDecoder::Decode(AVCodecContext* avctx, AVFrame* frame)
 
     CGPUMEM *m_gmem = (CGPUMEM *)av_buffer_get_opaque(frame->buf[0]);
     assert(m_gmem);
-    // need to flush ARM cache so GPU can see it
-    m_gmem->Flush();
+    // need to flush ARM cache so GPU can see it (HEVC will have already done this)
+    if (avctx->codec_id != AV_CODEC_ID_HEVC)
+      m_gmem->Flush();
     m_renderBuffer = static_cast<CMMALYUVBuffer*>(m_gmem->m_opaque);
     assert(m_renderBuffer && m_renderBuffer->mmal_buffer);
     if (m_renderBuffer)
