@@ -63,13 +63,15 @@ COMXAudioCodecOMX::~COMXAudioCodecOMX()
 
 bool COMXAudioCodecOMX::Open(CDVDStreamInfo &hints)
 {
-  AVCodec* pCodec;
+  AVCodec* pCodec = NULL;
   m_bOpenedCodec = false;
 
   if (hints.codec == AV_CODEC_ID_DTS && CSettings::Get().GetBool("audiooutput.supportdtshdcpudecoding"))
     pCodec = avcodec_find_decoder_by_name("libdcadec");
-  else
+
+  if (!pCodec)
     pCodec = avcodec_find_decoder(hints.codec);
+
   if (!pCodec)
   {
     CLog::Log(LOGDEBUG,"COMXAudioCodecOMX::Open() Unable to find codec %d", hints.codec);
