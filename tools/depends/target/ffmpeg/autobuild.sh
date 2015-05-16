@@ -137,6 +137,9 @@ patch -p1 < ../hevcdsp_ARM_NEON_optimized_epel_functions.patch
 patch -p1 < ../added_ARM_NEON_optimized_SAO_patches.patch
 patch -p1 < ../pfcd_hevc_optimisations.patch
 patch -p1 < ../0001-Squashed-commit-of-the-following.patch
+patch -p1 < ../0001-avcodec-add-h264_mvc-codec-id-and-profiles.patch
+patch -p1 < ../0001-h264_parser-add-support-for-parsing-h264-mvc-NALUs.patch
+patch -p1 < ../h264_parser_fix_parsing_of_mvc_slices_in_some_corner_cases.patch
 
 CFLAGS="$CFLAGS" CXXFLAGS="$CXXFLAGS" LDFLAGS="$LDFLAGS" \
 ./configure --prefix=$FFMPEG_PREFIX \
