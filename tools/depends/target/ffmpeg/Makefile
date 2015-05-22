@@ -23,7 +23,11 @@ ffmpg_config += --enable-gnutls
 ffmpg_config += --enable-encoder=png --enable-encoder=mjpeg
 
 ifeq ($(CROSS_COMPILING), yes)
+ ifeq ($(CPU), cortex-a7)
+  ffmpg_config += --arch=arm --enable-cross-compile
+ else
   ffmpg_config += --arch=$(CPU) --enable-cross-compile
+ endif
 endif
 ifeq ($(OS), linux)
   ffmpg_config += --target-os=$(OS) --cpu=$(CPU)
