@@ -73,6 +73,7 @@ public:
   int orientation; // orientation of the video in degress counter clockwise
   int bitsperpixel;
   std::string stereo_mode; // stereoscopic 3d mode
+  int workaround_bugs; // info for decoder
 
   // AUDIO
   int channels;

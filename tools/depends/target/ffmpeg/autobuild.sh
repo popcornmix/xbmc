@@ -132,6 +132,8 @@ mkdir -p "ffmpeg-${VERSION}"
 cd "ffmpeg-${VERSION}" || exit 2
 tar --strip-components=1 -xf $MYDIR/${ARCHIVE}
 
+patch -p1 < ../0001-mpeg4video-Signal-unsupported-GMC-with-more-than-one.patch
+
 CFLAGS="$CFLAGS" CXXFLAGS="$CXXFLAGS" LDFLAGS="$LDFLAGS" \
 ./configure --prefix=$FFMPEG_PREFIX \
 	--extra-version="kodi-${VERSION}" \
