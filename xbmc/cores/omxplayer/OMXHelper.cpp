@@ -30,6 +30,10 @@
 #include "cores/omxplayer/OMXPlayerVideo.h"
 #include "threads/SystemClock.h"
 
+#ifndef FF_BUG_GMC_UNSUPPORTED
+#define FF_BUG_GMC_UNSUPPORTED 0
+#endif
+
 #define PREDICATE_RETURN(lh, rh) \
   do { \
     if((lh) != (rh)) \
@@ -81,7 +85,9 @@ bool OMXPlayerUnsuitable(bool m_HasVideo, bool m_HasAudio, CDVDDemux* m_pDemuxer
       CDVDStreamInfo hint(*stream, true);
 
       bool supported = false;
-      if ((hint.codec == AV_CODEC_ID_MPEG1VIDEO || hint.codec == AV_CODEC_ID_MPEG2VIDEO) && g_RBP.GetCodecMpg2())
+      if (hint.workaround_bugs & FF_BUG_GMC_UNSUPPORTED)
+        ;
+      else if ((hint.codec == AV_CODEC_ID_MPEG1VIDEO || hint.codec == AV_CODEC_ID_MPEG2VIDEO) && g_RBP.GetCodecMpg2())
         supported = true;
       else if ((hint.codec == AV_CODEC_ID_VC1 || hint.codec == AV_CODEC_ID_WMV3) && g_RBP.GetCodecWvc1())
         supported = true;
