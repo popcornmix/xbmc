@@ -368,6 +368,9 @@ bool CMMALVideo::Open(CDVDStreamInfo &hints, CDVDCodecOptions &options)
   if (g_advancedSettings.CanLogComponent(LOGVIDEO))
     CLog::Log(LOGDEBUG, "%s::%s usemmal:%d software:%d %dx%d renderer:%p", CLASSNAME, __func__, CSettings::GetInstance().GetBool(CSettings::SETTING_VIDEOPLAYER_USEMMAL), hints.software, hints.width, hints.height, options.m_opaque_pointer);
 
+  // This occurs at start of m2ts files before streams have been fully identified - just ignore
+  if (!hints.width)
+    return false;
   // we always qualify even if DVDFactoryCodec does this too.
   if (!CSettings::GetInstance().GetBool(CSettings::SETTING_VIDEOPLAYER_USEMMAL) || hints.software)
     return false;
