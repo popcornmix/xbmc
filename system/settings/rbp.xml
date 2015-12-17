@@ -27,6 +27,11 @@
           </control>
           <control type="edit" format="integer" />
         </setting>
+        <setting id="videoplayer.acceleratedjpegs" type="boolean" label="38114" help="38115">
+          <level>2</level>
+          <default>true</default>
+          <control type="toggle" />
+        </setting>
       </group>
     </category>
   </section>
