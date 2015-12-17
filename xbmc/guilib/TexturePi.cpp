@@ -11,6 +11,9 @@
 #include "utils/GLUtils.h"
 #include "guilib/TextureManager.h"
 #include "utils/URIUtils.h"
+#include "ServiceBroker.h"
+#include "settings/Settings.h"
+#include "settings/SettingsComponent.h"
 
 #include "cores/omxplayer/OMXImage.h"
 
@@ -101,7 +104,7 @@ void CPiTexture::Update(unsigned int width, unsigned int height, unsigned int pi
 
 bool CPiTexture::LoadFromFileInternal(const std::string& texturePath, unsigned int maxWidth, unsigned int maxHeight, bool requirePixels, const std::string& strMimeType)
 {
-  if (URIUtils::HasExtension(texturePath, ".jpg|.tbn"))
+  if (CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool("videoplayer.acceleratedjpegs") && URIUtils::HasExtension(texturePath, ".jpg|.tbn"))
   {
     COMXImageFile *file = g_OMXImage.LoadJpeg(texturePath);
     if (file)
