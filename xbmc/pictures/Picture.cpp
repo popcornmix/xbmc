@@ -61,7 +61,7 @@ bool CPicture::CreateThumbnailFromSurface(const unsigned char *buffer, int width
   if (URIUtils::HasExtension(thumbFile, ".jpg"))
   {
 #if defined(TARGET_RASPBERRY_PI)
-    if (COMXImage::CreateThumbnailFromSurface(const_cast<unsigned char*>(buffer), width, height, XB_FMT_A8R8G8B8, stride, thumbFile.c_str()))
+    if (CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool("videoplayer.acceleratedjpegs") && COMXImage::CreateThumbnailFromSurface(const_cast<unsigned char*>(buffer), width, height, XB_FMT_A8R8G8B8, stride, thumbFile.c_str()))
       return true;
 #endif
   }

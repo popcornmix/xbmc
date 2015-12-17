@@ -21068,6 +21068,16 @@ msgstr ""
 #empty strings from id 38074 to 38099
 #strings 38074 to 38099 reserved for music library
 
+#: system/settings/rbp.xml
+msgctxt "#38114"
+msgid "Use GPU for jpeg acceleration"
+msgstr ""
+
+#: system/settings/rbp.xml
+msgctxt "#38115"
+msgid "This option uses the GPU for encoding and decoding jpegs"
+msgstr ""
+
 #. Description of section #14200 "Player""
 #: system/settings/settings.xml
 msgctxt "#38100"

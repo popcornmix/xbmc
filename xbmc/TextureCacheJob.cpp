@@ -10,8 +10,10 @@
 #include "ServiceBroker.h"
 #include "TextureCache.h"
 #include "guilib/Texture.h"
+#include "ServiceBroker.h"
 #include "settings/AdvancedSettings.h"
 #include "settings/SettingsComponent.h"
+#include "settings/Settings.h"
 #include "utils/log.h"
 #include "filesystem/File.h"
 #include "pictures/Picture.h"
@@ -79,7 +81,7 @@ bool CTextureCacheJob::CacheTexture(CBaseTexture **out_texture)
     return true;
 
 #if defined(TARGET_RASPBERRY_PI)
-  if (COMXImage::CreateThumb(image, width, height, additional_info, CTextureCache::GetCachedPath(m_cachePath + ".jpg")))
+  if (CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool("videoplayer.acceleratedjpegs") && COMXImage::CreateThumb(image, width, height, additional_info, CTextureCache::GetCachedPath(m_cachePath + ".jpg")))
   {
     m_details.width = width;
     m_details.height = height;
