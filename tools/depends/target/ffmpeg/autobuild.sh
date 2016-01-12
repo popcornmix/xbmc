@@ -136,6 +136,7 @@ patch -p1 < ../0001-mpeg4video-Signal-unsupported-GMC-with-more-than-one.patch
 patch -p1 < ../hevcdsp_ARM_NEON_optimized_epel_functions.patch
 patch -p1 < ../added_ARM_NEON_optimized_SAO_patches.patch
 patch -p1 < ../pfcd_hevc_optimisations.patch
+patch -p1 < ../0001-Squashed-commit-of-the-following.patch
 
 CFLAGS="$CFLAGS" CXXFLAGS="$CXXFLAGS" LDFLAGS="$LDFLAGS" \
 ./configure --prefix=$FFMPEG_PREFIX \
@@ -170,6 +171,7 @@ CFLAGS="$CFLAGS" CXXFLAGS="$CXXFLAGS" LDFLAGS="$LDFLAGS" \
 	--enable-zlib \
 	--disable-mipsdsp \
 	--disable-mipsdspr2 \
+	--extra-cflags="-DRPI=1" \
         ${FLAGS}
 
 make -j ${BUILDTHREADS} 
