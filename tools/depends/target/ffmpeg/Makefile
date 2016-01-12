@@ -3,7 +3,8 @@ include FFMPEG-VERSION
 DEPS= ../../Makefile.include FFMPEG-VERSION Makefile \
   0001-mpeg4video-Signal-unsupported-GMC-with-more-than-one.patch \
   hevcdsp_ARM_NEON_optimized_epel_functions.patch added_ARM_NEON_optimized_SAO_patches.patch \
-  pfcd_hevc_optimisations.patch
+  pfcd_hevc_optimisations.patch \
+  0001-Squashed-commit-of-the-following.patch
 
 # set to "yes" to enable patching
 # we don't apply patches until we move to a vanilla ffmpeg tarball
@@ -71,6 +72,7 @@ ifeq ($(Configuration), Release)
   ffmpg_config += --disable-debug
 endif
 
+ffmpg_config += --extra-cflags="-DRPI=1"
 
 CLEAN_FILES=$(ARCHIVE) $(PLATFORM)
 
@@ -87,6 +89,7 @@ $(PLATFORM): $(TARBALLS_LOCATION)/$(ARCHIVE) $(DEPS)
 	cd $(PLATFORM); patch -p1 < ../hevcdsp_ARM_NEON_optimized_epel_functions.patch
 	cd $(PLATFORM); patch -p1 < ../added_ARM_NEON_optimized_SAO_patches.patch
 	cd $(PLATFORM); patch -p1 < ../pfcd_hevc_optimisations.patch
+	cd $(PLATFORM); patch -p1 < ../0001-Squashed-commit-of-the-following.patch
 
 	cd $(PLATFORM);\
 	CFLAGS="$(CFLAGS)" CXXFLAGS="$(CXXFLAGS)" CPPFLAGS="$(CPPFLAGS)" LDFLAGS="$(LDFLAGS)" \
