@@ -14,6 +14,7 @@
 #include "commons/Exception.h"
 #include "cores/FFmpeg.h"
 #include "cores/VideoPlayer/Interface/Addon/TimingConstants.h" // for DVD_TIME_BASE
+#include "DVDCodecs/DVDCodecUtils.h"
 #include "DVDDemuxUtils.h"
 #include "DVDInputStreams/DVDInputStream.h"
 #include "DVDInputStreams/DVDInputStreamFFmpeg.h"
@@ -1435,6 +1436,15 @@ CDemuxStream* CDVDDemuxFFmpeg::AddStream(int streamIdx)
       }
       case AVMEDIA_TYPE_VIDEO:
       {
+        if (pStream->codec->codec_id == AV_CODEC_ID_H264_MVC)
+        {
+          // ignore MVC extension streams, they are handled specially
+          stream = new CDemuxStream();
+          stream->type = STREAM_DATA;
+          stream->disabled = true;
+          pStream->need_parsing = AVSTREAM_PARSE_NONE;
+          break;
+        }
         CDemuxStreamVideoFFmpeg* st = new CDemuxStreamVideoFFmpeg(pStream);
         stream = st;
         if(strcmp(m_pFormatContext->iformat->name, "flv") == 0)
@@ -1443,7 +1453,7 @@ CDemuxStream* CDVDDemuxFFmpeg::AddStream(int streamIdx)
           st->bVFR = false;
 
         // never trust pts in avi files with h264.
-        if (m_bAVI && pStream->codecpar->codec_id == AV_CODEC_ID_H264)
+        if (m_bAVI && (pStream->codecpar->codec_id == AV_CODEC_ID_H264 || pStream->codecpar->codec_id == AV_CODEC_ID_H264_MVC))
           st->bPTSInvalid = true;
 
         AVRational r_frame_rate = pStream->r_frame_rate;
@@ -1513,6 +1523,17 @@ CDemuxStream* CDVDDemuxFFmpeg::AddStream(int streamIdx)
         if (av_dict_get(pStream->metadata, "title", NULL, 0))
           st->m_description = av_dict_get(pStream->metadata, "title", NULL, 0)->value;
 
+        if (pStream->codec->codec_id == AV_CODEC_ID_H264)
+        {
+          if (CDVDCodecUtils::IsH264AnnexB(m_pFormatContext->iformat->name, pStream))
+          {
+            // TODO
+          }
+          else if (CDVDCodecUtils::ProcessH264MVCExtradata(pStream->codec->extradata, pStream->codec->extradata_size))
+          {
+            pStream->codecpar->codec_tag = MKTAG('M', 'V', 'C', '1');
+          }
+        }
         break;
       }
       case AVMEDIA_TYPE_DATA:
