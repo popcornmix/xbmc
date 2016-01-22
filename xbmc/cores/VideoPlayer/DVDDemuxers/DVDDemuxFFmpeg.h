@@ -21,6 +21,7 @@
  */
 
 #include "DVDDemux.h"
+#include "DemuxStreamSSIF.h"
 #include "threads/CriticalSection.h"
 #include "threads/SystemClock.h"
 #include <map>
@@ -152,6 +153,7 @@ protected:
   double   m_currentPts; // used for stream length estimation
   bool     m_bMatroska;
   bool     m_bAVI;
+  CDemuxStreamSSIF* m_pSSIF;
   int      m_speed;
   unsigned m_program;
   XbmcThreads::EndTime  m_timeout;

@@ -166,6 +166,7 @@ CDVDDemuxFFmpeg::CDVDDemuxFFmpeg() : CDVDDemux()
   m_currentPts = DVD_NOPTS_VALUE;
   m_bMatroska = false;
   m_bAVI = false;
+  m_pSSIF = nullptr;
   m_speed = DVD_PLAYSPEED_NORMAL;
   m_program = UINT_MAX;
   m_pkt.result = -1;
@@ -553,6 +554,8 @@ void CDVDDemuxFFmpeg::Dispose()
   m_pkt.result = -1;
   av_packet_unref(&m_pkt.pkt);
 
+  SAFE_DELETE(m_pSSIF);
+
   if (m_pFormatContext)
   {
     for (unsigned int i = 0; i < m_pFormatContext->nb_streams; i++)
@@ -606,6 +609,9 @@ void CDVDDemuxFFmpeg::Flush()
 
   m_displayTime = 0;
   m_dtsAtDisplayTime = DVD_NOPTS_VALUE;
+
+  if (m_pSSIF)
+    m_pSSIF->Flush();
 }
 
 void CDVDDemuxFFmpeg::Abort()
@@ -878,7 +884,9 @@ DemuxPacket* CDVDDemuxFFmpeg::Read()
     {
       Flush();
     }
-    else if (IsProgramChange())
+    // libavformat is confused by the interleaved SSIF.
+    // Disable program management for those
+    else if (!m_pSSIF && IsProgramChange())
     {
       // update streams
       CreateStreams(m_program);
@@ -906,6 +914,9 @@ DemuxPacket* CDVDDemuxFFmpeg::Read()
 
       m_pkt.result = -1;
       av_packet_unref(&m_pkt.pkt);
+
+      if (m_pSSIF)
+        m_pSSIF->Flush();
     }
     else
     {
@@ -915,7 +926,9 @@ DemuxPacket* CDVDDemuxFFmpeg::Read()
 
       if (IsVideoReady())
       {
-        if (m_program != UINT_MAX)
+        // libavformat is confused by the interleaved SSIF.
+        // Disable program management for those
+        if (!m_pSSIF && m_program != UINT_MAX )
         {
           /* check so packet belongs to selected program */
           for (unsigned int i = 0; i < m_pFormatContext->programs[m_program]->nb_stream_indexes; i++)
@@ -1064,6 +1077,15 @@ DemuxPacket* CDVDDemuxFFmpeg::Read()
         stream = AddStream(pPacket->iStreamId);
       }
     }
+    if (stream && m_pSSIF)
+    {
+      if (stream->type == STREAM_VIDEO || 
+          stream->type == STREAM_DATA)
+        pPacket = m_pSSIF->AddPacket(pPacket);
+
+      if (stream->type == STREAM_DATA && stream->codec == AV_CODEC_ID_H264_MVC && pPacket->iSize)
+        stream = GetStream(pPacket->iStreamId);
+    }
     if (!stream)
     {
       CLog::Log(LOGERROR, "CDVDDemuxFFmpeg::AddStream - internal error, stream is null");
@@ -1092,6 +1114,9 @@ bool CDVDDemuxFFmpeg::SeekTime(double time, bool backwards, double *startpts)
 
   m_pkt.result = -1;
   av_packet_unref(&m_pkt.pkt);
+
+  if (m_pSSIF)
+    m_pSSIF->Flush();
 
   CDVDInputStream::IPosTime* ist = m_pInput->GetIPosTime();
   if (ist)
@@ -1172,6 +1197,9 @@ bool CDVDDemuxFFmpeg::SeekByte(int64_t pos)
 
   m_pkt.result = -1;
   av_packet_unref(&m_pkt.pkt);
+
+  if (m_pSSIF)
+    m_pSSIF->Flush();
 
   return (ret >= 0);
 }
@@ -1358,11 +1386,12 @@ CDemuxStream* CDVDDemuxFFmpeg::AddStream(int streamIdx)
       {
         if (pStream->codec->codec_id == AV_CODEC_ID_H264_MVC)
         {
-          // ignore MVC extension streams, they are handled specially
+          m_pSSIF = new CDemuxStreamSSIF();
+          m_pSSIF->SetMVCStreamId(streamIdx);
+
           stream = new CDemuxStream();
           stream->type = STREAM_DATA;
-          stream->disabled = true;
-          pStream->need_parsing = AVSTREAM_PARSE_NONE;
+          pStream->codec->codec_type = AVMEDIA_TYPE_DATA;
           break;
         }
         CDemuxStreamVideoFFmpeg* st = new CDemuxStreamVideoFFmpeg(this, pStream);
@@ -1448,7 +1477,11 @@ CDemuxStream* CDVDDemuxFFmpeg::AddStream(int streamIdx)
         {
           if (CDVDCodecUtils::IsH264AnnexB(m_pFormatContext->iformat->name, pStream))
           {
-            // TODO
+            if (m_pSSIF)
+            {
+              m_pSSIF->SetH264StreamId(streamIdx);
+              pStream->codec->codec_tag = MKTAG('A', 'M', 'V', 'C');
+            }
           }
           else if (CDVDCodecUtils::ProcessH264MVCExtradata(pStream->codec->extradata, pStream->codec->extradata_size))
           {
@@ -1560,7 +1593,7 @@ CDemuxStream* CDVDDemuxFFmpeg::AddStream(int streamIdx)
     if (langTag)
       strncpy(stream->language, langTag->value, 3);
 
-    if( stream->type != STREAM_NONE && pStream->codec->extradata && pStream->codec->extradata_size > 0 )
+    if (stream->type != STREAM_NONE && pStream->codec->extradata && pStream->codec->extradata_size > 0)
     {
       stream->ExtraSize = pStream->codec->extradata_size;
       stream->ExtraData = new uint8_t[pStream->codec->extradata_size];
