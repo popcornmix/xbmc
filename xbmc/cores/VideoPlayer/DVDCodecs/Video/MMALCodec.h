@@ -99,7 +99,7 @@ protected:
   uint32_t          m_packet_num;
   uint32_t          m_packet_num_eos;
 
-  CCriticalSection m_sharedSection;
+  CCriticalSection &m_sharedSection;
   MMAL_COMPONENT_T *m_dec;
   MMAL_PORT_T *m_dec_input;
   MMAL_PORT_T *m_dec_output;
