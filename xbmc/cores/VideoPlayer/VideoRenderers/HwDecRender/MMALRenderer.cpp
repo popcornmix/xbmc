@@ -568,7 +568,7 @@ bool CMMALRenderer::CheckConfigurationVout(uint32_t width, uint32_t height, uint
   return true;
 }
 
-CMMALRenderer::CMMALRenderer() : CThread("MMALRenderer"), m_processThread(this, "MMALProcess")
+CMMALRenderer::CMMALRenderer() : CThread("MMALRenderer"), m_processThread(this, "MMALProcess"), m_sharedSection(g_RBP.GetLock())
 {
   CLog::Log(LOGDEBUG, "%s::%s", CLASSNAME, __func__);
   m_vout = NULL;
