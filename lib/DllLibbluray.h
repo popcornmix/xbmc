@@ -31,6 +31,8 @@ extern "C"
 #include <libbluray/log_control.h>
 #include <libbluray/keys.h>
 #include <libbluray/overlay.h>
+#include <libbluray/clpi_parse.h>
+#include <libbluray/mpls_parse.h>
 }
 
 class DllLibblurayInterface
@@ -80,6 +82,8 @@ public:
 #endif
   virtual int      bd_menu_call                 (BLURAY *bd, int64_t pts)=0;
   virtual int      bd_mouse_select              (BLURAY *bd, int64_t pts, uint16_t x, uint16_t y)=0;
+  virtual MPLS_PL* bd_get_title_mpls            (BLURAY *bd) = 0;
+  virtual int      bd_get_clip_infos            (BLURAY *bd, unsigned clip, uint64_t *clip_start_time, uint64_t *stream_start_time, uint64_t *pos, uint64_t *duration) = 0;
 };
 
 class DllLibbluray : public DllDynamic, DllLibblurayInterface
@@ -128,6 +132,8 @@ class DllLibbluray : public DllDynamic, DllLibblurayInterface
 #endif
   DEFINE_METHOD2(int,                 bd_menu_call,              (BLURAY *p1, int64_t p2))
   DEFINE_METHOD4(int,                 bd_mouse_select,           (BLURAY *p1, int64_t p2, uint16_t p3, uint16_t p4))
+  DEFINE_METHOD1(MPLS_PL*,            bd_get_title_mpls,         (BLURAY *p1))
+  DEFINE_METHOD6(int,                 bd_get_clip_infos,         (BLURAY *p1, unsigned p2, uint64_t *p3, uint64_t *p4, uint64_t *p5, uint64_t *p6))
 
   BEGIN_METHOD_RESOLVE()
     RESOLVE_METHOD(bd_get_titles)
@@ -172,6 +178,8 @@ class DllLibbluray : public DllDynamic, DllLibblurayInterface
 #endif
     RESOLVE_METHOD(bd_menu_call)
     RESOLVE_METHOD(bd_mouse_select)
+    RESOLVE_METHOD(bd_get_title_mpls)
+    RESOLVE_METHOD(bd_get_clip_infos)
   END_METHOD_RESOLVE()
 
 public:

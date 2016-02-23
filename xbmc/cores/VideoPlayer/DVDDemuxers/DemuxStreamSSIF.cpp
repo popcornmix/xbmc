@@ -19,11 +19,13 @@
 */
 
 #include "DemuxStreamSSIF.h"
+#include "DVDDemux.h"
 #include "DVDClock.h"
 #include "DVDDemuxUtils.h"
 #include "utils/log.h"
 
 //#define DEBUG_VERBOSE
+#define MVC_QUEUE_SIZE 100
 
 DemuxPacket* CDemuxStreamSSIF::AddPacket(DemuxPacket* &srcPkt)
 {
@@ -37,7 +39,7 @@ DemuxPacket* CDemuxStreamSSIF::AddPacket(DemuxPacket* &srcPkt)
   }
   else if (srcPkt->iStreamId == m_mvcStreamId)
   {
-    m_MVCqueue.push(srcPkt);
+    AddMVCExtPacket(srcPkt);
   }
 
   return GetMVCPacket();
@@ -81,6 +83,10 @@ DemuxPacket* CDemuxStreamSSIF::MergePacket(DemuxPacket* &srcPkt, DemuxPacket* &a
 
 DemuxPacket* CDemuxStreamSSIF::GetMVCPacket()
 {
+  // if input is a bluray fill mvc queue before processing
+  if (m_bluRay && m_MVCqueue.empty() && !m_H264queue.empty())
+    FillMVCQueue(m_H264queue.front()->dts);
+
   // Here, we recreate a h264 MVC packet from the base one + buffered MVC NALU's
   while (!m_H264queue.empty() && !m_MVCqueue.empty())
   {
@@ -151,6 +157,36 @@ DemuxPacket* CDemuxStreamSSIF::GetMVCPacket()
 #if defined(DEBUG_VERBOSE)
   CLog::Log(LOGDEBUG, ">>> MVC waiting. MVC(%d) H264(%d)", m_MVCqueue.size(), m_H264queue.size());
 #endif
-
   return CDVDDemuxUtils::AllocateDemuxPacket(0);
+}
+
+void CDemuxStreamSSIF::AddMVCExtPacket(DemuxPacket* &mvcExtPkt)
+{
+  m_MVCqueue.push(mvcExtPkt);
+}
+
+bool CDemuxStreamSSIF::FillMVCQueue(double dtsBase)
+{
+  if (!m_bluRay)
+    return false;
+
+  CDVDDemux* demux = m_bluRay->GetDemuxMVC();
+  DemuxPacket* mvc;
+  while ((m_MVCqueue.size() < MVC_QUEUE_SIZE) && (mvc = demux->Read()))
+  {
+    if (dtsBase == DVD_NOPTS_VALUE || mvc->dts == DVD_NOPTS_VALUE)
+    {
+      // do nothing, can't compare timestamps when they are not set
+    }
+    else if (mvc->dts < dtsBase)
+    {
+#if defined(DEBUG_VERBOSE)
+      CLog::Log(LOGDEBUG, ">>> MVC discard mvc: %6d, pts(%.3f) dts(%.3f)", mvc->iSize, mvc->pts*1e-6, mvc->dts*1e-6);
+#endif
+      CDVDDemuxUtils::FreeDemuxPacket(mvc);
+      continue;
+    }
+    AddMVCExtPacket(mvc);
+  };
+  return m_MVCqueue.size() == MVC_QUEUE_SIZE;
 }
