@@ -6,6 +6,7 @@ set(SOURCES DemuxMultiSource.cpp
             DVDDemuxClient.cpp
             DVDDemuxFFmpeg.cpp
             DemuxStreamSSIF.cpp
+            DemuxMVC.cpp
             DVDDemuxUtils.cpp
             DVDDemuxVobsub.cpp
             DVDFactoryDemuxer.cpp)
@@ -18,6 +19,7 @@ set(HEADERS DemuxMultiSource.h
             DVDDemuxClient.h
             DVDDemuxFFmpeg.h
             DemuxStreamSSIF.h
+            DemuxMVC.h
             DVDDemuxPacket.h
             DVDDemuxUtils.h
             DVDDemuxVobsub.h
