@@ -24,6 +24,8 @@ $(PLATFORM): $(TARBALLS_LOCATION)/$(ARCHIVE) $(DEPS)
 	cd $(PLATFORM); $(ARCHIVE_TOOL) $(ARCHIVE_TOOL_FLAGS) $(TARBALLS_LOCATION)/$(ARCHIVE)
 	# libbluray has borked Makefile.am with respect to CFLAGS, remove the offending line
 	sed -i -e "s|CFLAGS=|#CFLAGS=|" $(PLATFORM)/Makefile.am
+	cd $(PLATFORM); patch -p1 < ../libbluray-01-bump_to_Nevcairiel_vL20170904.patch
+	cd $(PLATFORM); patch -p1 < ../libbluray-02-install-extra-MVC-headers.patch
 	cd $(PLATFORM); ./bootstrap
 	cd $(PLATFORM); $(CONFIGURE)
 ifeq ($(TARGET_PLATFORM),appletvos)
