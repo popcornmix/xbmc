@@ -398,6 +398,7 @@ bool COMXVideo::Open(CDVDStreamInfo &hints, OMXClock *clock, bool hdmi_clock_syn
   switch (hints.codec)
   {
     case AV_CODEC_ID_H264:
+    case AV_CODEC_ID_H264_MVC:
     {
       switch(hints.profile)
       {
@@ -434,10 +435,13 @@ bool COMXVideo::Open(CDVDStreamInfo &hints, OMXClock *clock, bool hdmi_clock_syn
           break;
       }
     }
-    if (CSettings::GetInstance().GetBool(CSettings::SETTING_VIDEOPLAYER_SUPPORTMVC))
+    if ((hints.codec_tag == MKTAG('M', 'V', 'C', '1') || hints.codec_tag == MKTAG('A', 'M', 'V', 'C')) &&
+      CSettings::GetInstance().GetBool(CSettings::SETTING_VIDEOPLAYER_SUPPORTMVC))
     {
       m_codingType = OMX_VIDEO_CodingMVC;
       m_video_codec_name = "omx-mvc";
+      if (hints.stereo_mode == "mono")
+        hints.stereo_mode = "mvc_lr";
     }
     break;
     case AV_CODEC_ID_MPEG4:
