@@ -16,7 +16,7 @@ using namespace OVERLAY;
 
 CDebugRenderer::CDebugRenderer()
 {
-  for (int i=0; i<4; i++)
+  for (int i = 0; i<DEBUG_OVERLAY_COUNT_MAX; i++)
   {
     m_overlay[i] = nullptr;
     m_strDebug[i] = " ";
@@ -32,47 +32,29 @@ CDebugRenderer::~CDebugRenderer()
   }
 }
 
-void CDebugRenderer::SetInfo(std::string &info1, std::string &info2, std::string &info3, std::string &info4)
+void CDebugRenderer::SetInfo(std::vector<std::string> &infos)
 {
   m_overlayRenderer.Release(0);
 
-  if (info1 != m_strDebug[0])
+  for (size_t i = 0; i < std::min(infos.size(), (size_t)DEBUG_OVERLAY_COUNT_MAX); i++)
   {
-    m_strDebug[0] = info1;
-    if (m_overlay[0])
-      m_overlay[0]->Release();
-    m_overlay[0] = new CDVDOverlayText();
-    m_overlay[0]->AddElement(new CDVDOverlayText::CElementText(m_strDebug[0]));
-  }
-  if (info2 != m_strDebug[1])
-  {
-    m_strDebug[1] = info2;
-    if (m_overlay[1])
-      m_overlay[1]->Release();
-    m_overlay[1] = new CDVDOverlayText();
-    m_overlay[1]->AddElement(new CDVDOverlayText::CElementText(m_strDebug[1]));
-  }
-  if (info3 != m_strDebug[2])
-  {
-    m_strDebug[2] = info3;
-    if (m_overlay[2])
-      m_overlay[2]->Release();
-    m_overlay[2] = new CDVDOverlayText();
-    m_overlay[2]->AddElement(new CDVDOverlayText::CElementText(m_strDebug[2]));
-  }
-  if (info4 != m_strDebug[3])
-  {
-    m_strDebug[3] = info4;
-    if (m_overlay[3])
-      m_overlay[3]->Release();
-    m_overlay[3] = new CDVDOverlayText();
-    m_overlay[3]->AddElement(new CDVDOverlayText::CElementText(m_strDebug[3]));
-  }
+    if (infos[i] != m_strDebug[i])
+    {
+      if (infos[i].empty())
+        continue;
+      m_strDebug[i] = infos[i];
+      if (m_overlay[i])
+        m_overlay[i]->Release();
+      m_overlay[i] = new CDVDOverlayText();
+      m_overlay[i]->AddElement(new CDVDOverlayText::CElementText(m_strDebug[i]));
+    }
 
-  m_overlayRenderer.AddOverlay(m_overlay[0], 0, 0);
-  m_overlayRenderer.AddOverlay(m_overlay[1], 0, 0);
-  m_overlayRenderer.AddOverlay(m_overlay[2], 0, 0);
-  m_overlayRenderer.AddOverlay(m_overlay[3], 0, 0);
+  }
+  for (size_t i = 0; i < DEBUG_OVERLAY_COUNT_MAX; i++)
+  {
+    if (m_overlay[i])
+      m_overlayRenderer.AddOverlay(m_overlay[i], 0, 0);
+  }
 }
 
 void CDebugRenderer::Render(CRect &src, CRect &dst, CRect &view)
@@ -109,7 +91,7 @@ void CDebugRenderer::CRenderer::Render(int idx)
 
     COverlayText *text = dynamic_cast<COverlayText*>(o);
     if (text)
-      text->PrepareRender("arial.ttf", 1, 16, 0, m_font, m_fontBorder, UTILS::COLOR::NONE);
+      text->PrepareRender("arial.ttf", 1, 12, 0, m_font, m_fontBorder, UTILS::COLOR::NONE);
 
     RESOLUTION_INFO res = CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo(CServiceBroker::GetWinSystem()->GetGfxContext().GetVideoResolution());
 
