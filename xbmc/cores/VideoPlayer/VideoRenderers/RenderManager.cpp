@@ -24,6 +24,7 @@
 #include "guilib/GraphicContext.h"
 #include "utils/MathUtils.h"
 #include "threads/SingleLock.h"
+#include "utils/CPUInfo.h"
 #include "utils/log.h"
 #include "utils/StringUtils.h"
 #include "windowing/WindowingFactory.h"
@@ -922,7 +923,7 @@ void CRenderManager::Render(bool clear, DWORD flags, DWORD alpha, bool gui)
 
     if (m_renderDebug)
     {
-      std::string audio, video, player, vsync;
+      std::string audio, video, player, vsync, cpu;
 
       m_playerPort->GetDebugInfo(audio, video, player);
 
@@ -936,8 +937,10 @@ void CRenderManager::Render(bool clear, DWORD flags, DWORD alpha, bool gui)
                                      missedvblanks,
                                      clockspeed * 100);
       }
+      cpu = g_cpuInfo.GetCoresUsageString();
 
-      m_debugRenderer.SetInfo(audio, video, player, vsync);
+      std::vector<std::string> infos = { audio, video, player, vsync, cpu };
+      m_debugRenderer.SetInfo(infos);
       m_debugRenderer.Render(src, dst, view);
 
       m_debugTimer.Set(1000);
