@@ -290,6 +290,7 @@ CDVDOverlay* CDVDOverlayCodecFFmpeg::GetOverlay()
 
     m_SubtitleIndex++;
 
+    CLog::Log(LOGDEBUG, "Overlay: x:%d y:%d w:%d h:%d", overlay->x, overlay->y, overlay->width, overlay->height);
     return overlay;
   }
 
