@@ -92,6 +92,11 @@ void CRBP::InitializeSettings()
     CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_cacheMemSize = m_arm_mem < 256 ? 1024 * 1024 * 2 : 1024 * 1024 * 20;
 }
 
+int CRBP::GenCmd(char *response, int maxlen, const char *string)
+{
+  return m_DllBcmHost->vc_gencmd(response, maxlen, string);
+}
+
 bool CRBP::Initialize()
 {
   CSingleLock lock(m_critSection);
@@ -114,14 +119,14 @@ bool CRBP::Initialize()
   m_codec_mpg2_enabled = false;
   m_codec_wvc1_enabled = false;
 
-  if (vc_gencmd(response, sizeof response, "get_mem arm") == 0)
+  if (GenCmd(response, sizeof response, "get_mem arm") == 0)
     vc_gencmd_number_property(response, "arm", &m_arm_mem);
-  if (vc_gencmd(response, sizeof response, "get_mem gpu") == 0)
+  if (GenCmd(response, sizeof response, "get_mem gpu") == 0)
     vc_gencmd_number_property(response, "gpu", &m_gpu_mem);
 
-  if (vc_gencmd(response, sizeof response, "codec_enabled MPG2") == 0)
+  if (GenCmd(response, sizeof response, "codec_enabled MPG2") == 0)
     m_codec_mpg2_enabled = strcmp("MPG2=enabled", response) == 0;
-  if (vc_gencmd(response, sizeof response, "codec_enabled WVC1") == 0)
+  if (GenCmd(response, sizeof response, "codec_enabled WVC1") == 0)
     m_codec_wvc1_enabled = strcmp("WVC1=enabled", response) == 0;
 
   if (m_gpu_mem < 128)
@@ -141,15 +146,15 @@ bool CRBP::Initialize()
 void CRBP::LogFirmwareVersion()
 {
   char  response[1024];
-  m_DllBcmHost->vc_gencmd(response, sizeof response, "version");
+  GenCmd(response, sizeof response, "version");
   response[sizeof(response) - 1] = '\0';
   CLog::Log(LOGNOTICE, "Raspberry PI firmware version: %s", response);
   CLog::Log(LOGNOTICE, "ARM mem: %dMB GPU mem: %dMB MPG2:%d WVC1:%d", m_arm_mem, m_gpu_mem, m_codec_mpg2_enabled, m_codec_wvc1_enabled);
   CLog::Log(LOGNOTICE, "cache.memorysize: %dMB", CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_cacheMemSize >> 20);
-  m_DllBcmHost->vc_gencmd(response, sizeof response, "get_config int");
+  GenCmd(response, sizeof response, "get_config int");
   response[sizeof(response) - 1] = '\0';
   CLog::Log(LOGNOTICE, "Config:\n%s", response);
-  m_DllBcmHost->vc_gencmd(response, sizeof response, "get_config str");
+  GenCmd(response, sizeof response, "get_config str");
   response[sizeof(response) - 1] = '\0';
   CLog::Log(LOGNOTICE, "Config:\n%s", response);
 }
@@ -508,13 +513,13 @@ AVRpiZcFrameGeometry CRBP::GetFrameGeometry(uint32_t encoding, unsigned short vi
 
 double CRBP::AdjustHDMIClock(double adjust)
 {
-  char response[80];
+  char command[80], response[80];
 
   if (adjust == m_requested_pll_adjust)
     return m_actual_pll_adjust;
 
-  m_requested_pll_adjust = adjust;
-  vc_gencmd(response, sizeof response, "hdmi_adjust_clock %f", adjust);
+  sprintf(command, "hdmi_adjust_clock %f", adjust);
+  GenCmd(response, sizeof response, command);
   char *p = strchr(response, '=');
   if (p)
     m_actual_pll_adjust = atof(p+1);
