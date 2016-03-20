@@ -73,10 +73,10 @@ static void SetAudioProps(bool stream_channels, uint32_t channel_map)
   char command[80], response[80];
 
   sprintf(command, "hdmi_stream_channels %d", stream_channels ? 1 : 0);
-  vc_gencmd(response, sizeof response, command);
+  g_RBP.GenCmd(response, sizeof response, command);
 
   sprintf(command, "hdmi_channel_map 0x%08x", channel_map);
-  vc_gencmd(response, sizeof response, command);
+  g_RBP.GenCmd(response, sizeof response, command);
 
   CLog::Log(LOGDEBUG, "%s:%s hdmi_stream_channels %d hdmi_channel_map %08x", CLASSNAME, __func__, stream_channels, channel_map);
 }
