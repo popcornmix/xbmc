@@ -620,6 +620,12 @@ bool XBPython::OnScriptInitialized(ILanguageInvoker *invoker)
 #endif
 #endif
 
+#if !defined(TARGET_WINDOWS)
+    // use Kodi provided cert if available
+    if (XFILE::CFile::Exists("special://xbmc/system/certs/cacert.pem"))
+      setenv("SSL_CERT_FILE", CSpecialProtocol::TranslatePath("special://xbmc/system/certs/cacert.pem").c_str(), 1);
+#endif
+
     if (PyEval_ThreadsInitialized())
       PyEval_AcquireLock();
     else
