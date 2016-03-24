@@ -6,7 +6,8 @@ DEPS= ../../Makefile.include FFMPEG-VERSION Makefile \
   pfcd_hevc_optimisations.patch \
   0001-Squashed-commit-of-the-following.patch \
   0001-avcodec-add-h264_mvc-codec-id-and-profiles.patch 0001-h264_parser-add-support-for-parsing-h264-mvc-NALUs.patch \
-  h264_parser_fix_parsing_of_mvc_slices_in_some_corner_cases.patch
+  h264_parser_fix_parsing_of_mvc_slices_in_some_corner_cases.patch \
+  73fde6f9f3d01f7fc0f3ae4b66f6c725f9fb1105.patch
 
 # set to "yes" to enable patching
 # we don't apply patches until we move to a vanilla ffmpeg tarball
@@ -95,6 +96,7 @@ $(PLATFORM): $(TARBALLS_LOCATION)/$(ARCHIVE) $(DEPS)
 	cd $(PLATFORM); patch -p1 < ../0001-avcodec-add-h264_mvc-codec-id-and-profiles.patch
 	cd $(PLATFORM); patch -p1 < ../0001-h264_parser-add-support-for-parsing-h264-mvc-NALUs.patch
 	cd $(PLATFORM); patch -p1 < ../h264_parser_fix_parsing_of_mvc_slices_in_some_corner_cases.patch
+	cd $(PLATFORM); patch -p1 < ../73fde6f9f3d01f7fc0f3ae4b66f6c725f9fb1105.patch
 
 	cd $(PLATFORM);\
 	CFLAGS="$(CFLAGS)" CXXFLAGS="$(CXXFLAGS)" CPPFLAGS="$(CPPFLAGS)" LDFLAGS="$(LDFLAGS)" \
