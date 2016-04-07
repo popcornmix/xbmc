@@ -57,6 +57,7 @@ namespace XFILE
 
 struct DemuxPacket;
 class CDemuxStream;
+class CDVDDemux;
 
 class CDVDInputStream
 {
@@ -129,6 +130,16 @@ public:
     virtual void AbortDemux() = 0;
     virtual void FlushDemux() = 0;
     virtual void SetVideoResolution(int width, int height) {};
+  };
+
+  class IExtentionStream
+  {
+    public:
+    virtual ~IExtentionStream() {}
+    virtual bool HasExtention() = 0;
+    virtual bool AreEyesFlipped() = 0;
+    virtual CDVDDemux* GetExtentionDemux() = 0;
+    virtual void DisableExtention() = 0;
   };
 
   enum ENextStream

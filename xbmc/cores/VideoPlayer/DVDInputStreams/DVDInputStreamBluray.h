@@ -46,6 +46,7 @@ class CDVDInputStreamBluray
   , public CDVDInputStream::IChapter
   , public CDVDInputStream::IPosTime
   , public CDVDInputStream::IMenus
+  , public CDVDInputStream::IExtentionStream
 {
 public:
   CDVDInputStreamBluray(IVideoPlayer* player, const CFileItem& fileitem);
@@ -120,9 +121,10 @@ public:
   BLURAY_TITLE_INFO* GetTitleFile(const std::string& name);
 
   void ProcessEvent();
-  CDVDDemux* GetDemuxMVC() { return m_pMVCDemux; };
-  bool HasMVC() { return m_bMVCPlayback; }
-  bool AreEyesFlipped() { return m_bFlipEyes; }
+  CDVDDemux* GetExtentionDemux() override { return m_pMVCDemux; };
+  bool HasExtention() override { return m_bMVCPlayback; }
+  bool AreEyesFlipped() override { return m_bFlipEyes; }
+  void DisableExtention() override;
 
 protected:
   struct SPlane;
@@ -157,6 +159,7 @@ protected:
   int                 m_nMVCSubPathIndex = 0;
   int                 m_nMVCClip = -1;
   bool                m_bFlipEyes = false;
+  bool                m_bMVCDisabled = false;
   uint64_t            m_clipStartTime = 0;
 
   typedef std::shared_ptr<CDVDOverlayImage> SOverlay;

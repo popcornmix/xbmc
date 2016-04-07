@@ -91,6 +91,7 @@ public:
   int GetVideoBitrate();
   std::string GetStereoMode();
   void SetSpeed(int iSpeed);
+  bool SupportsExtention() const override { return m_pVideoCodec && m_pVideoCodec->SupportsExtention(); }
 
   // classes
   CDVDOverlayContainer* m_pOverlayContainer;
