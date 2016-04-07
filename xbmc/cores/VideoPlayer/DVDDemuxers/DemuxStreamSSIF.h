@@ -21,7 +21,7 @@
 */
 
 #include "DVDDemuxPacket.h"
-#include "DVDInputStreams/DVDInputStreamBluray.h"
+#include "DVDInputStreams/DVDInputStream.h"
 #include <queue>
 
 extern "C" {
@@ -41,7 +41,7 @@ public:
   int GetH264StreamId() { return m_h264StreamId; };
   int GetMVCStreamId() { return m_mvcStreamId; };
   void AddMVCExtPacket(DemuxPacket* &scrPkt);
-  void SetBluRay(CDVDInputStreamBluray* &bluRay) { m_bluRay = bluRay; };
+  void SetBluRay(CDVDInputStream::IExtentionStream* &bluRay) { m_bluRay = bluRay; };
   bool IsBluRay() { return m_bluRay != nullptr; };
 
 private:
@@ -49,7 +49,7 @@ private:
   DemuxPacket* MergePacket(DemuxPacket* &srcPkt, DemuxPacket* &appendPkt);
   bool FillMVCQueue(double dtsBase);
 
-  CDVDInputStreamBluray*   m_bluRay = nullptr;
+  CDVDInputStream::IExtentionStream* m_bluRay = nullptr;
   std::queue<DemuxPacket*> m_H264queue;
   std::queue<DemuxPacket*> m_MVCqueue;
   int m_h264StreamId = -1;
