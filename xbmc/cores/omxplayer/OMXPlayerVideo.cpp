@@ -398,11 +398,9 @@ void OMXPlayerVideo::Process()
 
     if (pMsg->IsType(CDVDMsg::GENERAL_SYNCHRONIZE))
     {
+      CLog::Log(LOGDEBUG, "COMXPlayerVideo - CDVDMsg::GENERAL_SYNCHRONIZE");
       if(((CDVDMsgGeneralSynchronize*)pMsg)->Wait(100, SYNCSOURCE_VIDEO))
-      {
-        CLog::Log(LOGDEBUG, "COMXPlayerVideo - CDVDMsg::GENERAL_SYNCHRONIZE");
-
-      }
+        CLog::Log(LOGDEBUG, "COMXPlayerVideo - CDVDMsg::GENERAL_SYNCHRONIZED");
       else
         SendMessage(pMsg->Acquire(), 1); /* push back as prio message, to process other prio messages */
     }
