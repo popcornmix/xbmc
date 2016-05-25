@@ -1063,7 +1063,11 @@ void CRenderManager::UpdateDisplayLatency()
     refresh = 0; // No idea about refresh rate when windowed, just get the default latency
   m_displayLatency = (double) g_advancedSettings.GetDisplayLatency(refresh);
 
+#ifdef TARGET_RASPBERRY_PI
+  int buffers = CSettings::GetInstance().GetBool("videoplayer.usedisplayasclock") ? 1:2;
+#else
   int buffers = g_Windowing.NoOfBuffers();
+#endif
   m_displayLatency += (buffers - 1) / fps;
 
 }

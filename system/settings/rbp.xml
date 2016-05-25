@@ -85,6 +85,12 @@
           <control type="toggle" />
         </setting>
       </group>
+      <group id="3">
+        <setting id="videoscreen.noofbuffers">
+          <visible>false</visible>
+          <default>2</default> <!-- double buffered -->
+        </setting>
+      </group>
     </category>
     <category id="audio">
       <group id="1">
