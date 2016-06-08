@@ -220,8 +220,6 @@ void CMMALVideo::dec_output_port_cb(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
       // we don't keep up when running at 60fps in the background so switch to half rate
       if (m_fps > 40.0f && !CServiceBroker::GetWinSystem()->GetGfxContext().IsFullScreenVideo() && !(m_num_decoded & 1))
         wanted = false;
-      if (CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_omxDecodeStartWithValidFrame && (buffer->flags & MMAL_BUFFER_HEADER_FLAG_CORRUPTED))
-        wanted = false;
       m_num_decoded++;
       CLog::Log(LOGDEBUG, LOGVIDEO,
                 "%s::%s - omvb:%p mmal:%p len:%u dts:%.3f pts:%.3f flags:%x:%x pool:%p %dx%d "
@@ -836,7 +834,7 @@ CDVDVideoCodec::VCReturn CMMALVideo::GetPicture(VideoPicture* picture)
     picture->pts = buffer->mmal_buffer->pts == MMAL_TIME_UNKNOWN ? DVD_NOPTS_VALUE : buffer->mmal_buffer->pts;
     picture->iRepeatPicture = 0;
     picture->iFlags  = 0;
-    if (buffer->mmal_buffer->flags & MMAL_BUFFER_HEADER_FLAG_USER3)
+    if (buffer->mmal_buffer->flags & MMAL_BUFFER_HEADER_FLAG_USER3 || (CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_omxDecodeStartWithValidFrame && (buffer->flags & MMAL_BUFFER_HEADER_FLAG_CORRUPTED)))
       picture->iFlags |= DVP_FLAG_DROPPED;
     CLog::Log(LOGINFO, LOGVIDEO,
               "%s::%s dts:%.3f pts:%.3f flags:%x:%x MMALBuffer:%p mmal_buffer:%p", CLASSNAME,
