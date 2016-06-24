@@ -659,6 +659,10 @@ std::string OMXPlayerAudio::GetPlayerInfo()
   std::ostringstream s;
   s << "aq:"     << std::setw(2) << std::min(99,m_messageQueue.GetLevel() + MathUtils::round_int(100.0/8.0*GetCacheTime())) << "%";
   s << ", Kb/s:" << std::fixed << std::setprecision(2) << (double)GetAudioBitrate() / 1024.0;
+  s << ", ac:"   << m_processInfo.GetAudioDecoderName().c_str();
+  if (!m_passthrough)
+    s << ", chan:" << m_processInfo.GetAudioChannels().c_str();
+  s << ", " << m_processInfo.GetAudioSampleRate()/1000 << " kHz";
 
   return s.str();
 }

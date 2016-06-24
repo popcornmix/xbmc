@@ -55,7 +55,6 @@ protected:
   bool                      m_stalled;
   IDVDStreamPlayer::ESyncState m_syncState;
   bool                      m_flush;
-  std::string               m_codecname;
   std::atomic_bool          m_bAbortOutput;
   double                    m_iSubtitleDelay;
   bool                      m_bRenderSubs;
