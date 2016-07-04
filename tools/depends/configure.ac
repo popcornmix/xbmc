@@ -433,7 +433,7 @@ if test "$target_platform" = "raspberry-pi" ; then
    -isystem${use_firmware}/opt/vc/include \
    -isystem${use_firmware}/opt/vc/include/interface/vcos/pthreads \
    -isystem${use_firmware}/opt/vc/include/interface/vmcs_host/linux"
-  platform_ldflags+=" -L${use_firmware}/opt/vc/lib -lEGL -lGLESv2 -lbcm_host -lvcos \
+  platform_ldflags+=" -L${use_firmware}/opt/vc/lib -lbrcmEGL -lbrcmGLESv2 -lbcm_host -lvcos \
    -lvchiq_arm"
 fi
 

@@ -13,7 +13,7 @@
 find_package(EMBEDDED)
 
 if(PKG_CONFIG_FOUND AND NOT PLATFORM STREQUAL "raspberry-pi")
-  pkg_check_modules(PC_OPENGLES glesv2 QUIET)
+  pkg_check_modules(PC_OPENGLES brcmglesv2 QUIET)
   if(NOT OPENGLES_FOUND AND EMBEDDED_FOUND)
     set(CMAKE_PREFIX_PATH ${EMBEDDED_FOUND} ${CMAKE_PREFIX_PATH})
   endif()
@@ -22,9 +22,9 @@ endif()
 if(NOT CORE_SYSTEM_NAME STREQUAL ios)
   find_path(OPENGLES_INCLUDE_DIR GLES2/gl2.h
                                  PATHS ${PC_OPENGLES_INCLUDEDIR})
-  find_library(OPENGLES_gl_LIBRARY NAMES GLESv2
+  find_library(OPENGLES_gl_LIBRARY NAMES brcmGLESv2
                                    PATHS ${PC_OPENGLES_LIBDIR})
-  find_library(OPENGLES_egl_LIBRARY NAMES EGL
+  find_library(OPENGLES_egl_LIBRARY NAMES brcmEGL
                                     PATHS ${PC_OPENGLES_LIBDIR})
 else()
   find_library(OPENGLES_gl_LIBRARY NAMES OpenGLES
