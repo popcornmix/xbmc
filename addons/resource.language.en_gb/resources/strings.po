@@ -8694,7 +8694,7 @@ msgstr ""
 
 #: xbmc/video/dialogs/GUIDialogVideoSettings.cpp
 msgctxt "#16313"
-msgid "VDPAU - Sharpness"
+msgid "Sharpness"
 msgstr ""
 
 #empty string with id 16314
