@@ -59,7 +59,7 @@ void CGUIImage::UpdateInfo(const CGUIListItem *item)
     return; // nothing to do
 
   // don't allow image to change while animating out
-  if (HasProcessed() && IsAnimating(ANIM_TYPE_HIDDEN) && !IsVisibleFromSkin())
+  if (HasProcessed() && IsAnimating(ANIM_TYPE_HIDDEN) && IsVisibleFromSkin())
     return;
 
   if (item)
