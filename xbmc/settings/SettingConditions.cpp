@@ -332,6 +332,9 @@ void CSettingConditions::Initialize(const CProfilesManager &profileManager)
   m_simpleConditions.insert("has_dx");
   m_simpleConditions.insert("hasdxva2");
 #endif
+#if defined(HAVE_LIBMFX) || defined(TARGET_RASPBERRY_PI)
+  m_simpleConditions.insert("has_mvc");
+#endif
 #ifdef HAVE_LCMS2
   m_simpleConditions.insert("have_lcms2");
 #endif
