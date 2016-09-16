@@ -28,13 +28,6 @@
           <control type="edit" format="integer" />
         </setting>
       </group>
-      <group id="4">
-        <setting id="videoplayer.supportmvc" type="boolean" label="38027" help="38028">
-          <level>2</level>
-          <default>true</default>
-          <control type="toggle" />
-        </setting>
-      </group>
     </category>
   </section>
   <section id="media">
