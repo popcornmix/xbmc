@@ -12,17 +12,6 @@
       <visible>false</visible>
     </category>
   </section>
-  <section id="player">
-    <category id="videoplayer">
-      <group id="4">
-        <setting id="videoplayer.supportmvc" type="boolean" label="38027" help="38028">
-          <level>2</level>
-          <default>true</default>
-          <control type="toggle" />
-        </setting>
-      </group>
-    </category>
-  </section>
   <section id="system">
     <category id="display">
       <group id="1">

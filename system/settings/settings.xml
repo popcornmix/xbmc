@@ -343,6 +343,12 @@
           <default>true</default>
           <control type="toggle" />
         </setting>
+        <setting id="videoplayer.supportmvc" type="boolean" label="38027" help="38028">
+          <level>2</level>
+          <default>true</default>
+          <control type="toggle" />
+          <requirement>HAS_MVC</requirement>
+        </setting>
       </group>
       <group id="5" label="14233">
         <setting id="videoplayer.teletextenabled" type="boolean" label="23050" help="36174">
