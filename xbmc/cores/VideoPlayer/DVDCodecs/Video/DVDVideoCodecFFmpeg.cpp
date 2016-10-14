@@ -579,7 +579,7 @@ void CDVDVideoCodecFFmpeg::UpdateName()
   if(m_pHardware)
     m_name += "-" + m_pHardware->Name();
 
-  m_processInfo.SetVideoDecoderName(m_name, m_pHardware ? true : false);
+  m_processInfo.SetVideoDecoderName(m_name, m_pHardware && m_pHardware->Name() != "mmal" ? true : false);
 
   CLog::Log(LOGDEBUG, "CDVDVideoCodecFFmpeg - Updated codec: %s", m_name.c_str());
 }
