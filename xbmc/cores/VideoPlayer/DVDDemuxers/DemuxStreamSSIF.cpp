@@ -183,12 +183,15 @@ bool CDemuxStreamSSIF::FillMVCQueue(double dtsBase)
     else if (mvc->dts < dtsBase)
     {
 #if defined(DEBUG_VERBOSE)
-      CLog::Log(LOGDEBUG, ">>> MVC discard mvc: %6d, pts(%.3f) dts(%.3f)", mvc->iSize, mvc->pts*1e-6, mvc->dts*1e-6);
+      CLog::Log(LOGDEBUG, ">>> MVC drop mvc: %6d, pts(%.3f) dts(%.3f)", mvc->iSize, mvc->pts*1e-6, mvc->dts*1e-6);
 #endif
       CDVDDemuxUtils::FreeDemuxPacket(mvc);
       continue;
     }
     AddMVCExtPacket(mvc);
   };
-  return m_MVCqueue.size() == MVC_QUEUE_SIZE;
+  if (m_MVCqueue.size() != MVC_QUEUE_SIZE)
+    m_bluRay->OpenNextStream();
+
+  return true;
 }

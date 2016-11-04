@@ -23,6 +23,7 @@
 #include "DVDInputStream.h"
 #include <list>
 #include <memory>
+#include <queue>
 
 extern "C"
 {
@@ -125,6 +126,7 @@ public:
   bool HasExtention() override { return m_bMVCPlayback; }
   bool AreEyesFlipped() override { return m_bFlipEyes; }
   void DisableExtention() override;
+  bool OpenNextStream() override;
 
 protected:
   struct SPlane;
@@ -161,6 +163,7 @@ protected:
   bool                m_bFlipEyes = false;
   bool                m_bMVCDisabled = false;
   uint64_t            m_clipStartTime = 0;
+  std::queue<int>     m_clipQueue;
 
   typedef std::shared_ptr<CDVDOverlayImage> SOverlay;
   typedef std::list<SOverlay>                 SOverlays;

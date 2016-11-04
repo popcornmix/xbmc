@@ -140,6 +140,7 @@ public:
     virtual bool AreEyesFlipped() = 0;
     virtual CDVDDemux* GetExtentionDemux() = 0;
     virtual void DisableExtention() = 0;
+    virtual bool OpenNextStream() = 0;
   };
 
   enum ENextStream
