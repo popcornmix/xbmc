@@ -64,6 +64,7 @@ public:
   virtual void ass_set_message_cb(ASS_Library *priv
                                 , void (*msg_cb)(int level, const char *fmt, va_list args, void *data)
                                 , void *data)=0;
+  virtual void ass_set_cache_limits(ASS_Renderer *render_priv, int glyph_max, int bitmap_max)=0;
 };
 
 class DllLibass : public DllDynamic, DllLibassInterface
@@ -91,6 +92,7 @@ class DllLibass : public DllDynamic, DllLibassInterface
   DEFINE_METHOD5(void, ass_process_chunk, (ASS_Track* p1, char* p2, int p3, long long p4, long long p5))
   DEFINE_METHOD3(void, ass_process_codec_private, (ASS_Track* p1, char* p2, int p3))
   DEFINE_METHOD3(void, ass_set_message_cb, (ASS_Library* p1, void (*p2)(int level, const char *fmt, va_list args, void *data), void* p3))
+  DEFINE_METHOD3(void, ass_set_cache_limits, (ASS_Renderer *p1, int p2, int p3))
   BEGIN_METHOD_RESOLVE()
     RESOLVE_METHOD(ass_set_extract_fonts)
     RESOLVE_METHOD(ass_set_fonts_dir)
@@ -114,5 +116,6 @@ class DllLibass : public DllDynamic, DllLibassInterface
     RESOLVE_METHOD(ass_process_chunk)
     RESOLVE_METHOD(ass_process_codec_private)
     RESOLVE_METHOD(ass_set_message_cb)
+    RESOLVE_METHOD(ass_set_cache_limits)
   END_METHOD_RESOLVE()
 };
