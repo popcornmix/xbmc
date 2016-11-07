@@ -19,6 +19,7 @@
 #include "utils/StringUtils.h"
 #include "threads/SingleLock.h"
 #include "windowing/GraphicContext.h"
+#include "settings/AdvancedSettings.h"
 
 static void libass_log(int level, const char *fmt, va_list args, void *data)
 {
@@ -53,6 +54,8 @@ CDVDSubtitlesLibass::CDVDSubtitlesLibass()
 
   if(!m_renderer)
     return;
+
+  ass_set_cache_limits(m_renderer, 0, CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_libAssCache);
 
   //Setting default font to the Arial in \media\fonts (used if FontConfig fails)
   const std::shared_ptr<CSettings> settings = CServiceBroker::GetSettingsComponent()->GetSettings();
