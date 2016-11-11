@@ -331,6 +331,11 @@ bool CMMALVideo::SendCodecConfigData()
   return true;
 }
 
+bool CMMALVideo::SupportsExtention()
+{
+  return CServiceBroker::GetSettings()->GetBool(CSettings::SETTING_VIDEOPLAYER_SUPPORTMVC);
+}
+
 bool CMMALVideo::Open(CDVDStreamInfo &hints, CDVDCodecOptions &options)
 {
   CSingleLock lock(m_sharedSection);
@@ -382,12 +387,12 @@ bool CMMALVideo::Open(CDVDStreamInfo &hints, CDVDCodecOptions &options)
       m_codingType = MMAL_ENCODING_H264;
       m_pFormatName = "mmal-h264";
       if ((hints.codec_tag == MKTAG('M', 'V', 'C', '1') || hints.codec_tag == MKTAG('A', 'M', 'V', 'C')) &&
-        CServiceBroker::GetSettings()->GetBool(CSettings::SETTING_VIDEOPLAYER_SUPPORTMVC))
+          SupportsExtention())
       {
         m_codingType = MMAL_ENCODING_MVC;
         m_pFormatName= "mmal-mvc";
         if (hints.stereo_mode == "mono")
-          hints.stereo_mode = "mvc_lr";
+          hints.stereo_mode = "block_lr";
       }
     break;
     case AV_CODEC_ID_H263:

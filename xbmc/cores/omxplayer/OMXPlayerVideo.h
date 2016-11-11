@@ -85,6 +85,7 @@ public:
   bool IsStalled() const                            override { return m_stalled;  }
   bool IsEOS() override;
   void CloseStream(bool bWaitForBuffers) override;
+  bool SupportsExtention() const;
   void Output(double pts, bool bDropPacket);
   bool StepFrame();
   void Flush(bool sync) override;

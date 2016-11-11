@@ -90,6 +90,11 @@ OMXPlayerVideo::~OMXPlayerVideo()
   CloseStream(false);
 }
 
+bool OMXPlayerVideo::SupportsExtention() const
+{
+  return CServiceBroker::GetSettings()->GetBool(CSettings::SETTING_VIDEOPLAYER_SUPPORTMVC);
+}
+
 bool OMXPlayerVideo::OpenStream(CDVDStreamInfo hints)
 {
   m_hints       = hints;
