@@ -11,7 +11,7 @@ SRCS += DVDDemuxVobsub.cpp
 SRCS += DVDDemuxCC.cpp
 SRCS += DVDFactoryDemuxer.cpp
 SRCS += DemuxStreamSSIF.cpp
-SRCS += DVDDemuxMVC.cpp
+SRCS += DemuxMVC.cpp
 
 LIB = DVDDemuxers.a
 

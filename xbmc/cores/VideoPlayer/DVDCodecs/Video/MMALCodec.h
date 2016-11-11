@@ -104,6 +104,7 @@ public:
   virtual bool GetCodecStats(double &pts, int &droppedPics);
   virtual void SetCodecControl(int flags);
   virtual void SetSpeed(int iSpeed);
+  virtual bool SupportsExtention();
 
   // MMAL decoder callback routines.
   void dec_output_port_cb(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer);
