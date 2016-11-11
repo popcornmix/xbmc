@@ -96,6 +96,7 @@ public:
   void WaitForBuffers()                             { m_messageQueue.WaitUntilEmpty(); }
   int  GetLevel() const                             { return m_messageQueue.GetLevel(); }
   bool IsStalled() const                            { return m_stalled;  }
+  bool SupportsExtention() const;
   bool IsEOS();
   void CloseStream(bool bWaitForBuffers);
   void Output(double pts, bool bDropPacket);

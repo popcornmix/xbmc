@@ -70,10 +70,13 @@ static const struct StereoModeMap VideoModeToGuiModeMap[] =
   { "anaglyph_cyan_red",        RENDER_STEREO_MODE_ANAGLYPH_RED_CYAN },
   { "anaglyph_green_magenta",   RENDER_STEREO_MODE_ANAGLYPH_GREEN_MAGENTA },
   { "anaglyph_yellow_blue",     RENDER_STEREO_MODE_ANAGLYPH_YELLOW_BLUE },
+#ifndef TARGET_RASPBERRY_PI
   { "block_lr",                 RENDER_STEREO_MODE_HARDWAREBASED },
   { "block_rl",                 RENDER_STEREO_MODE_HARDWAREBASED },
+#else
   { "block_lr",                 RENDER_STEREO_MODE_SPLIT_HORIZONTAL }, // fallback
   { "block_rl",                 RENDER_STEREO_MODE_SPLIT_HORIZONTAL }, // fallback
+#endif
   {}
 };
 
