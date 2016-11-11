@@ -52,6 +52,7 @@ public:
   virtual const char* GetName(void) override { return m_pFormatName ? m_pFormatName:"mmal-xxx"; }
   virtual void SetCodecControl(int flags) override;
   virtual void SetSpeed(int iSpeed) override;
+  virtual bool SupportsExtention() override;
 
   // MMAL decoder callback routines.
   void dec_output_port_cb(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer);
