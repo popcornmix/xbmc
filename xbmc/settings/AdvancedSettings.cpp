@@ -361,8 +361,10 @@ void CAdvancedSettings::Initialize()
 #ifdef TARGET_RASPBERRY_PI
   // want default to be memory dependent, but interface to gpu not available yet, so set in RBP.cpp
   m_cacheMemSize = ~0;
+  m_libAssCache = ~0;
 #else
   m_cacheMemSize = 1024 * 1024 * 20;
+  m_libAssCache = 0;
 #endif
   m_libAssCache = 0;
 
