@@ -65,6 +65,8 @@ void CRBP::InitializeSettings()
 {
   if (m_initialized && g_advancedSettings.m_cacheMemSize == ~0U)
     g_advancedSettings.m_cacheMemSize = m_arm_mem < 256 ? 1024 * 1024 * 2 : 1024 * 1024 * 20;
+  if (m_initialized && g_advancedSettings.m_libAssCache == ~0U)
+    g_advancedSettings.m_libAssCache = m_arm_mem < 256 ? 21 : m_arm_mem < 512 ? 42 : 96;
 }
 
 bool CRBP::Initialize()
@@ -120,7 +122,7 @@ void CRBP::LogFirmwareVerison()
   response[sizeof(response) - 1] = '\0';
   CLog::Log(LOGNOTICE, "Raspberry PI firmware version: %s", response);
   CLog::Log(LOGNOTICE, "ARM mem: %dMB GPU mem: %dMB MPG2:%d WVC1:%d", m_arm_mem, m_gpu_mem, m_codec_mpg2_enabled, m_codec_wvc1_enabled);
-  CLog::Log(LOGNOTICE, "cache.memorysize: %dMB",  g_advancedSettings.m_cacheMemSize >> 20);
+  CLog::Log(LOGNOTICE, "cache.memorysize: %dMB libass.cache: %dMB",  g_advancedSettings.m_cacheMemSize >> 20, g_advancedSettings.m_libAssCache);
   m_DllBcmHost->vc_gencmd(response, sizeof response, "get_config int");
   response[sizeof(response) - 1] = '\0';
   CLog::Log(LOGNOTICE, "Config:\n%s", response);
