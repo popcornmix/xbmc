@@ -188,7 +188,7 @@ DemuxPacket* CDemuxMVC::Read()
   return nullptr;
 }
 
-bool CDemuxMVC::SeekTime(int time, bool backwords, double* startpts)
+bool CDemuxMVC::SeekTime(double time, bool backwords, double* startpts)
 {
   if (!m_pInput)
     return false;
