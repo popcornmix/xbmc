@@ -127,6 +127,7 @@ class CAdvancedSettings : public ISettingCallback, public ISettingsHandler
 
     int m_audioHeadRoom;
     float m_ac3Gain;
+    int m_ac3Bitrate;
     std::string m_audioDefaultPlayer;
     float m_audioPlayCountMinimumPercent;
     bool m_VideoPlayerIgnoreDTSinWAV;

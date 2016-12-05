@@ -132,6 +132,7 @@ void CAdvancedSettings::Initialize()
 
   m_audioHeadRoom = 0;
   m_ac3Gain = 12.0f;
+  m_ac3Bitrate = 0;
   m_audioApplyDrc = -1.0f;
   m_VideoPlayerIgnoreDTSinWAV = false;
 
@@ -545,6 +546,7 @@ void CAdvancedSettings::ParseSettingsFile(const std::string &file)
   if (pElement)
   {
     XMLUtils::GetFloat(pElement, "ac3downmixgain", m_ac3Gain, -96.0f, 96.0f);
+    XMLUtils::GetInt(pElement, "ac3bitrate", m_ac3Bitrate, 0, 1280000);
     XMLUtils::GetInt(pElement, "headroom", m_audioHeadRoom, 0, 12);
     XMLUtils::GetString(pElement, "defaultplayer", m_audioDefaultPlayer);
     // 101 on purpose - can be used to never automark as watched
