@@ -91,7 +91,7 @@ void CRBP::InitializeSettings()
   if (m_initialized && CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_cacheMemSize == ~0U)
     CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_cacheMemSize = m_arm_mem < 256 ? 1024 * 1024 * 2 : 1024 * 1024 * 20;
   if (m_initialized && CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_libAssCache == ~0U)
-    CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_libAssCache = m_arm_mem < 256 ? 21 : m_arm_mem < 512 ? 42 : 96;
+    CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_libAssCache = 21; //m_arm_mem < 256 ? 21 : m_arm_mem < 512 ? 42 : 96;
 }
 
 bool CRBP::Initialize()
