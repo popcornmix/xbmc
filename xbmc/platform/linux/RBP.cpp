@@ -94,7 +94,6 @@ void CRBP::InitializeSettings()
 
 int CRBP::GenCmd(char *response, int maxlen, const char *string)
 {
-  CSingleLock lock(m_critSection);
   return m_DllBcmHost->vc_gencmd(response, maxlen, string);
 }
 

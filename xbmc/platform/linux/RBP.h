@@ -102,7 +102,6 @@ public:
   double AdjustHDMIClock(double adjust);
   double GetAdjustHDMIClock() { return m_actual_pll_adjust; }
   int GenCmd(char *response, int maxlen, const char *string);
-  CCriticalSection &GetLock() { return m_critSection; }
 
 private:
   DllBcmHost *m_DllBcmHost;
