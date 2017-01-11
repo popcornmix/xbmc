@@ -29,6 +29,42 @@ APP_BINARY=$LIBDIR/${bin_name}/@APP_BINARY@
 CRASHLOG_DIR=${CRASHLOG_DIR:-$HOME}
 KODI_DATA=${KODI_DATA:-"${HOME}/.${bin_name}"} # mapped to special://home/
 
+# Black Screen on exit fix
+ORIGINAL_DEPTH=`fbset | head -3 | tail -1 | cut -d " " -f 10`
+
+# PiPplware fixes
+if pgrep "fbi" > /dev/null
+then
+    sudo killall fbi >/dev/null 2>&1
+fi
+if pgrep "cec-client" > /dev/null
+then
+    sudo service cec stop >/dev/null 2>&1
+fi
+
+# EmulationStation screen resolution fix
+save_screen_mode() {
+    local status="$(tvservice -s)"
+    if echo "$status" | grep -qE "(PAL|NTSC)"; then
+        MODE_TYPE=$(echo "$status" | grep -oE "(PAL|NTSC)")
+        MODE_INFO=$(echo "$status" | grep -oE "([0-9]+\:[0-9]+)")
+    else
+        MODE_TYPE=$(echo "$status" | grep -oE "(CEA|DMT)")
+        MODE_INFO=$(echo "$status" | grep -oE "\([0-9]+\)" | tr -d '()')
+    fi
+}
+
+restore_screen_mode() {
+    if [ "$MODE_TYPE" = "PAL" ] || [ "$MODE_TYPE" = "NTSC" ]; then
+        tvservice -c "$MODE_TYPE $MODE_INFO" >/dev/null
+    else
+        tvservice -e "$MODE_TYPE $MODE_INFO" >/dev/null
+    fi
+    sleep 1
+}
+
+save_screen_mode
+
 # Workaround for high CPU load with nvidia GFX
 export __GL_YIELD=USLEEP
 
@@ -176,7 +212,7 @@ while [ $(( $LOOP )) = "1" ]
 do
   [ -f "${APPORT_CORE}" ] && rm -f "${APPORT_CORE}"
   LOOP=0
-  ${KODI_BINARY} $SAVED_ARGS &
+  ${KODI_BINARY} --lircdev /var/run/lirc/lircd $SAVED_ARGS &
   CHILD=$!
   wait "${CHILD}"
   RET=$?
@@ -188,5 +224,22 @@ do
     print_crash_report
   fi
 done
+
+# Raspberry Pi fixes
+restore_screen_mode
+fbset -depth 8 > /dev/null 2>&1
+fbset -depth $ORIGINAL_DEPTH > /dev/null 2>&1
+if pgrep "X" > /dev/null
+then
+    xrefresh >/dev/null 2>&1
+fi
+if [ -f "/usr/bin/cec-daemon" ]
+then
+    sudo service cec start >/dev/null 2>&1
+fi
+if [ -f "/usr/bin/cec-daemon" ]
+then
+    sudo service cec start >/dev/null 2>&1
+fi
 
 exit $RET
