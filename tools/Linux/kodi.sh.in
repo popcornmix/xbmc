@@ -29,6 +29,11 @@ APP_BINARY=$LIBDIR/${bin_name}/@APP_BINARY@
 CRASHLOG_DIR=${CRASHLOG_DIR:-$HOME}
 KODI_DATA=${KODI_DATA:-"${HOME}/.${bin_name}"} # mapped to special://home/
 
+if pgrep "cec-client" > /dev/null; then
+    sudo service cec stop >/dev/null 2>&1
+    CEC_STOPPED=1
+fi
+
 # Workaround for high CPU load with nvidia GFX
 export __GL_YIELD=USLEEP
 
@@ -42,6 +47,14 @@ do
         --setlibdir)
             LIBDIR="$2"
             shift; shift
+            ;;
+        --pulse)
+            WANT_PULSE=1
+            shift
+            ;;
+        --standalone)
+            STANDALONE=1
+            shift
             ;;
         *)
             shift
@@ -205,12 +218,22 @@ if [ -n "${KODI_GL_INTERFACE}" ]; then
   fi
 fi
 
+if [ "$WANT_PULSE" != "1" ] && pactl list > /dev/null 2>&1 ; then
+ systemctl --user stop pulseaudio.socket
+ systemctl --user stop pulseaudio.service
+ PULSE_STOPPED=1
+fi
+
 LOOP=1
 while [ $(( $LOOP )) = "1" ]
 do
   [ -f "${APPORT_CORE}" ] && rm -f "${APPORT_CORE}"
   LOOP=0
-  ${KODI_BINARY} ${ENV_ARGS} $SAVED_ARGS &
+  if [ -n "$WAYLAND_DISPLAY" ] && [ -z "$STANDALONE" ]; then
+    ${KODI_BINARY} ${ENV_ARGS} $SAVED_ARGS &
+  else
+    unset DISPLAY; sudo openvt -sw -- su -c "${KODI_BINARY} ${ENV_ARGS} $SAVED_ARGS" $USER &
+  fi
   CHILD=$!
   wait "${CHILD}"
   RET=$?
@@ -222,5 +245,13 @@ do
     print_crash_report
   fi
 done
+
+if [ -n "$CEC_STOPPED" ]; then
+    sudo service cec start >/dev/null 2>&1
+fi
+if [ "$PULSE_STOPPED" = "1" ]; then
+ systemctl --user start pulseaudio.service
+ systemctl --user start pulseaudio.socket
+fi
 
 exit $RET
