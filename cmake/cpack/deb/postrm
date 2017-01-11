@@ -1,3 +1,16 @@
 #!/bin/sh
 set -e
 if [ -x "`which update-menus 2>/dev/null`" ]; then update-menus ; fi
+
+if [ -f "/etc/sudoers.d/020_kodi" ]; then
+rm /etc/sudoers.d/020_kodi
+fi
+
+if [ -f "/etc/udev/rules.d/99-kodi.rules" ]; then
+rm /etc/udev/rules.d/99-kodi.rules
+fi
+
+if [ -f "/etc/polkit-1/localauthority/50-local.d/kodi.pkla" ]; then
+rm /etc/polkit-1/localauthority/50-local.d/kodi.pkla
+fi
+
