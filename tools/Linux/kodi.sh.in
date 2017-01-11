@@ -43,6 +43,10 @@ do
             LIBDIR="$2"
             shift; shift
             ;;
+        --standalone)
+            STANDALONE=1
+            shift
+            ;;
         *)
             shift
             ;;
@@ -210,7 +214,11 @@ while [ $(( $LOOP )) = "1" ]
 do
   [ -f "${APPORT_CORE}" ] && rm -f "${APPORT_CORE}"
   LOOP=0
-  ${KODI_BINARY} ${ENV_ARGS} $SAVED_ARGS &
+  if [ -n "$WAYLAND_DISPLAY" ] && [ -z "$STANDALONE" ]; then
+    ${KODI_BINARY} ${ENV_ARGS} $SAVED_ARGS &
+  else
+    unset DISPLAY WAYLAND_DISPLAY; vt=$(sudo fgconsole); (chvt 8 2> /dev/null || sudo chvt 8) && ${KODI_BINARY} ${ENV_ARGS} $SAVED_ARGS &
+  fi
   CHILD=$!
   wait "${CHILD}"
   RET=$?
@@ -222,5 +230,10 @@ do
     print_crash_report
   fi
 done
+
+# change vt back if we previously changed it
+if [ "$vt" != "" ]; then
+  sudo /bin/chvt $vt
+fi
 
 exit $RET
