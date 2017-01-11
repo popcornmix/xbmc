@@ -3,3 +3,37 @@ set -e
 if [ "$1" = "configure" ] && [ -x "`which update-menus 2>/dev/null`" ]; then
 	update-menus
 fi
+
+if [ ! -f "/etc/sudoers.d/020_kodi" ]; then
+tee -a /etc/sudoers.d/020_kodi > /dev/null 2>&1 <<_EOF_
+Cmnd_Alias KODI_VT = /bin/fgconsole, /bin/chvt *
+
+%video ALL = (root) NOPASSWD: KODI_VT
+_EOF_
+fi
+
+if [ ! -f "/etc/udev/rules.d/99-kodi.rules" ]; then
+tee -a /etc/udev/rules.d/99-kodi.rules > /dev/null 2>&1 <<_EOF_
+SUBSYSTEM=="drm", GROUP="video", MODE="0660"
+SUBSYSTEM=="tty", KERNEL=="tty[0-9]*", GROUP="tty", MODE="0660"
+_EOF_
+fi
+
+if [ ! -f "/etc/polkit-1/localauthority/50-local.d/kodi.pkla" ]; then
+tee -a /etc/polkit-1/localauthority/50-local.d/kodi.pkla > /dev/null 2>&1 <<_EOF_
+[Allow users in the plugdev group to reboot and shutdown]
+Identity=unix-group:plugdev
+Action=org.freedesktop.consolekit*;org.freedesktop.upower*;org.freedesktop.login1*
+ResultAny=yes
+ResultInactive=yes
+ResultActive=yes
+
+[Allow users in the plugdev group to mount/unmount devices]
+Identity=unix-group:plugdev
+Action=org.freedesktop.udisks*
+ResultAny=yes
+ResultInactive=yes
+ResultActive=yes
+_EOF_
+fi
+
