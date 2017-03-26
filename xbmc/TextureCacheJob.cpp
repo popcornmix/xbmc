@@ -109,7 +109,12 @@ bool CTextureCacheJob::CacheTexture(CBaseTexture **out_texture)
     if (!(!(file.IsPicture() && !(file.IsZIP() || file.IsRAR() || file.IsCBR() || file.IsCBZ() ))
         && !StringUtils::StartsWithNoCase(file.GetMimeType(), "image/") && !StringUtils::EqualsNoCase(file.GetMimeType(), "application/octet-stream"))) // ignore non-pictures
     {
-      texture = CBaseTexture::LoadFromFile(image, width, height, true, file.GetMimeType());
+      texture = new CTexture();
+      if (!(texture->LoadFromFileInternal(image, width, height, true, file.GetMimeType())))
+      {
+        delete texture;
+        texture = nullptr;
+      }
       if (texture)
       {
       // EXIF bits are interpreted as: <flipXY><flipY*flipX><flipX>
