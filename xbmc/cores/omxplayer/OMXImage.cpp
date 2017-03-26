@@ -117,7 +117,6 @@ COMXImageFile *COMXImage::LoadJpeg(const std::string& texturePath)
   COMXImageFile *file = new COMXImageFile();
   if (!file->ReadFile(texturePath))
   {
-    CLog::Log(LOGNOTICE, "%s: unable to load %s", __func__, CURL::GetRedacted(texturePath).c_str());
     delete file;
     file = NULL;
   }
@@ -597,16 +596,16 @@ static void inline SKIPN(uint8_t * &p, unsigned int n)
   p += n;
 }
 
-OMX_IMAGE_CODINGTYPE COMXImageFile::GetCodingType(unsigned int &width, unsigned int &height, int orientation)
+bool COMXImageFile::GetCodingType(unsigned int &width, unsigned int &height, int orientation, std::string &error)
 {
-  OMX_IMAGE_CODINGTYPE eCompressionFormat = OMX_IMAGE_CodingMax;
+  bool valid = false;
   bool progressive = false;
   int components = 0;
   m_orientation   = 0;
 
   if(!m_image_size)
   {
-    CLog::Log(LOGERROR, "%s::%s %s m_image_size unexpected (%lu)\n", CLASSNAME, __func__, GetFilename(), m_image_size);
+    error = "m_image_size unexpected";
     return OMX_IMAGE_CodingMax;
   }
 
@@ -616,8 +615,7 @@ OMX_IMAGE_CODINGTYPE COMXImageFile::GetCodingType(unsigned int &width, unsigned 
   /* JPEG Header */
   if(READ16(p) == 0xFFD8)
   {
-    eCompressionFormat = OMX_IMAGE_CodingJPEG;
-
+    valid = true;
     READ8(p);
     unsigned char marker = READ8(p);
     unsigned short block_size = 0;
@@ -856,7 +854,7 @@ OMX_IMAGE_CODINGTYPE COMXImageFile::GetCodingType(unsigned int &width, unsigned 
     }
   }
   else
-    CLog::Log(LOGERROR, "%s::%s error unsupported image format\n", CLASSNAME, __func__);
+    error = "unsupported image format";
 
   // apply input orientation
   m_orientation = m_orientation ^ orientation;
@@ -865,17 +863,23 @@ OMX_IMAGE_CODINGTYPE COMXImageFile::GetCodingType(unsigned int &width, unsigned 
 
   if(progressive)
   {
-    CLog::Log(LOGWARNING, "%s::%s progressive images not supported by decoder\n", CLASSNAME, __func__);
-    eCompressionFormat = OMX_IMAGE_CodingMax;
+    error = "progressive images not supported by decoder";
+    valid = false;
   }
 
   if(components > 3)
   {
-    CLog::Log(LOGWARNING, "%s::%s Only YUV images are supported by decoder\n", CLASSNAME, __func__);
-    eCompressionFormat = OMX_IMAGE_CodingMax;
+    error = "only YUV images are supported by decoder";
+    valid = false;
   }
 
-  return eCompressionFormat;
+  if(m_width < 1 || m_height < 1)
+  {
+    error = "invalid dimensions";
+    valid = false;
+  }
+
+  return valid;
 }
 
 
@@ -910,13 +914,12 @@ bool COMXImageFile::ReadFile(const std::string& inputFile, int orientation)
   m_pFile.Read(m_image_buffer, m_image_size);
   m_pFile.Close();
 
-  OMX_IMAGE_CODINGTYPE eCompressionFormat = GetCodingType(m_width, m_height, orientation);
-  if(eCompressionFormat != OMX_IMAGE_CodingJPEG || m_width < 1 || m_height < 1)
+  std::string error;
+  if (!GetCodingType(m_width, m_height, orientation, error))
   {
-    CLog::Log(LOGDEBUG, "%s::%s %s GetCodingType=0x%x (%dx%d)\n", CLASSNAME, __func__, GetFilename(), eCompressionFormat, m_width, m_height);
+    CLog::Log(LOGNOTICE, "%s::%s %s %dx%d %s", CLASSNAME, __func__, GetFilename(), m_width, m_height, error.c_str());
     return false;
   }
-
   return true;
 }
 

@@ -88,7 +88,7 @@ public:
   const uint8_t *GetImageBuffer() const { return (const uint8_t *)m_image_buffer; };
   const char *GetFilename() const { return m_filename.c_str(); };
 protected:
-  OMX_IMAGE_CODINGTYPE GetCodingType(unsigned int &width, unsigned int &height, int orientation);
+  bool GetCodingType(unsigned int &width, unsigned int &height, int orientation, std::string &error);
   uint8_t           *m_image_buffer;
   unsigned long     m_image_size;
   unsigned int      m_width;
