@@ -94,7 +94,33 @@ bool CTextureCacheJob::CacheTexture(CBaseTexture **out_texture)
     return true;
   }
 #endif
-  CBaseTexture *texture = LoadImage(image, width, height, additional_info, true);
+  CBaseTexture *texture = nullptr;
+  if (additional_info == "music")
+  { // special case for embedded music images
+    EmbeddedArt art;
+    if (CMusicThumbLoader::GetEmbeddedThumb(image, art))
+      texture = CBaseTexture::LoadFromFileInMemory(art.m_data.data(), art.m_size, art.m_mime, width, height);
+  }
+  else
+  {
+    // Validate file URL to see if it is an image
+    CFileItem file(image, false);
+    file.FillInMimeType();
+    if (!(!(file.IsPicture() && !(file.IsZIP() || file.IsRAR() || file.IsCBR() || file.IsCBZ() ))
+        && !StringUtils::StartsWithNoCase(file.GetMimeType(), "image/") && !StringUtils::EqualsNoCase(file.GetMimeType(), "application/octet-stream"))) // ignore non-pictures
+    {
+      texture = CBaseTexture::LoadFromFile(image, width, height, true, file.GetMimeType());
+      if (texture)
+      {
+      // EXIF bits are interpreted as: <flipXY><flipY*flipX><flipX>
+      // where to undo the operation we apply them in reverse order <flipX>*<flipY*flipX>*<flipXY>
+      // When flipped we have an additional <flipX> on the left, which is equivalent to toggling the last bit
+      if (additional_info == "flipped")
+        texture->SetOrientation(texture->GetOrientation() ^ 1);
+      }
+    }
+  }
+
   if (texture)
   {
     if (texture->HasAlpha())
