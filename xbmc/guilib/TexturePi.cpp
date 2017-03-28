@@ -102,17 +102,10 @@ void CPiTexture::Update(unsigned int width, unsigned int height, unsigned int pi
   CGLTexture::Update(width, height, pitch, format, pixels, loadToGPU);
 }
 
-bool CPiTexture::LoadFromFileInternal(const std::string& texturePath, unsigned int maxWidth, unsigned int maxHeight, bool requirePixels, const std::string& strMimeType)
+bool CPiTexture::LoadFromFileInternal(const std::string& texturePath, const XFILE::auto_buffer &buf, unsigned int maxWidth, unsigned int maxHeight, bool requirePixels, const std::string& strMimeType)
 {
   if (CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool("videoplayer.acceleratedjpegs") && URIUtils::HasExtension(texturePath, ".jpg|.tbn"))
   {
-    // Read image into memory to use our vfs
-    XFILE::CFile file;
-    XFILE::auto_buffer buf;
-
-    if (file.LoadFile(texturePath, buf) <= 0)
-      return false;
-
     unsigned int width = 0, height = 0;
     int orientation = 0;
     std::string error;
@@ -144,5 +137,5 @@ bool CPiTexture::LoadFromFileInternal(const std::string& texturePath, unsigned i
       }
     }
   }
-  return CGLTexture::LoadFromFileInternal(texturePath, maxWidth, maxHeight, requirePixels);
+  return CGLTexture::LoadFromFileInternal(texturePath, buf, maxWidth, maxHeight, requirePixels);
 }
