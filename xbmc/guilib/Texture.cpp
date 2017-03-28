@@ -202,8 +202,14 @@ CBaseTexture *CBaseTexture::LoadFromFile(const std::string& texturePath, unsigne
     }
   }
 #endif
+  // Read image into memory to use our vfs
+  XFILE::CFile file;
+  XFILE::auto_buffer buf;
+  if (!URIUtils::HasExtension(texturePath, ".dds"))
+    file.LoadFile(texturePath, buf);
+
   CTexture *texture = new CTexture();
-  if (texture->LoadFromFileInternal(texturePath, idealWidth, idealHeight, requirePixels, strMimeType))
+  if (texture->LoadFromFileInternal(texturePath, buf, idealWidth, idealHeight, requirePixels, strMimeType))
     return texture;
   delete texture;
   return NULL;
@@ -218,7 +224,7 @@ CBaseTexture *CBaseTexture::LoadFromFileInMemory(unsigned char *buffer, size_t b
   return NULL;
 }
 
-bool CBaseTexture::LoadFromFileInternal(const std::string& texturePath, unsigned int maxWidth, unsigned int maxHeight, bool requirePixels, const std::string& strMimeType)
+bool CBaseTexture::LoadFromFileInternal(const std::string& texturePath, const XFILE::auto_buffer &buf, unsigned int maxWidth, unsigned int maxHeight, bool requirePixels, const std::string& strMimeType)
 {
   if (URIUtils::HasExtension(texturePath, ".dds"))
   { // special case for DDS images
@@ -235,13 +241,6 @@ bool CBaseTexture::LoadFromFileInternal(const std::string& texturePath, unsigned
                                   CServiceBroker::GetRenderSystem()->GetMaxTextureSize();
   unsigned int height = maxHeight ? std::min(maxHeight, CServiceBroker::GetRenderSystem()->GetMaxTextureSize()) :
                                     CServiceBroker::GetRenderSystem()->GetMaxTextureSize();
-
-  // Read image into memory to use our vfs
-  XFILE::CFile file;
-  XFILE::auto_buffer buf;
-
-  if (file.LoadFile(texturePath, buf) <= 0)
-    return false;
 
   CURL url(texturePath);
   // make sure resource:// paths are properly resolved
