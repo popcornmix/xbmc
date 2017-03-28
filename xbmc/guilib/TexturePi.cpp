@@ -106,29 +106,36 @@ bool CPiTexture::LoadFromFileInternal(const std::string& texturePath, unsigned i
 {
   if (CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool("videoplayer.acceleratedjpegs") && URIUtils::HasExtension(texturePath, ".jpg|.tbn"))
   {
-    COMXImageFile *file = g_OMXImage.LoadJpeg(texturePath);
-    if (file)
+    // Read image into memory to use our vfs
+    XFILE::CFile file;
+    XFILE::auto_buffer buf;
+
+    if (file.LoadFile(texturePath, buf) <= 0)
+      return false;
+
+    unsigned int width = 0, height = 0;
+    int orientation = 0;
+    std::string error;
+    if (g_OMXImage.GetCodingType(buf, width, height, orientation, error))
     {
       bool okay = false;
-      int orientation = file->GetOrientation();
       // limit the sizes of jpegs (even if we fail to decode)
-      g_OMXImage.ClampLimits(maxWidth, maxHeight, file->GetWidth(), file->GetHeight(), orientation & 4);
+      g_OMXImage.ClampLimits(maxWidth, maxHeight, width, height, orientation & 4);
 
       if (requirePixels)
       {
         Allocate(maxWidth, maxHeight, XB_FMT_A8R8G8B8);
-        if (m_pixels && COMXImage::DecodeJpeg(file, maxWidth, GetRows(), GetPitch(), (void *)m_pixels))
+        if (m_pixels && COMXImage::DecodeJpeg(texturePath, buf, maxWidth, GetRows(), GetPitch(), (void *)m_pixels))
           okay = true;
       }
       else
       {
-        if (g_OMXImage.DecodeJpegToTexture(file, maxWidth, maxHeight, &m_egl_image) && m_egl_image)
+        if (g_OMXImage.DecodeJpegToTexture(texturePath, buf, maxWidth, maxHeight, &m_egl_image) && m_egl_image)
         {
           Allocate(maxWidth, maxHeight, XB_FMT_A8R8G8B8);
           okay = true;
         }
       }
-      g_OMXImage.CloseJpeg(file);
       if (okay)
       {
         m_hasAlpha = false;
