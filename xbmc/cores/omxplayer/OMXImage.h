@@ -51,20 +51,19 @@ public:
   virtual ~COMXImage();
   void Initialize();
   void Deinitialize();
-  static COMXImageFile *LoadJpeg(const std::string& texturePath);
-  static void CloseJpeg(COMXImageFile *file);
 
-  static bool DecodeJpeg(COMXImageFile *file, unsigned int maxWidth, unsigned int maxHeight, unsigned int stride, void *pixels);
+  static bool DecodeJpeg(const std::string& srcFile, const XFILE::auto_buffer &buf, unsigned int maxWidth, unsigned int maxHeight, unsigned int stride, void *pixels);
   static bool CreateThumbnailFromSurface(unsigned char* buffer, unsigned int width, unsigned int height,
       unsigned int format, unsigned int pitch, const std::string& destFile);
   static bool ClampLimits(unsigned int &width, unsigned int &height, unsigned int m_width, unsigned int m_height, bool transposed = false);
-  static bool CreateThumb(const std::string& srcFile, unsigned int width, unsigned int height, std::string &additional_info, const std::string& destFile);
+  static bool CreateThumb(const std::string& srcFile, const XFILE::auto_buffer &buf, unsigned int width, unsigned int height, std::string &additional_info, const std::string& destFile);
   bool SendMessage(bool (*callback)(EGLDisplay egl_display, EGLContext egl_context, void *cookie), void *cookie);
-  bool DecodeJpegToTexture(COMXImageFile *file, unsigned int width, unsigned int height, void **userdata);
+  bool DecodeJpegToTexture(const std::string& srcFile, const XFILE::auto_buffer &buf, unsigned int width, unsigned int height, void **userdata);
   void DestroyTexture(void *userdata);
   void GetTexture(void *userdata, GLuint *texture);
   bool AllocTextureInternal(EGLDisplay egl_display, EGLContext egl_context, struct textureinfo *tex);
   bool DestroyTextureInternal(EGLDisplay egl_display, EGLContext egl_context, struct textureinfo *tex);
+  static bool GetCodingType(const XFILE::auto_buffer &buf, unsigned int &width, unsigned int &height, int &orientation, std::string &error);
 private:
   EGLContext m_egl_context;
 
@@ -73,28 +72,6 @@ private:
   CCriticalSection               m_texqueue_lock;
   XbmcThreads::ConditionVariable m_texqueue_cond;
   std::queue <struct callbackinfo *> m_texqueue;
-};
-
-class COMXImageFile
-{
-public:
-  COMXImageFile();
-  virtual ~COMXImageFile();
-  bool ReadFile(const std::string& inputFile, int orientation = 0);
-  int  GetOrientation() const { return m_orientation; };
-  unsigned int GetWidth() const { return m_width; };
-  unsigned int GetHeight() const { return m_height; };
-  unsigned long GetImageSize() const { return m_image_size; };
-  const uint8_t *GetImageBuffer() const { return (const uint8_t *)m_image_buffer; };
-  const char *GetFilename() const { return m_filename.c_str(); };
-protected:
-  bool GetCodingType(unsigned int &width, unsigned int &height, int orientation, std::string &error);
-  uint8_t           *m_image_buffer;
-  unsigned long     m_image_size;
-  unsigned int      m_width;
-  unsigned int      m_height;
-  int               m_orientation;
-  std::string       m_filename;
 };
 
 class COMXImageDec
@@ -151,7 +128,7 @@ public:
 
   // Required overrides
   void Close();
-  bool ReEncode(COMXImageFile &srcFile, unsigned int width, unsigned int height, void * &pDestBuffer, unsigned int &nDestSize);
+  bool ReEncode(const std::string& srcFile, const XFILE::auto_buffer &buf, unsigned int width, unsigned int height, unsigned int maxWidth, unsigned int maxHeight, int orientation, void * &pDestBuffer, unsigned int &nDestSize);
   bool Gpu() { return m_gpu; }
 protected:
   bool HandlePortSettingChange(unsigned int resize_width, unsigned int resize_height, int orientation, bool port_settings_changed);
