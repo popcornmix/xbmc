@@ -15,7 +15,7 @@ if(CROSSCOMPILING)
 endif()
 
 if(CORE_SYSTEM_NAME STREQUAL rbpi)
-  string(CONCAT CMAKE_C_FLAGS ${CMAKE_C_FLAGS} " -DRPI=1")
+  string(CONCAT CMAKE_C_FLAGS ${CMAKE_C_FLAGS} " -DRPI=1 -I/opt/vc/include -I/opt/vc/include/interface/vcos/pthreads -I/opt/vc/include/interface/vmcs_host/linux")
 endif()
 
 if(CMAKE_C_FLAGS)
