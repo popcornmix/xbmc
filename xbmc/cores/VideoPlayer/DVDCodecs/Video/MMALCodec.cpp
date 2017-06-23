@@ -203,6 +203,12 @@ void CMMALVideo::dec_output_port_cb(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buf
   bool kept = false;
   CMMALVideoBuffer *omvb = (CMMALVideoBuffer *)buffer->user_data;
 
+  if (omvb)
+  {
+    assert(omvb && omvb->m_firmware_owned);
+    omvb->m_firmware_owned = false;
+  }
+
   assert(!(buffer->flags & MMAL_BUFFER_HEADER_FLAG_TRANSMISSION_FAILED));
   if (buffer->cmd == 0)
   {

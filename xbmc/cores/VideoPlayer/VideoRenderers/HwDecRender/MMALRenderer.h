@@ -104,6 +104,7 @@ public:
   MMALState m_state = MMALStateNone;
   bool m_rendered = false;
   bool m_stills = false;
+  bool m_firmware_owned = false;
 
   virtual void Unref();
   virtual std::shared_ptr<CMMALPool> Pool() { return std::dynamic_pointer_cast<CMMALPool>(m_pool); };
