@@ -77,6 +77,8 @@ void CMMALYUVBuffer::GetStrides(int(&strides)[YuvImage::MAX_PLANES])
   strides[0] = geo.getStrideY();
   strides[1] = geo.getStrideC();
   strides[2] = geo.getStrideC();
+  if (geo.getStripes() > 1)
+    strides[3] = geo.getHeightY() + geo.getHeightC();      // abuse: strides[3] = stripe stride
 }
 
 void CMMALYUVBuffer::SetDimensions(int width, int height, const int (&strides)[YuvImage::MAX_PLANES], const int (&planeOffsets)[YuvImage::MAX_PLANES])
@@ -284,6 +286,7 @@ CDVDVideoCodec::VCReturn CDecoder::Decode(AVCodecContext* avctx, AVFrame* frame)
   if (frame)
   {
     if ((frame->format != AV_PIX_FMT_YUV420P && frame->format != AV_PIX_FMT_YUV420P10 && frame->format != AV_PIX_FMT_YUV420P12 && frame->format != AV_PIX_FMT_YUV420P14 && frame->format != AV_PIX_FMT_YUV420P16 &&
+        frame->format != AV_PIX_FMT_SAND128 && frame->format != AV_PIX_FMT_SAND64_10 && frame->format != AV_PIX_FMT_SAND64_16 &&
         frame->format != AV_PIX_FMT_BGR0 && frame->format != AV_PIX_FMT_RGB565LE) ||
         frame->buf[1] != nullptr || frame->buf[0] == nullptr)
     {
