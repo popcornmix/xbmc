@@ -23,7 +23,7 @@ extern "C" {
 
 struct YuvImage
 {
-  static const int MAX_PLANES = 3;
+  static const int MAX_PLANES = 4;
 
   uint8_t* plane[MAX_PLANES];
   int planesize[MAX_PLANES];
