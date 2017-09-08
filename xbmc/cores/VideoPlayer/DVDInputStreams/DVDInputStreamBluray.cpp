@@ -168,10 +168,10 @@ bool CDVDInputStreamBluray::Open()
   }
   else if (m_item.IsDiscImage())
   {
-    if (!OpenStream(m_item))
-      return false;
-
-    openStream = true;
+    CURL url("udf://");
+    url.SetHostName(strPath);
+    root = url.Get();
+    filename = "index.bdmv";
   }
   else
   {
