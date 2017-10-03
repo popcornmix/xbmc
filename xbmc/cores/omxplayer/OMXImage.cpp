@@ -131,11 +131,10 @@ bool COMXImage::DecodeJpeg(const std::string& srcFile, const XFILE::auto_buffer 
 
 bool COMXImage::ClampLimits(unsigned int &width, unsigned int &height, unsigned int m_width, unsigned int m_height, bool transposed)
 {
-  RESOLUTION_INFO& res_info = CDisplaySettings::GetInstance().GetResolutionInfo(CServiceBroker::GetWinSystem()->GetGfxContext().GetVideoResolution());
+  unsigned int owidth = width;
+  unsigned int oheight = height;
   unsigned int max_width = width;
   unsigned int max_height = height;
-  const unsigned int gui_width = transposed ? res_info.iHeight:res_info.iWidth;
-  const unsigned int gui_height = transposed ? res_info.iWidth:res_info.iHeight;
   const float aspect = (float)m_width / m_height;
   bool clamped = false;
 
@@ -153,13 +152,15 @@ bool COMXImage::ClampLimits(unsigned int &width, unsigned int &height, unsigned 
       }
     }
     max_width = max_height * 16/9;
+
+    RESOLUTION_INFO& res_info = CDisplaySettings::GetInstance().GetResolutionInfo(CServiceBroker::GetWinSystem()->GetGfxContext().GetVideoResolution());
+    const unsigned int gui_width = transposed ? res_info.iHeight:res_info.iWidth;
+    const unsigned int gui_height = transposed ? res_info.iWidth:res_info.iHeight;
+    if (gui_width)
+      max_width = std::min(max_width, gui_width);
+    if (gui_height)
+      max_height = std::min(max_height, gui_height);
   }
-
-  if (gui_width)
-    max_width = std::min(max_width, gui_width);
-  if (gui_height)
-    max_height = std::min(max_height, gui_height);
-
   max_width  = std::min(max_width, 2048U);
   max_height = std::min(max_height, 2048U);
 
@@ -176,6 +177,7 @@ bool COMXImage::ClampLimits(unsigned int &width, unsigned int &height, unsigned 
     clamped = true;
   }
 
+  CLog::Log(LOGDEBUG, "%s: %dx%d %dx%d -> %dx%d clamped=%d", __func__, owidth, oheight, m_width, m_height, width, height, clamped);
   return clamped;
 }
 
