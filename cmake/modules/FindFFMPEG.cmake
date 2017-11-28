@@ -271,15 +271,10 @@ if(NOT FFMPEG_FOUND)
                                     ${CMAKE_COMMAND} -E copy
                                     ${CMAKE_SOURCE_DIR}/tools/depends/target/ffmpeg/FindGnuTls.cmake
                                     <SOURCE_DIR> &&
+                                    patch -p1 < ${CMAKE_SOURCE_DIR}/tools/depends/target/ffmpeg/0001-ffmpeg-Call-get_format-to-fix-an-issue-with-MMAL-ren.patch &&
                                     patch -p1 < ${CMAKE_SOURCE_DIR}/tools/depends/target/ffmpeg/0001-mpeg4video-Signal-unsupported-GMC-with-more-than-one.patch &&
-                                    patch -p1 < ${CMAKE_SOURCE_DIR}/tools/depends/target/ffmpeg/hevcdsp_ARM_NEON_optimized_epel_functions.patch &&
-                                    patch -p1 < ${CMAKE_SOURCE_DIR}/tools/depends/target/ffmpeg/added_ARM_NEON_optimized_SAO_patches.patch &&
                                     patch -p1 < ${CMAKE_SOURCE_DIR}/tools/depends/target/ffmpeg/pfcd_hevc_optimisations.patch &&
-                                    patch -p1 < ${CMAKE_SOURCE_DIR}/tools/depends/target/ffmpeg/0001-Squashed-commit-of-the-following.patch &&
-                                    patch -p1 < ${CMAKE_SOURCE_DIR}/tools/depends/target/ffmpeg/0001-avcodec-add-h264_mvc-codec-id-and-profiles.patch &&
-                                    patch -p1 < ${CMAKE_SOURCE_DIR}/tools/depends/target/ffmpeg/0001-h264_parser-add-support-for-parsing-h264-mvc-NALUs.patch &&
-                                    patch -p1 < ${CMAKE_SOURCE_DIR}/tools/depends/target/ffmpeg/h264_parser_fix_parsing_of_mvc_slices_in_some_corner_cases.patch &&
-                                    patch -p1 < ${CMAKE_SOURCE_DIR}/tools/depends/target/ffmpeg/73fde6f9f3d01f7fc0f3ae4b66f6c725f9fb1105.patch
+                                    patch -p1 < ${CMAKE_SOURCE_DIR}/tools/depends/target/ffmpeg/added_upstream_mvc_patches.patch
                      )
 
   find_program(BASH_COMMAND bash)

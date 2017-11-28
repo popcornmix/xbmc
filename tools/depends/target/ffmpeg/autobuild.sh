@@ -132,6 +132,11 @@ mkdir -p "ffmpeg-${VERSION}"
 cd "ffmpeg-${VERSION}" || exit 2
 tar --strip-components=1 -xf $MYDIR/${ARCHIVE}
 
+patch -p1 < ../0001-ffmpeg-Call-get_format-to-fix-an-issue-with-MMAL-ren.patch
+patch -p1 < ../0001-mpeg4video-Signal-unsupported-GMC-with-more-than-one.patch
+patch -p1 < ../pfcd_hevc_optimisations.patch
+patch -p1 < ../added_upstream_mvc_patches.patch
+
 CFLAGS="$CFLAGS" CXXFLAGS="$CXXFLAGS" LDFLAGS="$LDFLAGS" \
 ./configure --prefix=$FFMPEG_PREFIX \
 	--extra-version="kodi-${VERSION}" \
@@ -163,6 +168,7 @@ CFLAGS="$CFLAGS" CXXFLAGS="$CXXFLAGS" LDFLAGS="$LDFLAGS" \
 	--enable-zlib \
 	--disable-mipsdsp \
 	--disable-mipsdspr2 \
+	--enable-rpi \
         ${FLAGS}
 
 make -j ${BUILDTHREADS}
