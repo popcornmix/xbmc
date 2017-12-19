@@ -5097,6 +5097,16 @@ void CVideoPlayer::GetVideoStreamInfo(int streamId, VideoStreamInfo &info)
   info.videoAspectRatio = s.aspect_ratio;
   info.stereoMode = s.stereo_mode;
   info.flags = s.flags;
+
+  if (info.stereoMode.empty())
+  {
+    CGUIComponent *gui = CServiceBroker::GetGUI();
+    if (gui != nullptr)
+    {
+      const CStereoscopicsManager &stereoscopicsManager = gui->GetStereoscopicsManager();
+      info.stereoMode = stereoscopicsManager.DetectStereoModeByString(s.filename);
+    }
+  }
 }
 
 int CVideoPlayer::GetVideoStreamCount() const
