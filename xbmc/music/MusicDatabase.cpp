@@ -2346,7 +2346,7 @@ bool CMusicDatabase::GetSongByFileName(const std::string& strFileNameAndPath, CS
                                  "where strFileName='%s' and strPath='%s'",
                                  strFileName.c_str(), strPath.c_str());
   if (startOffset)
-    strSQL += PrepareSQL(" AND iStartOffset=%" PRIi64, startOffset);
+    strSQL += PrepareSQL(" AND iStartOffset=%" PRId64, startOffset);
 
   int idSong = (int)strtol(GetSingleValue(strSQL).c_str(), NULL, 10);
   if (idSong > 0)
