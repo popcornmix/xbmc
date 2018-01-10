@@ -1349,7 +1349,7 @@ void CWinSystemWayland::PrepareFramePresentation()
       }
       m_latencyMovingAverage = m_latencyMovingAverage + iter->latency / LATENCY_MOVING_AVERAGE_SIZE + adjust;
 
-      CLog::Log(LOGDEBUG, LOGAVTIMING, "Presentation feedback: %" PRIi64 " ns -> moving average %f s", latency, static_cast<double> (m_latencyMovingAverage));
+      CLog::Log(LOGDEBUG, LOGAVTIMING, "Presentation feedback: %" PRId64 " ns -> moving average %f s", latency, static_cast<double> (m_latencyMovingAverage));
     };
     feedback.on_discarded() = [this,iter]()
     {
