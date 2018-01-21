@@ -1550,7 +1550,9 @@ CDemuxStream* CDVDDemuxFFmpeg::AddStream(int streamIdx)
         if (!stereoMode.empty())
           st->stereo_mode = stereoMode;
 
-
+        AVCodecContext *c = (AVCodecContext *)(((uint32_t *)pStream->internal)[4]); /* Eek! */
+        st->workaround_bugs = c->workaround_bugs;
+        
         if ( m_pInput->IsStreamType(DVDSTREAM_TYPE_DVD) )
         {
           if (pStream->codecpar->codec_id == AV_CODEC_ID_PROBE)

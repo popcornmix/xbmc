@@ -38,6 +38,10 @@
 
 #include "platform/linux/RBP.h"
 
+#ifndef FF_BUG_GMC_UNSUPPORTED
+#define FF_BUG_GMC_UNSUPPORTED 0
+#endif
+
 using namespace KODI::MESSAGING;
 using namespace MMAL;
 
@@ -348,6 +352,8 @@ bool CMMALVideo::Open(CDVDStreamInfo &hints, CDVDCodecOptions &options)
     return false;
   // we always qualify even if DVDFactoryCodec does this too.
   if (!CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(CSettings::SETTING_VIDEOPLAYER_USEMMAL) || (hints.codecOptions & CODEC_FORCE_SOFTWARE))
+    return false;
+  if (hints.workaround_bugs & FF_BUG_GMC_UNSUPPORTED)
     return false;
 
   std::list<EINTERLACEMETHOD> deintMethods;
