@@ -3,6 +3,7 @@ include FFMPEG-VERSION
 DEPS= ../../Makefile.include FFMPEG-VERSION Makefile \
   pfcd_hevc_optimisations.patch \
   0001-ffmpeg-Call-get_format-to-fix-an-issue-with-MMAL-ren.patch \
+  0001-mpeg4video-Signal-unsupported-GMC-with-more-than-one.patch \
 
 # set to "yes" to enable patching
 # we don't apply patches until we move to a vanilla ffmpeg tarball
@@ -82,6 +83,7 @@ $(PLATFORM): $(TARBALLS_LOCATION)/$(ARCHIVE) $(DEPS)
 	cd $(PLATFORM); sed -i".bak" -e "s%pkg_config_default=pkg-config%export PKG_CONFIG_LIBDIR=$(PREFIX)/lib/pkgconfig \&\& pkg_config_default=$(NATIVEPREFIX)/bin/pkg-config%" configure
 	cd $(PLATFORM); patch -p1 < ../pfcd_hevc_optimisations.patch
 	cd $(PLATFORM); patch -p1 < ../0001-ffmpeg-Call-get_format-to-fix-an-issue-with-MMAL-ren.patch
+	cd $(PLATFORM); patch -p1 < ../0001-mpeg4video-Signal-unsupported-GMC-with-more-than-one.patch
 	cd $(PLATFORM);\
 	CFLAGS="$(CFLAGS)" CXXFLAGS="$(CXXFLAGS)" CPPFLAGS="$(CPPFLAGS)" LDFLAGS="$(LDFLAGS)" \
 	./configure $(ffmpg_config)
