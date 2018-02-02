@@ -66,7 +66,7 @@ unsigned int GetFlagsStereoMode(const std::string& mode)
   static std::map<std::string, unsigned int> convert;
   if(convert.empty())
   {
-    convert["mono"]                   = 0u;
+    convert[""]                       = 0u;
     convert["left_right"]             = CONF_FLAGS_STEREO_MODE_SBS | CONF_FLAGS_STEREO_CADANCE_LEFT_RIGHT;
     convert["bottom_top"]             = CONF_FLAGS_STEREO_MODE_TAB | CONF_FLAGS_STEREO_CADANCE_RIGHT_LEFT;
     convert["top_bottom"]             = CONF_FLAGS_STEREO_MODE_TAB | CONF_FLAGS_STEREO_CADANCE_LEFT_RIGHT;
