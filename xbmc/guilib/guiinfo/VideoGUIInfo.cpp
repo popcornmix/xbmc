@@ -675,7 +675,7 @@ bool CVideoGUIInfo::GetBool(bool& value, const CGUIListItem *gitem, int contextW
       std::string stereoMode = item->GetProperty("stereomode").asString();
       if (stereoMode.empty() && tag)
         stereoMode = CStereoscopicsManager::NormalizeStereoMode(tag->m_streamDetails.GetStereoMode());
-      if (!stereoMode.empty() && stereoMode != "mono")
+      if (!stereoMode.empty())
         value = true;
       return true;
     }

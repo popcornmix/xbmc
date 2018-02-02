@@ -393,7 +393,7 @@ bool CMMALVideo::Open(CDVDStreamInfo &hints, CDVDCodecOptions &options)
       {
         m_codingType = MMAL_ENCODING_MVC;
         m_pFormatName= "mmal-mvc";
-        if (hints.stereo_mode == "mono")
+        if (hints.stereo_mode.empty())
           hints.stereo_mode = "block_lr";
       }
     break;

@@ -426,7 +426,7 @@ bool COMXVideo::Open(CDVDStreamInfo &hints, OMXClock *clock, bool hdmi_clock_syn
     {
       m_codingType = OMX_VIDEO_CodingMVC;
       m_video_codec_name = "omx-mvc";
-      if (hints.stereo_mode == "mono")
+      if (hints.stereo_mode.empty())
         hints.stereo_mode = "block_lr";
     }
     break;
