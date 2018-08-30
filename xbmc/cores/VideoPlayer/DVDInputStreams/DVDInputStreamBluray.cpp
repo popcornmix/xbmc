@@ -330,7 +330,7 @@ bool CDVDInputStreamBluray::Open()
       CLog::Log(LOGERROR, "CDVDInputStreamBluray::Open - failed to select playlist %d", m_title->idx);
       return false;
     }
-    m_clip = nullptr;
+    m_clip = 0;
   }
 
   // Process any events that occurred during opening
@@ -463,36 +463,45 @@ void CDVDInputStreamBluray::ProcessEvent() {
     break;
 
   case BD_EVENT_PLAYITEM:
-    CLog::Log(LOGDEBUG, "CDVDInputStreamBluray - BD_EVENT_PLAYITEM %d", m_event.param);
-     if (m_title && m_event.param < m_title->clip_count)
-    m_clip = &m_title->clips[m_event.param];
+    CLog::Log(LOGDEBUG, "CDVDInputStreamBluray - BD_EVENT_PLAYITEM %d",
+        m_event.param);
+    m_clip    = m_event.param;
     break;
 
   case BD_EVENT_CHAPTER:
-    CLog::Log(LOGDEBUG, "CDVDInputStreamBluray - BD_EVENT_CHAPTER %d", m_event.param);
+    CLog::Log(LOGDEBUG, "CDVDInputStreamBluray - BD_EVENT_CHAPTER %d",
+        m_event.param);
     break;
 
     /* stream selection */
 
   case BD_EVENT_AUDIO_STREAM:
     pid = -1;
-    if (m_title && m_clip && static_cast<uint32_t>(m_clip->audio_stream_count) > (m_event.param - 1))
-      pid = m_clip->audio_streams[m_event.param - 1].pid;
-    CLog::Log(LOGDEBUG, "CDVDInputStreamBluray - BD_EVENT_AUDIO_STREAM %d %d", m_event.param, pid);
+    if (m_title && m_title->clip_count > m_clip
+        && m_title->clips[m_clip].audio_stream_count
+            > static_cast<uint32_t> (m_event.param - 1))
+      pid = m_title->clips[m_clip].audio_streams[m_event.param - 1].pid;
+    CLog::Log(LOGDEBUG, "CDVDInputStreamBluray - BD_EVENT_AUDIO_STREAM %d %d",
+        m_event.param, pid);
     m_player->OnDiscNavResult(static_cast<void*>(&pid), BD_EVENT_AUDIO_STREAM);
     break;
 
   case BD_EVENT_PG_TEXTST:
-    CLog::Log(LOGDEBUG, "CDVDInputStreamBluray - BD_EVENT_PG_TEXTST %d", m_event.param);
+    CLog::Log(LOGDEBUG, "CDVDInputStreamBluray - BD_EVENT_PG_TEXTST %d",
+        m_event.param);
     pid = m_event.param;
     m_player->OnDiscNavResult(static_cast<void*>(&pid), BD_EVENT_PG_TEXTST);
     break;
 
   case BD_EVENT_PG_TEXTST_STREAM:
     pid = -1;
-    if (m_title && m_clip && static_cast<uint32_t>(m_clip->pg_stream_count) > (m_event.param - 1))
-      pid = m_clip->pg_streams[m_event.param - 1].pid;
-    CLog::Log(LOGDEBUG, "CDVDInputStreamBluray - BD_EVENT_PG_TEXTST_STREAM %d, %d", m_event.param, pid);
+    if (m_title && m_title->clip_count > m_clip
+        && m_title->clips[m_clip].pg_stream_count
+            > static_cast<uint32_t> (m_event.param - 1))
+      pid = m_title->clips[m_clip].pg_streams[m_event.param - 1].pid;
+    CLog::Log(LOGDEBUG,
+        "CDVDInputStreamBluray - BD_EVENT_PG_TEXTST_STREAM %d, %d",
+        m_event.param, pid);
     m_player->OnDiscNavResult(static_cast<void*>(&pid), BD_EVENT_PG_TEXTST_STREAM);
     break;
 
@@ -959,17 +968,18 @@ static bool find_stream(int pid, BLURAY_STREAM_INFO *info, int count, std::strin
 
 void CDVDInputStreamBluray::GetStreamInfo(int pid, std::string &language)
 {
-  if(!m_title || !m_clip)
+  if(!m_title || m_clip >= m_title->clip_count)
     return;
 
+  BLURAY_CLIP_INFO *clip = m_title->clips+m_clip;
   if (pid == HDMV_PID_VIDEO)
-    find_stream(pid, m_clip->video_streams, m_clip->video_stream_count, language);
+    find_stream(pid, clip->video_streams, clip->video_stream_count, language);
   else if (HDMV_PID_AUDIO_FIRST <= pid && pid <= HDMV_PID_AUDIO_LAST)
-    find_stream(pid, m_clip->audio_streams, m_clip->audio_stream_count, language);
+    find_stream(pid, clip->audio_streams, clip->audio_stream_count, language);
   else if (HDMV_PID_PG_FIRST <= pid && pid <= HDMV_PID_PG_LAST)
-    find_stream(pid, m_clip->pg_streams, m_clip->pg_stream_count, language);
+    find_stream(pid, clip->pg_streams, clip->pg_stream_count, language);
   else if (HDMV_PID_IG_FIRST <= pid && pid <= HDMV_PID_IG_LAST)
-    find_stream(pid, m_clip->ig_streams, m_clip->ig_stream_count, language);
+    find_stream(pid, clip->ig_streams, clip->ig_stream_count, language);
 }
 
 CDVDInputStream::ENextStream CDVDInputStreamBluray::NextStream()
