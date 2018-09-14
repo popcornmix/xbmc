@@ -131,8 +131,7 @@ protected:
 
   IVideoPlayer* m_player = nullptr;
   BLURAY* m_bd = nullptr;
-  const BLURAY_TITLE* m_title = nullptr;
-  BLURAY_TITLE_INFO* m_titleInfo = nullptr;
+  BLURAY_TITLE_INFO* m_title = nullptr;
   uint32_t m_playlist = MAX_PLAYLIST_ID + 1;
   BLURAY_CLIP_INFO* m_clip = nullptr;
   uint32_t m_angle = 0;
@@ -157,8 +156,7 @@ protected:
     HOLD_DATA,
     HOLD_STILL,
     HOLD_ERROR,
-    HOLD_EXIT,
-    HOLD_PAUSE
+    HOLD_EXIT
   } m_hold = HOLD_NONE;
   BD_EVENT m_event;
 #ifdef HAVE_LIBBLURAY_BDJ
