@@ -18,8 +18,9 @@ if(CROSSCOMPILING)
   message(STATUS "CROSS: ${ffmpeg_conf}")
 endif()
 
-if(CORE_SYSTEM_NAME STREQUAL rbpi)
-  string(CONCAT CMAKE_C_FLAGS ${CMAKE_C_FLAGS} " -DRPI=1 -I/opt/vc/include -I/opt/vc/include/interface/vcos/pthreads -I/opt/vc/include/interface/vmcs_host/linux")
+if(CORE_PLATFORM_NAME STREQUAL rbpi)
+  string(CONCAT CMAKE_C_FLAGS ${CMAKE_C_FLAGS} " -I/opt/vc/include -I/opt/vc/include/interface/vcos/pthreads -I/opt/vc/include/interface/vmcs_host/linux")
+  list(APPEND ffmpeg_conf --enable-rpi)
 endif()
 
 if(CMAKE_C_FLAGS)
