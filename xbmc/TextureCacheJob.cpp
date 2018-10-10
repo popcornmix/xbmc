@@ -13,6 +13,7 @@
 #include "ServiceBroker.h"
 #include "settings/AdvancedSettings.h"
 #include "settings/SettingsComponent.h"
+#include "settings/Settings.h"
 #include "utils/log.h"
 #include "filesystem/File.h"
 #include "pictures/Picture.h"
