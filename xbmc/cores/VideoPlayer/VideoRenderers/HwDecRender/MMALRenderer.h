@@ -202,7 +202,6 @@ protected:
   EINTERLACEMETHOD  m_interlace_method;
   uint32_t m_deint_width, m_deint_height, m_deint_aligned_width, m_deint_aligned_height;
   MMAL_FOURCC_T m_deinterlace_out_encoding;
-  uint64_t m_interlace_history;
   void DestroyDeinterlace();
   bool CheckConfigurationDeint(uint32_t width, uint32_t height, uint32_t aligned_width, uint32_t aligned_height, uint32_t encoding, EINTERLACEMETHOD interlace_method, int bitsPerPixel);
 
