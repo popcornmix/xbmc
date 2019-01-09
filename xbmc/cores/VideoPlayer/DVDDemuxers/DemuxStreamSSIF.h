@@ -20,7 +20,9 @@
 *
 */
 
+#if defined(HAVE_LIBBLURAY)
 #include "DVDInputStreams/DVDInputStreamBluray.h"
+#endif
 #include "DVDInputStreams/DVDInputStream.h"
 #include <queue>
 
