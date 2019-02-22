@@ -15,7 +15,7 @@
 #include <stdexcept>
 #include <string>
 
-#include <openssl/evp.h>
+#include <gcrypt.h>
 
 namespace KODI
 {
@@ -23,7 +23,7 @@ namespace UTILITY
 {
 
 /**
- * Utility class for calculating message digests/hashes, currently using OpenSSL
+ * Utility class for calculating message digests/hashes
  */
 class CDigest
 {
@@ -93,12 +93,12 @@ public:
 private:
   struct MdCtxDeleter
   {
-    void operator()(EVP_MD_CTX* context);
+    void operator()(gcry_md_hd_t context);
   };
 
   bool m_finalized{false};
-  std::unique_ptr<EVP_MD_CTX, MdCtxDeleter> m_context;
-  EVP_MD const* m_md;
+  std::unique_ptr<struct gcry_md_handle, MdCtxDeleter> m_context;
+  int const m_md;
 };
 
 struct TypedDigest

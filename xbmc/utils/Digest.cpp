@@ -13,7 +13,7 @@
 #include <array>
 #include <stdexcept>
 
-#include <openssl/evp.h>
+#include <gcrypt.h>
 
 namespace KODI
 {
@@ -23,18 +23,18 @@ namespace UTILITY
 namespace
 {
 
-EVP_MD const * TypeToEVPMD(CDigest::Type type)
+int const TypeToInt(CDigest::Type type)
 {
   switch (type)
   {
     case CDigest::Type::MD5:
-      return EVP_md5();
+      return GCRY_MD_MD5;
     case CDigest::Type::SHA1:
-      return EVP_sha1();
+      return GCRY_MD_SHA1;
     case CDigest::Type::SHA256:
-      return EVP_sha256();
+      return GCRY_MD_SHA256;
     case CDigest::Type::SHA512:
-      return EVP_sha512();
+      return GCRY_MD_SHA512;
     default:
       throw std::invalid_argument("Unknown digest type");
   }
@@ -92,18 +92,20 @@ CDigest::Type CDigest::TypeFromString(std::string const& type)
   }
 }
 
-void CDigest::MdCtxDeleter::operator()(EVP_MD_CTX* context)
+void CDigest::MdCtxDeleter::operator()(gcry_md_hd_t context)
 {
-  EVP_MD_CTX_destroy(context);
+  gcry_md_close(context);
 }
 
 CDigest::CDigest(Type type)
-: m_context{EVP_MD_CTX_create()}, m_md(TypeToEVPMD(type))
+    : m_context(), m_md(TypeToInt(type))
 {
-  if (1 != EVP_DigestInit_ex(m_context.get(), m_md, nullptr))
+  gcry_md_hd_t hd = NULL;
+  if (GPG_ERR_NO_ERROR != gcry_md_open(&hd, m_md, 0))
   {
-    throw std::runtime_error("EVP_DigestInit_ex failed");
+    throw std::runtime_error("gcry_md_open failed");
   }
+  m_context.reset(hd);
 }
 
 void CDigest::Update(std::string const& data)
@@ -118,10 +120,7 @@ void CDigest::Update(void const* data, std::size_t size)
     throw std::logic_error("Finalized digest cannot be updated any more");
   }
 
-  if (1 != EVP_DigestUpdate(m_context.get(), data, size))
-  {
-    throw std::runtime_error("EVP_DigestUpdate failed");
-  }
+  gcry_md_write(m_context.get(), data, size);
 }
 
 std::string CDigest::FinalizeRaw()
@@ -134,15 +133,12 @@ std::string CDigest::FinalizeRaw()
   m_finalized = true;
 
   std::array<unsigned char, 64> digest;
-  std::size_t size = EVP_MD_size(m_md);
+  std::size_t size = gcry_md_get_algo_dlen(m_md);
   if (size > digest.size())
   {
     throw std::runtime_error("Digest unexpectedly long");
   }
-  if (1 != EVP_DigestFinal_ex(m_context.get(), digest.data(), nullptr))
-  {
-    throw std::runtime_error("EVP_DigestFinal_ex failed");
-  }
+  memcpy(digest.data(), gcry_md_read(m_context.get(), m_md), size);
   return {reinterpret_cast<char*> (digest.data()), size};
 }
 
