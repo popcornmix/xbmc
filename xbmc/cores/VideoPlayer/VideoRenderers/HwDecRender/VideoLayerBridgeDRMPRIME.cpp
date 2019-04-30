@@ -42,6 +42,16 @@ void CVideoLayerBridgeDRMPRIME::Disable()
   CLog::Log(LOGDEBUG, "CVideoLayerBridgeDRMPRIME::{} - setting max bpc to {} ({})",
             __FUNCTION__, bpc, result);
 
+  uint64_t value;
+  std::tie(result, value) = connector->GetPropertyValue("Colorspace", "Default");
+  if (result)
+  {
+    CLog::Log(LOGDEBUG, "CVideoLayerBridgeDRMPRIME::{} - setting connector colorspace to Default",
+              __FUNCTION__);
+    m_DRM->AddProperty(connector, "Colorspace", value);
+    m_DRM->SetActive(true);
+  }
+
   m_DRM->AddProperty(plane, "FB_ID", 0);
   m_DRM->AddProperty(plane, "CRTC_ID", 0);
 
@@ -190,6 +200,15 @@ void CVideoLayerBridgeDRMPRIME::Configure(CVideoBufferDRMPRIME* buffer)
   result = m_DRM->AddProperty(connector, "max bpc", bpc);
   CLog::Log(LOGDEBUG, "CVideoLayerBridgeDRMPRIME::{} - setting max bpc to {} ({})", __FUNCTION__,
             bpc, result);
+
+  std::tie(result, value) = connector->GetPropertyValue("Colorspace", GetColorimetry(picture));
+  if (result)
+  {
+    CLog::Log(LOGDEBUG, "CVideoLayerBridgeDRMPRIME::{} - setting connector colorspace to {}",
+              __FUNCTION__, GetColorimetry(picture));
+    m_DRM->AddProperty(connector, "Colorspace", value);
+    m_DRM->SetActive(true);
+  }
 
 }
 
