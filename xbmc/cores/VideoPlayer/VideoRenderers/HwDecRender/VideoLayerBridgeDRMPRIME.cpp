@@ -35,8 +35,18 @@ void CVideoLayerBridgeDRMPRIME::Disable()
   m_DRM->AddProperty(plane, "FB_ID", 0);
   m_DRM->AddProperty(plane, "CRTC_ID", 0);
 
-  // disable HDR metadata
   auto connector = m_DRM->GetConnector();
+
+  bool result;
+  uint64_t value;
+  std::tie(result, value) = connector->GetPropertyValue("Colorspace", "Default");
+  if (result)
+  {
+    CLog::Log(LOGDEBUG, "CVideoLayerBridgeDRMPRIME::{} - setting connector colorspace to Default", __FUNCTION__);
+    m_DRM->AddProperty(connector, "Colorspace", value);
+  }
+
+  // disable HDR metadata
   if (connector->SupportsProperty("HDR_OUTPUT_METADATA"))
   {
     m_DRM->AddProperty(connector, "HDR_OUTPUT_METADATA", 0);
@@ -173,6 +183,16 @@ void CVideoLayerBridgeDRMPRIME::Configure(CVideoBufferDRMPRIME* buffer)
     m_DRM->AddProperty(plane, "COLOR_RANGE", value);
 
   auto connector = m_DRM->GetConnector();
+
+  std::tie(result, value) =  connector->GetPropertyValue("Colorspace", GetColorimetry(picture));
+  if (result)
+  {
+    CLog::Log(LOGDEBUG, "CVideoLayerBridgeDRMPRIME::{} - setting connector colorspace to {}", __FUNCTION__,
+              GetColorimetry(picture));
+    m_DRM->AddProperty(connector, "Colorspace", value);
+    m_DRM->SetActive(true);
+  }
+
   if (connector->SupportsProperty("HDR_OUTPUT_METADATA"))
   {
     m_hdr_metadata.metadata_type = HDMI_STATIC_METADATA_TYPE1;
