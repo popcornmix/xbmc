@@ -14,6 +14,11 @@
 
 #include <memory>
 
+extern "C"
+{
+#include <libavfilter/avfilter.h>
+}
+
 class CVideoBufferPoolDMA;
 class CVideoBufferPoolDRMPRIMEFFmpeg;
 
@@ -38,6 +43,8 @@ protected:
   void Drain();
   void SetPictureParams(VideoPicture* pVideoPicture);
   void UpdateProcessInfo(struct AVCodecContext* avctx, const enum AVPixelFormat fmt);
+  CDVDVideoCodec::VCReturn ProcessFilterIn();
+  CDVDVideoCodec::VCReturn ProcessFilterOut();
   static enum AVPixelFormat GetFormat(struct AVCodecContext* avctx, const enum AVPixelFormat* fmt);
   static int GetBuffer(struct AVCodecContext* avctx, AVFrame* frame, int flags);
 
@@ -47,6 +54,9 @@ protected:
   double m_DAR = 1.0;
   AVCodecContext* m_pCodecContext = nullptr;
   AVFrame* m_pFrame = nullptr;
+  AVFilterGraph* m_pFilterGraph = nullptr;
+  AVFilterContext* m_pFilterIn = nullptr;
+  AVFilterContext* m_pFilterOut = nullptr;
   std::shared_ptr<CVideoBufferPoolDRMPRIMEFFmpeg> m_hwVideoBufferPool;
   std::shared_ptr<CVideoBufferPoolDMA> m_swVideoBufferPool;
 };
