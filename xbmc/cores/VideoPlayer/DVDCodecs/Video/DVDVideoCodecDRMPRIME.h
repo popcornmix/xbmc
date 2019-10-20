@@ -14,6 +14,11 @@
 
 #include <memory>
 
+extern "C"
+{
+#include <libavfilter/avfilter.h>
+}
+
 class CDVDVideoCodecDRMPRIME : public CDVDVideoCodec
 {
 public:
@@ -33,16 +38,30 @@ public:
 
 protected:
   void Drain();
-  void SetPictureParams(VideoPicture* pVideoPicture);
+  bool SetPictureParams(VideoPicture* pVideoPicture);
   void UpdateProcessInfo(struct AVCodecContext* avctx, const enum AVPixelFormat fmt);
+  CDVDVideoCodec::VCReturn ProcessFilterIn();
+  CDVDVideoCodec::VCReturn ProcessFilterOut();
   static enum AVPixelFormat GetFormat(struct AVCodecContext* avctx, const enum AVPixelFormat* fmt);
   static int GetBuffer(struct AVCodecContext* avctx, AVFrame* frame, int flags);
+  static AVFrame *alloc_filter_frame(AVFilterContext * ctx, void * v, int w, int h);
+  bool FilterOpen(const std::string& filters, AVPixelFormat pix_fmt, bool test);
+  void FilterClose();
+  void FilterTest(AVPixelFormat pix_fmt);
+  std::string GetFilterChain(bool interlaced);
 
   std::string m_name;
+  std::string m_deintFilterName;
+  std::string m_filters;
   int m_codecControlFlags = 0;
   CDVDStreamInfo m_hints;
   double m_DAR = 1.0;
+  bool m_checkedDeinterlace = false;
   AVCodecContext* m_pCodecContext = nullptr;
   AVFrame* m_pFrame = nullptr;
+  AVFrame* m_pFilterFrame = nullptr;
+  AVFilterGraph* m_pFilterGraph = nullptr;
+  AVFilterContext* m_pFilterIn = nullptr;
+  AVFilterContext* m_pFilterOut = nullptr;
   std::shared_ptr<IVideoBufferPool> m_videoBufferPool;
 };
