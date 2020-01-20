@@ -209,6 +209,10 @@ macro(buildFFMPEG)
       set(postproc_pkg_config_search "postproc=`PKG_CONFIG_PATH=${DEPENDS_PATH}/lib/pkgconfig ${PKG_CONFIG_EXECUTABLE} --libs --static libpostproc`")
     endif()
 
+    list(APPEND PATCH_COMMAND COMMAND ${CMAKE_COMMAND} -E copy
+                                ${CMAKE_SOURCE_DIR}/tools/depends/target/ffmpeg/0001-rpi-Add-hevc-acceleration.patch
+                                <SOURCE_DIR>)
+
     BUILD_DEP_TARGET()
 
     find_program(BASH_COMMAND bash)
