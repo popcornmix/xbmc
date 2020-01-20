@@ -46,6 +46,7 @@ all: .installed-$(PLATFORM)
 	cd $(PLATFORM); $(ARCHIVE_TOOL) $(ARCHIVE_TOOL_FLAGS) $(TARBALLS_LOCATION)/$(ARCHIVE)
 	cd $(PLATFORM); cp ../CMakeLists.txt ./
 	cd $(PLATFORM); cp ../001-ffmpeg-all-libpostproc-plugin.patch ./
+	cd $(PLATFORM); cp ../0001-rpi-Add-hevc-acceleration.patch ./
 	cd $(PLATFORM)/build; $(CMAKE) $(CMAKE_ARGS) ..
 	touch $@
 
