@@ -18,6 +18,13 @@ if(CROSSCOMPILING)
   message(STATUS "CROSS: ${ffmpeg_conf}")
 endif()
 
+#if(CORE_PLATFORM_NAME STREQUAL rbpi)
+  string(CONCAT CMAKE_C_FLAGS ${CMAKE_C_FLAGS} " -I/opt/vc/include -I/opt/vc/include/interface/vcos/pthreads -I/opt/vc/include/interface/vmcs_host/linux")
+  string(CONCAT CMAKE_EXE_LINKER_FLAGS ${CMAKE_EXE_LINKER_FLAGS} " -L/opt/vc/lib")
+  string(CONCAT CMAKE_MODULE_LINKER_FLAGS ${CMAKE_MODULE_LINKER_FLAGS} " -L/opt/vc/lib")
+  list(APPEND ffmpeg_conf --enable-sand --enable-v4l2-request --enable-libdrm --enable-libudev --disable-hwaccel=h264_v4l2request --disable-hwaccel=mpeg2_v4l2request --disable-hwaccel=vp8_v4l2request)
+#endif()
+
 if(CMAKE_C_FLAGS)
   list(APPEND ffmpeg_conf --extra-cflags=${CMAKE_C_FLAGS})
 endif()
@@ -111,10 +118,9 @@ externalproject_add(ffmpeg
                     CONFIGURE_COMMAND ${pkgconf} ${pkgconf_path} <SOURCE_DIR>/configure
                       --prefix=${CMAKE_INSTALL_PREFIX}
                       --extra-version="kodi-${FFMPEG_VER}"
-                      --disable-devices
                       --disable-doc
                       --disable-ffplay
-                      --disable-ffmpeg
+                      --enable-ffmpeg
                       --disable-ffprobe
                       --enable-gpl
                       --enable-runtime-cpudetect
