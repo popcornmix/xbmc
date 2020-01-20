@@ -277,7 +277,10 @@ if(NOT FFMPEG_FOUND)
                                     <SOURCE_DIR> &&
                                     ${CMAKE_COMMAND} -E copy
                                     ${CMAKE_SOURCE_DIR}/tools/depends/target/ffmpeg/FindGnuTls.cmake
-                                    <SOURCE_DIR>)
+                                    <SOURCE_DIR> &&
+                                    patch -p1 < ${CMAKE_SOURCE_DIR}/tools/depends/target/ffmpeg/0001-rpi-Add-hevc-acceleration.patch &&
+                                    echo "########################################## patched ffmpeg ##############################"
+                     )
 
   if (ENABLE_INTERNAL_DAV1D)
     add_dependencies(ffmpeg dav1d)
