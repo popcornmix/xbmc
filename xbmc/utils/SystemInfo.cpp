@@ -75,6 +75,9 @@ using namespace winrt::Windows::System::Profile;
 
 #include <system_error>
 
+#include <algorithm>
+#include <cctype>
+
 /* Expand macro before stringify */
 #define STR_MACRO(x) #x
 #define XSTR_MACRO(x) STR_MACRO(x)
@@ -521,7 +524,7 @@ bool CSysInfo::Save(TiXmlNode *settings) const
 const std::string& CSysInfo::GetAppName(void)
 {
   assert(CCompileInfo::GetAppName() != NULL);
-  static const std::string appName(CCompileInfo::GetAppName());
+  static const std::string appName(StringUtils::Format("{} from Debian", CCompileInfo::GetAppName()));
 
   return appName;
 }
@@ -1181,7 +1184,9 @@ std::string CSysInfo::GetUserAgent()
   if (!result.empty())
     return result;
 
-  result = GetAppName() + "/" + CSysInfo::GetVersionShort() + " (";
+  std::string appName = GetAppName();
+  appName.erase(std::remove_if(appName.begin(), appName.end(), ::isspace), appName.end());
+  result = appName + "/" + CSysInfo::GetVersionShort() + " (";
 #if defined(TARGET_WINDOWS)
   result += GetKernelName() + " " + GetKernelVersion();
 #ifndef TARGET_WINDOWS_STORE
@@ -1350,8 +1355,7 @@ std::string CSysInfo::GetVersionShort()
 
 std::string CSysInfo::GetVersion()
 {
-  return GetVersionShort() + " (" + CCompileInfo::GetVersionCode() + ")" +
-         " Git:" + CCompileInfo::GetSCMID();
+  return GetVersionShort() + StringUtils::Format(" Debian package version: {}", DEB_VERSION);
 }
 
 std::string CSysInfo::GetVersionCode()

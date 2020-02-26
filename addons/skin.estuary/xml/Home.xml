@@ -1090,6 +1090,14 @@
 						<param name="visible" value="Player.HasMedia + Player.IsRemote + !Player.HasAudio" />
 					</include>
 				</control>
+		                <control type="image">
+			          <left>140</left>
+				  <top>71</top>
+			          <width>250</width>
+				  <height>56</height>
+			          <aspectratio>keep</aspectratio>
+			          <texture>from-debian-logo.png</texture>
+		                </control>
 			</control>
 			<include>BottomBar</include>
 			<control type="group">
