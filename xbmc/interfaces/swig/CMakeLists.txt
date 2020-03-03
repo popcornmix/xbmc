@@ -1,7 +1,6 @@
 function(generate_file file)
-  set(classpath ${groovy_SOURCE_DIR}/lib/*
-                ${apache-commons-lang_SOURCE_DIR}/*
-                ${apache-commons-text_SOURCE_DIR}/*
+  set(classpath /usr/share/java/groovy.jar
+                /usr/share/java/commons-lang-2.6.jar
                 ${CMAKE_SOURCE_DIR}/tools/codegenerator
                 ${CMAKE_CURRENT_SOURCE_DIR}/../python)
   if(NOT CORE_SYSTEM_NAME STREQUAL windows AND NOT CORE_SYSTEM_NAME STREQUAL windowsstore)
@@ -23,12 +22,16 @@ function(generate_file file)
   add_custom_command(OUTPUT ${CPP_FILE}
                      COMMAND ${SWIG_EXECUTABLE}
                      ARGS -w401 -c++ -o ${file}.xml -xml -I${CMAKE_SOURCE_DIR}/xbmc ${CMAKE_CURRENT_SOURCE_DIR}/../swig/${file}
-                     COMMAND ${Java_JAVA_EXECUTABLE}
-                     ARGS ${JAVA_OPEN_OPTS} -cp "${classpath}" groovy.ui.GroovyMain ${CMAKE_SOURCE_DIR}/tools/codegenerator/Generator.groovy ${file}.xml ${CMAKE_CURRENT_SOURCE_DIR}/../python/PythonSwig.cpp.template ${file}.cpp > ${devnull}
+                     COMMAND groovy
+                     ARGS -cp "${classpath}" ${CMAKE_SOURCE_DIR}/tools/codegenerator/Generator.groovy ${file}.xml ${CMAKE_CURRENT_SOURCE_DIR}/../python/PythonSwig.cpp.template ${file}.cpp > ${devnull}
                      ${CLANG_FORMAT_COMMAND}
                      DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/../swig/${file} ${CMAKE_CURRENT_SOURCE_DIR}/../python/PythonSwig.cpp.template)
   set(SOURCES ${SOURCES} "${CPP_FILE}" PARENT_SCOPE)
 endfunction()
+
+set(groovy_SOURCE_DIR "1")
+set(apache-commons-lang_SOURCE_DIR "1")
+set(apache-commons-text_SOURCE_DIR "1")
 
 find_package(Java COMPONENTS Runtime REQUIRED)
 find_package(SWIG REQUIRED)

@@ -18,8 +18,6 @@
  *
  */
 
-import groovy.xml.XmlParser
-
 /**
  * These methods are somewhat ugly because they have been copied out of
  * the Swig source code and simply made compilable with groovy. They could
