@@ -35,7 +35,7 @@
   <addon>metadata.local</addon>
   <addon>metadata.themoviedb.org.python</addon>
   <addon>metadata.tvshows.themoviedb.org.python</addon>
-  <addon>repository.xbmc.org</addon>
+  <addon optional="true">repository.xbmc.org</addon>
   <addon>resource.images.weathericons.default</addon>
   <addon>resource.language.en_gb</addon>
   <addon>resource.uisounds.kodi</addon>
