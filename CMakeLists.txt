@@ -215,7 +215,7 @@ set(required_deps ASS>=0.15.0
                   LibDvd
                   Libgcrypt
                   Lzo2
-                  OpenSSL>=1.1.0
+#                  OpenSSL>=1.1.0
                   PCRE
                   RapidJSON>=1.0.2
                   Spdlog
