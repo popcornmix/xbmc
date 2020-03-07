@@ -602,7 +602,7 @@ template <class W> void RunMassEventTest(std::vector<std::shared_ptr<W>>& m, boo
 }
 
 
-TEST(TestMassEvent, General)
+TEST(DISABLED_TestMassEvent, General)
 {
   g_event = new CEvent();
 
@@ -614,7 +614,7 @@ TEST(TestMassEvent, General)
   delete g_event;
 }
 
-TEST(TestMassEvent, Polling)
+TEST(DISABLED_TestMassEvent, Polling)
 {
   g_event = new CEvent(true); // polling needs to avoid the auto-reset
 
