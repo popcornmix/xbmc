@@ -7291,6 +7291,16 @@ msgctxt "#13467"
 msgid "Unlimited / 1080 (>30Hz)"
 msgstr ""
 
+#: system/settings/settings.xml
+msgctxt "#13500"
+msgid "Only allow acceleration for HEVC"
+msgstr ""
+
+#: system/settings/settings.xml
+msgctxt "#13501"
+msgid "This option disables acceleration for other codecs as they don't currently support seeking with V4L2"
+msgstr ""
+
 #empty strings from id 13468 to 13504
 
 #: system/settings/settings.xml
