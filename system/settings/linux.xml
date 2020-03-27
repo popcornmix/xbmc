@@ -168,6 +168,18 @@
           <default>true</default>
           <control type="toggle" />
         </setting>
+        <setting id="videoplayer.disablenonhevc" type="boolean" parent="videoplayer.useprimedecoderforhw" label="13500" help="13501">
+          <requirement>HAS_GLES</requirement>
+          <visible>false</visible>
+          <dependencies>
+            <dependency type="enable">
+              <condition setting="videoplayer.useprimedecoderforhw" operator="is">true</condition>
+            </dependency>
+          </dependencies>
+          <level>3</level>
+          <default>true</default>
+          <control type="toggle" />
+        </setting>
         <setting id="videoplayer.useprimerenderer" type="integer" label="13462" help="13463">
           <requirement>HAS_GLES</requirement>
           <visible>false</visible>
