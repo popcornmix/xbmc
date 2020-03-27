@@ -221,6 +221,13 @@ int CDVDVideoCodecDRMPRIME::GetBuffer(struct AVCodecContext* avctx, AVFrame* fra
 
 bool CDVDVideoCodecDRMPRIME::Open(CDVDStreamInfo& hints, CDVDCodecOptions& options)
 {
+  if (CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(CSettings::SETTING_VIDEOPLAYER_DISABLE_NON_HEVC) && hints.codec != AV_CODEC_ID_HEVC)
+  {
+    CLog::Log(LOGNOTICE, "CDVDVideoCodecDRMPRIME::{} - codec {} disallowed",
+              __FUNCTION__, hints.codec);
+    return false;
+  }
+
   const AVCodec* pCodec = FindDecoder(hints);
   if (!pCodec)
   {
