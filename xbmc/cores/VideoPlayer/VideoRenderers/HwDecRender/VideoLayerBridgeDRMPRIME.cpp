@@ -11,6 +11,7 @@
 #include "cores/VideoPlayer/Buffers/VideoBufferDRMPRIME.h"
 #include "utils/log.h"
 #include "windowing/gbm/drm/DRMAtomic.h"
+#include "settings/DisplaySettings.h"
 
 #include <utility>
 
@@ -264,14 +265,25 @@ void CVideoLayerBridgeDRMPRIME::SetVideoPlane(CVideoBufferDRMPRIME* buffer, cons
   auto plane = m_DRM->GetVideoPlane();
   m_DRM->AddProperty(plane, "FB_ID", buffer->m_fb_id);
   m_DRM->AddProperty(plane, "CRTC_ID", m_DRM->GetCrtc()->GetCrtcId());
+
+  uint32_t srcw = buffer->GetWidth();
+  uint32_t dstw = static_cast<uint32_t>(destRect.Width());
+  int32_t dstx = static_cast<int32_t>(destRect.x1);
+  double scalex = (double)srcw / (double)dstw;
+  RESOLUTION_INFO &res = CDisplaySettings::GetInstance().GetCurrentResolutionInfo();
+  if (dstw > 1 && dstx + dstw > (uint32_t)res.iScreenWidth - 1)
+  {
+    dstw -= 1;
+    srcw = (uint32_t)(srcw - 1.0 * scalex + 0.5);
+  }
   m_DRM->AddProperty(plane, "SRC_X", 0);
   m_DRM->AddProperty(plane, "SRC_Y", 0);
-  m_DRM->AddProperty(plane, "SRC_W", buffer->GetWidth() << 16);
+  m_DRM->AddProperty(plane, "SRC_W", srcw << 16);
   m_DRM->AddProperty(plane, "SRC_H", buffer->GetHeight() << 16);
-  m_DRM->AddProperty(plane, "CRTC_X", static_cast<int32_t>(destRect.x1) & ~1);
-  m_DRM->AddProperty(plane, "CRTC_Y", static_cast<int32_t>(destRect.y1) & ~1);
-  m_DRM->AddProperty(plane, "CRTC_W", (static_cast<uint32_t>(destRect.Width()) + 1) & ~1);
-  m_DRM->AddProperty(plane, "CRTC_H", (static_cast<uint32_t>(destRect.Height()) + 1) & ~1);
+  m_DRM->AddProperty(plane, "CRTC_X", dstx);
+  m_DRM->AddProperty(plane, "CRTC_Y", static_cast<int32_t>(destRect.y1));
+  m_DRM->AddProperty(plane, "CRTC_W", dstw);
+  m_DRM->AddProperty(plane, "CRTC_H", static_cast<uint32_t>(destRect.Height()));
 }
 
 void CVideoLayerBridgeDRMPRIME::UpdateVideoPlane()
