@@ -48226,10 +48226,10 @@ index 0000000000..392f22b988
 +#endif
 diff --git a/libavcodec/v4l2_request.c b/libavcodec/v4l2_request.c
 new file mode 100644
-index 0000000000..06beeda0da
+index 0000000000..c6eb10dd95
 --- /dev/null
 +++ b/libavcodec/v4l2_request.c
-@@ -0,0 +1,1093 @@
+@@ -0,0 +1,1101 @@
 +/*
 + * This file is part of FFmpeg.
 + *
@@ -48283,6 +48283,14 @@ index 0000000000..06beeda0da
 +
 +#ifndef DRM_FORMAT_NV20
 +#define DRM_FORMAT_NV20 fourcc_code('N', 'V', '2', '0')
++#endif
++
++#ifndef V4L2_PIX_FMT_NV12_10_COL128
++#define V4L2_PIX_FMT_NV12_10_COL128 v4l2_fourcc('N', 'C', '3', '0')
++#endif
++
++#ifndef V4L2_PIX_FMT_NV12_COL128
++#define V4L2_PIX_FMT_NV12_COL128 v4l2_fourcc('N', 'C', '1', '2') /* 12  Y/CbCr 4:2:0 128 pixel wide column */
 +#endif
 +
 +uint64_t ff_v4l2_request_get_capture_timestamp(AVFrame *frame)
