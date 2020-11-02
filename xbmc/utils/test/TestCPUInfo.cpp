@@ -36,7 +36,7 @@ TEST_F(TestCPUInfo, GetCPUCount)
   EXPECT_GT(CServiceBroker::GetCPUInfo()->GetCPUCount(), 0);
 }
 
-TEST_F(TestCPUInfo, GetCPUFrequency)
+TEST_F(TestCPUInfo, DISABLED_GetCPUFrequency)
 {
   EXPECT_GE(CServiceBroker::GetCPUInfo()->GetCPUFrequency(), 0.f);
 }
