@@ -1,4 +1,5 @@
-#include "../../lib/c++/xbmcclient.h"
+#include <kodi/xbmcclient.h>
+
 #include <stdio.h>
 #include <string.h>
 #include <sys/socket.h>
