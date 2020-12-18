@@ -9,6 +9,9 @@
         <setting id="videoplayer.useprimedecoderforhw">
           <visible>true</visible>
         </setting>
+        <setting id="videoplayer.disablenonhevc">
+          <default>false</default>
+        </setting>
         <setting id="videoplayer.useprimerenderer">
           <default>0</default>
         </setting>
