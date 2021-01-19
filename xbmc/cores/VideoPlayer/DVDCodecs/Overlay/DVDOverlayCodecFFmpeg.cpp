@@ -233,7 +233,8 @@ CDVDOverlay* CDVDOverlayCodecFFmpeg::GetOverlay()
     }
 
     RENDER_STEREO_MODE render_stereo_mode = CServiceBroker::GetWinSystem()->GetGfxContext().GetStereoMode();
-    if (render_stereo_mode != RENDER_STEREO_MODE_OFF)
+    if (render_stereo_mode != RENDER_STEREO_MODE_OFF &&
+        m_pCodecContext->codec_id != AV_CODEC_ID_HDMV_PGS_SUBTITLE)
     {
       if (rect.h > m_height / 2)
       {
@@ -262,8 +263,19 @@ CDVDOverlay* CDVDOverlayCodecFFmpeg::GetOverlay()
     overlay->height   = rect.h;
     overlay->bForced  = rect.flags != 0;
 
-    overlay->source_width  = m_width;
-    overlay->source_height = m_height;
+    if (render_stereo_mode != RENDER_STEREO_MODE_OFF &&
+        m_pCodecContext->codec_id == AV_CODEC_ID_HDMV_PGS_SUBTITLE)
+    {
+      // For PGS subtitles we don't set source_width and source_height here.
+      // Later this will lead to 'video alignment' being chosen for that subtitle.
+      overlay->source_width  = 0;
+      overlay->source_height = 0;
+    }
+    else
+    {
+      overlay->source_width  = m_width;
+      overlay->source_height = m_height;
+    }
 
     uint8_t* s = rect.data[0];
     uint8_t* t = overlay->data;

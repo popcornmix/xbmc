@@ -537,6 +537,8 @@ void CDVDVideoCodecDRMPRIME::SetPictureParams(VideoPicture* pVideoPicture)
                            ? DVD_NOPTS_VALUE
                            : static_cast<double>(pts) * DVD_TIME_BASE / AV_TIME_BASE;
   pVideoPicture->dts = DVD_NOPTS_VALUE;
+
+  CLog::Log(LOGDEBUG, "CDVDVideoCodecDRMPRIME::{} - iFlags:{} flags:{} pts:{}", __FUNCTION__, pVideoPicture->iFlags, m_pFrame->flags, pts);
 }
 
 CDVDVideoCodec::VCReturn CDVDVideoCodecDRMPRIME::GetPicture(VideoPicture* pVideoPicture)
