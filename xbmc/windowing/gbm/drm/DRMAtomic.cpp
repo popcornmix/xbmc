@@ -92,19 +92,13 @@ void CDRMAtomic::DrmAtomicCommit(int fb_id, int flags, bool rendered, bool video
       return;
   }
 
-  uint32_t srcw = m_width << 16;
-  uint32_t dstw = m_mode->hdisplay;
-  double scalex = (double)srcw / (double)dstw;
-  dstw -= 2;
-  srcw = (uint32_t)(srcw - 2.0 * scalex + 0.5);
-
   if (rendered)
   {
     AddProperty(m_gui_plane, "FB_ID", fb_id);
     AddProperty(m_gui_plane, "CRTC_ID", m_crtc->GetCrtcId());
     AddProperty(m_gui_plane, "SRC_X", 0);
     AddProperty(m_gui_plane, "SRC_Y", 0);
-    AddProperty(m_gui_plane, "SRC_W", srcw);
+    AddProperty(m_gui_plane, "SRC_W", m_width << 16);
     AddProperty(m_gui_plane, "SRC_H", m_height << 16);
     AddProperty(m_gui_plane, "CRTC_X", 0);
     AddProperty(m_gui_plane, "CRTC_Y", 0);
@@ -115,7 +109,7 @@ void CDRMAtomic::DrmAtomicCommit(int fb_id, int flags, bool rendered, bool video
     // }
     // else
     {
-      AddProperty(m_gui_plane, "CRTC_W", dstw);
+      AddProperty(m_gui_plane, "CRTC_W", m_mode->hdisplay);
       AddProperty(m_gui_plane, "CRTC_H", m_mode->vdisplay);
     }
 
