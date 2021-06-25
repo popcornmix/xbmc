@@ -205,6 +205,11 @@ if [ -n "${KODI_GL_INTERFACE}" ]; then
   fi
 fi
 
+
+# Check if locale is affected by "Turkish I"
+# See https://github.com/xbmc/xbmc/issue/19883 for details
+unset LC_CTYPE LC_ALL LANG
+
 LOOP=1
 while [ $(( $LOOP )) = "1" ]
 do
