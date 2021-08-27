@@ -646,7 +646,7 @@ bool CDVDVideoCodecDRMPRIME::SetPictureParams(VideoPicture* pVideoPicture)
   if (!pVideoPicture->videoBuffer)
   {
     CLog::Log(LOGERROR, "CDVDVideoCodecDRMPRIME::{} - videoBuffer:nullptr format:{}", __FUNCTION__,
-              av_get_pix_fmt_name(static_cast<AVPixelFormat>(m_pFrame->format)));
+              m_pFrame->format == AV_PIX_FMT_NONE ? "AV_PIX_FMT_NONE" : av_get_pix_fmt_name(static_cast<AVPixelFormat>(m_pFrame->format)));
     av_frame_unref(m_pFrame);
     return false;
   }
