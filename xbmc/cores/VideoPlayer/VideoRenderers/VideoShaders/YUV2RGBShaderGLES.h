@@ -72,6 +72,7 @@ namespace Shaders {
     std::shared_ptr<CConvertMatrix> m_pConvMatrix;
 
     // shader attribute handles
+    GLint m_oesTex{-1};
     GLint m_hYTex{-1};
     GLint m_hUTex{-1};
     GLint m_hVTex{-1};
