@@ -548,7 +548,7 @@ bool CDVDVideoCodecDRMPRIME::SetPictureParams(VideoPicture* pVideoPicture)
                            : static_cast<double>(pts) * DVD_TIME_BASE / AV_TIME_BASE;
   pVideoPicture->dts = DVD_NOPTS_VALUE;
 
-  if (IsSupportedHwFormat(static_cast<AVPixelFormat>(m_pFrame->format)))
+  if (m_pFrame->format == AV_PIX_FMT_DRM_PRIME)
   {
     CVideoBufferDRMPRIMEFFmpeg* buffer =
         dynamic_cast<CVideoBufferDRMPRIMEFFmpeg*>(m_videoBufferPool->Get());
@@ -562,7 +562,6 @@ bool CDVDVideoCodecDRMPRIME::SetPictureParams(VideoPicture* pVideoPicture)
     buffer->SetPictureParams(*pVideoPicture);
     buffer->Acquire();
     buffer->SyncEnd();
-    buffer->SetDimensions(m_pFrame->width, m_pFrame->height);
 
     pVideoPicture->videoBuffer = buffer;
     av_frame_unref(m_pFrame);
@@ -626,7 +625,7 @@ bool CDVDVideoCodecDRMPRIME::FilterOpen(const std::string& filters, bool test)
 
   const AVFilter* srcFilter = avfilter_get_by_name("buffer");
   const AVFilter* outFilter = avfilter_get_by_name("buffersink");
-  enum AVPixelFormat pix_fmts[] = { AV_PIX_FMT_DRM_PRIME, AV_PIX_FMT_NONE };
+  enum AVPixelFormat pix_fmts[] = { AV_PIX_FMT_DRM_PRIME, AV_PIX_FMT_YUV420P, AV_PIX_FMT_NONE };
 
   std::string args = StringUtils::Format("video_size={}x{}:pix_fmt={}:time_base={}/{}:"
                                          "pixel_aspect={}/{}:sws_param=flags=2",
@@ -865,6 +864,17 @@ CDVDVideoCodec::VCReturn CDVDVideoCodecDRMPRIME::GetPicture(VideoPicture* pVideo
     CLog::Log(LOGERROR, "CDVDVideoCodecDRMPRIME::{} - receive frame failed: {} ({})",
               __FUNCTION__, err, ret);
     return VC_ERROR;
+  }
+
+  if (IsSupportedHwFormat(static_cast<AVPixelFormat>(m_pFrame->format)))
+  {
+  }
+  else if (m_pFrame->opaque)
+  {
+    CVideoBufferDMA* buffer = static_cast<CVideoBufferDMA*>(m_pFrame->opaque);
+    buffer->SetDimensions(m_pFrame->width, m_pFrame->height);
+    auto descriptor = buffer->GetDescriptor();
+    m_pFrame->data[0] = reinterpret_cast<uint8_t*>(descriptor);
   }
 
   if (!m_processInfo.GetVideoInterlaced() && m_pFrame->interlaced_frame)
