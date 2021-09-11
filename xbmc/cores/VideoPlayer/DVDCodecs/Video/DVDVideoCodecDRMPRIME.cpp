@@ -623,7 +623,7 @@ bool CDVDVideoCodecDRMPRIME::SetPictureParams(VideoPicture* pVideoPicture)
     pVideoPicture->videoBuffer = nullptr;
   }
 
-  if (IsSupportedHwFormat(static_cast<AVPixelFormat>(m_pFrame->format)))
+  if (m_pFrame->format == AV_PIX_FMT_DRM_PRIME)
   {
     CVideoBufferDRMPRIMEFFmpeg* buffer =
         dynamic_cast<CVideoBufferDRMPRIMEFFmpeg*>(m_videoBufferPool->Get());
@@ -701,7 +701,7 @@ bool CDVDVideoCodecDRMPRIME::FilterOpen(const std::string& filters, bool test)
 
   const AVFilter* srcFilter = avfilter_get_by_name("buffer");
   const AVFilter* outFilter = avfilter_get_by_name("buffersink");
-  enum AVPixelFormat pix_fmts[] = { AV_PIX_FMT_DRM_PRIME, AV_PIX_FMT_NONE };
+  enum AVPixelFormat pix_fmts[] = { AV_PIX_FMT_DRM_PRIME, AV_PIX_FMT_YUV420P, AV_PIX_FMT_NONE };
 
   std::string args = StringUtils::Format("video_size={}x{}:pix_fmt={}:time_base={}/{}:"
                                          "pixel_aspect={}/{}:sws_param=flags=2",
@@ -848,6 +848,16 @@ void CDVDVideoCodecDRMPRIME::FilterClose()
 
 CDVDVideoCodec::VCReturn CDVDVideoCodecDRMPRIME::ProcessFilterIn()
 {
+  // sw decoded buffers need cache flush and for descripter to be set
+  if (!IsSupportedHwFormat(static_cast<AVPixelFormat>(m_pFrame->format)) && m_pFrame->opaque != nullptr)
+  {
+    CVideoBufferDMA* buffer = static_cast<CVideoBufferDMA*>(m_pFrame->opaque);
+    buffer->SetDimensions(m_pFrame->width, m_pFrame->height);
+    buffer->SyncEnd();
+    auto descriptor = buffer->GetDescriptor();
+    m_pFrame->data[0] = reinterpret_cast<uint8_t*>(descriptor);
+  }
+
   int ret = av_buffersrc_add_frame(m_pFilterIn, m_pFrame);
   if (ret < 0)
   {
