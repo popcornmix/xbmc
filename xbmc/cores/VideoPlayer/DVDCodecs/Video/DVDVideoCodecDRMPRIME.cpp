@@ -905,11 +905,6 @@ CDVDVideoCodec::VCReturn CDVDVideoCodecDRMPRIME::GetPicture(VideoPicture* pVideo
         return VC_NONE;
     }
   }
-  else
-  {
-    m_filters.clear();
-    FilterClose();
-  }
 
   if (!SetPictureParams(pVideoPicture))
     return VC_ERROR;
