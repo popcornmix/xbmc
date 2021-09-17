@@ -906,6 +906,10 @@ std::string CDVDVideoCodecDRMPRIME::GetFilterChain(bool interlaced)
   if (!m_processInfo.Supports(mInt))
     mInt = m_processInfo.GetFallbackDeintMethod();
 
+  // avoid disabling deinterlace graph for occasional progressive frames - they will be copied by deinterlace
+  if (!m_filters.empty())
+    interlaced = true;
+
   if (mInt != VS_INTERLACEMETHOD_NONE && interlaced && !m_deintFilterName.empty())
     filterChain += m_deintFilterName;
 
