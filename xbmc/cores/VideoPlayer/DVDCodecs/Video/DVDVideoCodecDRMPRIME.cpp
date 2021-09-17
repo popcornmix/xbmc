@@ -913,16 +913,11 @@ CDVDVideoCodec::VCReturn CDVDVideoCodecDRMPRIME::GetPicture(VideoPicture* pVideo
         FilterClose();
     }
 
-    if (m_pFilterGraph)
-    {
-      if (ProcessFilterIn() != VC_PICTURE)
-        return VC_NONE;
-    }
   }
-  else
+  if (m_pFilterGraph)
   {
-    m_filters.clear();
-    FilterClose();
+    if (ProcessFilterIn() != VC_PICTURE)
+      return VC_NONE;
   }
 
   if (!SetPictureParams(pVideoPicture))
