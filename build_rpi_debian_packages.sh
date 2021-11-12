@@ -61,13 +61,14 @@ KODI_OPTS="\
 -DVERBOSE=1 \
 -DCORE_SYSTEM_NAME=linux \
 -DCORE_PLATFORM_NAME=gbm \
--DGBM_RENDER_SYSTEM=gles \
+-DAPP_RENDER_SYSTEM=gles \
 -DENABLE_VAAPI=OFF \
 -DENABLE_VDPAU=OFF \
--DENABLE_MMAL=ON \
 -DENABLE_OPENGL=OFF \
+-DENABLE_DEBUGFISSION=OFF \
+-DENABLE_INTERNAL_SPDLOG=ON \
+-DCMAKE_CXX_STANDARD_LIBRARIES="-latomic" \
 #-DWITH_CPU=${CPU} \
--DCMAKE_PREFIX_PATH=/opt/vc \
 -DENABLE_OPENGLES=ON \
 -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
 -DCMAKE_INSTALL_PREFIX=/usr \
@@ -80,11 +81,7 @@ KODI_OPTS="\
 -DENABLE_DVDCSS=ON \
 -DENABLE_EGL=ON \
 -DENABLE_EVENTCLIENTS=ON \
--DENABLE_INTERNAL_FFMPEG=ON \
--DENABLE_INTERNAL_CROSSGUID=ON \
 -DENABLE_INTERNAL_FMT=ON \
--DENABLE_INTERNAL_RapidJSON=ON \
--DENABLE_INTERNAL_FLATBUFFERS=ON \
 -DENABLE_MICROHTTPD=ON \
 -DENABLE_MYSQLCLIENT=ON \
 -DENABLE_NFS=ON \
@@ -160,7 +157,7 @@ function compileAddons {
         cd  $ADDONS_BUILD_DIR && rm -rf *
    fi
    echo "#------ Configuring addons   ------#"
-   cmake -DOVERRIDE_PATHS=1 -DBUILD_DIR=$(pwd) -DCORE_SOURCE_DIR="${REPO_DIR}" -DADDONS_TO_BUILD="${ADDONS_TO_BUILD}" -DADDON_DEPENDS_PATH="${KODI_BUILD_DIR}/build" -DCMAKE_INCLUDE_PATH=/opt/vc/include:/opt/vc/include/interface:/opt/vc/include/interface/vcos/pthreads:/opt/vc/include/interface/vmcs_host/linux -DCMAKE_LIBRARY_PATH=/opt/vc/lib $REPO_DIR/cmake/addons/ |& tee -a build_addons.log
+   cmake -DOVERRIDE_PATHS=1 -DBUILD_DIR=$(pwd) -DCORE_SOURCE_DIR="${REPO_DIR}" -DADDONS_TO_BUILD="${ADDONS_TO_BUILD}" -DADDON_DEPENDS_PATH="${KODI_BUILD_DIR}/build" $REPO_DIR/cmake/addons/ |& tee -a build_addons.log
    if [ $? -ne 0 ]; then
       echo "ADDONS ERROR: configure step failed.. Bailing out."
       exit
@@ -184,20 +181,7 @@ function compileAddons {
 			sed -i "s/-DUSE_LTO=1//g" debian/rules
 		fi
 
-		# START GLES Fix
-		if [[ -f "FindOpenGLES2.cmake" ]]; then
-			sed -i "s/-DBUILD_SHARED_LIBS=1 -DUSE_LTO=1/-DBUILD_SHARED_LIBS=1 -DFORCE_GLES=1 -DUSE_LTO=1/g" debian/rules
-			sed -i "s/if(OPENGL_FOUND)/if(OPENGL_FOUND AND NOT FORCE_GLES)/g" CMakeLists.txt
-            sed -i "s/OpenGLES2 glesv2/OPENGLES2 brcmglesv2/g" FindOpenGLES2.cmake
-            sed -i "/endif(PKG_CONFIG_FOUND)/i \
-                link_directories(\${OPENGLES2_LIBRARY_DIRS})" FindOpenGLES2.cmake
-            sed -i "/endif(PKG_CONFIG_FOUND)/i \
-                include_directories(\${OPENGLES2_INCLUDE_DIRS})" FindOpenGLES2.cmake
-            sed -i "s/NAMES GLESv2/NAMES brcmGLESv2/g" FindOpenGLES2.cmake
-            sed -i "s/NAMES EGL/NAMES brcmEGL/g" FindOpenGLES2.cmake
-		fi
-		# END GLES Fix
-   		PKG_CONFIG_PATH=/opt/vc/lib/pkgconfig dpkg-buildpackage $DEBUILD_OPTS -us -uc -b |& tee -a build_addons.log
+		dpkg-buildpackage $DEBUILD_OPTS -us -uc -b |& tee -a build_addons.log
 		cd ..
 	fi
    done
