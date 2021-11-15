@@ -104,7 +104,7 @@ KODI_OPTS="\
 -DDEBIAN_PACKAGE_TYPE=${DEBIAN_PACKAGE_TYPE}
 "
 
-EXTRA_FLAGS="-Os -fomit-frame-pointer -march=armv8-a+crc+simd -mfpu=neon-fp-armv8 -mfloat-abi=hard -mvectorize-with-neon-quad"
+#EXTRA_FLAGS="-Os -fomit-frame-pointer -march=armv8-a+crc+simd -mfpu=neon-fp-armv8 -mfloat-abi=hard -mvectorize-with-neon-quad"
 
     echo "#-------------------------------#"
 }
