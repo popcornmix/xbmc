@@ -10,7 +10,7 @@ BUILD_TYPE=${BUILD_TYPE:-"Release"}
 DEB_ARCH=${DEB_ARCH:-"armhf"}
 DEB_PACK_VERSION=${DEB_PACK_VERSION:-"1"}
 DEBUILD_OPTS=${DEBUILD_OPTS:-""}
-BUILD_THREADS=$(( $(nproc)-1))
+BUILD_THREADS=$(( $(nproc)+2))
 
 function usage {
     echo "$0: This script builds a Kodi debian package from a git repository optimized for Raspberry Pi 4.
