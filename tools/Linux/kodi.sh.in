@@ -49,6 +49,10 @@ do
             LIBDIR="$2"
             shift; shift
             ;;
+        --pulse)
+            WANT_PULSE=1
+            shift
+            ;;
         --windowing)
             WINDOWING="$2"
             echo "$SAVED_ARGS" | sed "s/--windowing[ ]*$2//g"
@@ -203,6 +207,12 @@ if command_exists gdb; then
   fi
 fi
 
+if [ "$WANT_PULSE" != "1" ] && pactl list > /dev/null 2>&1 ; then
+ systemctl --user stop pulseaudio.socket
+ systemctl --user stop pulseaudio.service
+ PULSE_STOPPED=1
+fi
+
 
 # Check if locale is affected by "Turkish I"
 # See https://github.com/xbmc/xbmc/issues/19883 for details
@@ -229,6 +239,10 @@ done
 # Raspberry Pi fixes
 if [ -f "/usr/bin/cec-daemon" ]; then
     sudo service cec start >/dev/null 2>&1
+fi
+if [ "$PULSE_STOPPED" = "1" ]; then
+ systemctl --user start pulseaudio.service
+ systemctl --user start pulseaudio.socket
 fi
 
 exit $RET
