@@ -30,60 +30,9 @@ CRASHLOG_DIR=${CRASHLOG_DIR:-$HOME}
 KODI_DATA=${KODI_DATA:-"${HOME}/.${bin_name}"} # mapped to special://home/
 WINDOWING=${WINDOWING:-"auto"}
 
-# Black Screen on exit fix
-ORIGINAL_DEPTH=`fbset | head -3 | tail -1 | cut -d " " -f 10`
-
 # PiPplware fixes
-if pgrep "fbi" > /dev/null
-then
-    sudo killall fbi >/dev/null 2>&1
-fi
-if pgrep "cec-client" > /dev/null
-then
+if pgrep "cec-client" > /dev/null; then
     sudo service cec stop >/dev/null 2>&1
-fi
-
-is_legacy() {
-  ! grep -q okay /proc/device-tree/soc/v3d@7ec00000/status 2> /dev/null && ! grep -q okay /proc/device-tree/v3dbus/v3d@7ec04000/status 2> /dev/null
-}
-
-is_fkms() {
-  ! is_legacy && grep -q okay /proc/device-tree/soc/firmwarekms@7e600000/status 2> /dev/null
-}
-
-is_kms() {
-  ! is_legacy && ! grep -q okay /proc/device-tree/soc/firmwarekms@7e600000/status 2> /dev/null
-}
-
-# EmulationStation screen resolution fix
-save_screen_mode() {
-    local status="$(tvservice -s)"
-    if echo "$status" | grep -qE "(PAL|NTSC)"; then
-        MODE_TYPE=$(echo "$status" | grep -oE "(PAL|NTSC)")
-        MODE_INFO=$(echo "$status" | grep -oE "([0-9]+\:[0-9]+)")
-    else
-        MODE_TYPE=$(echo "$status" | grep -oE "(CEA|DMT)")
-        MODE_INFO=$(echo "$status" | grep -oE "\([0-9]+\)" | tr -d '()')
-    fi
-}
-
-restore_screen_mode() {
-    if [ "$MODE_TYPE" = "PAL" ] || [ "$MODE_TYPE" = "NTSC" ]; then
-        tvservice -c "$MODE_TYPE $MODE_INFO" >/dev/null
-    else
-        tvservice -e "$MODE_TYPE $MODE_INFO" >/dev/null
-    fi
-    sleep 1
-}
-
-if is_legacy ; then
- save_screen_mode
-else
- # if not legacy and running X11 change VT
- if pgrep "X" > /dev/null; then
-  vt=$(sudo /bin/fgconsole)
-  sudo /bin/chvt 8
- fi
 fi
 
 # Workaround for high CPU load with nvidia GFX
@@ -99,6 +48,10 @@ do
         --setlibdir)
             LIBDIR="$2"
             shift; shift
+            ;;
+        --pulse)
+            WANT_PULSE=1
+            shift
             ;;
         --windowing)
             WINDOWING="$2"
@@ -140,18 +93,6 @@ if [ ! -x ${KODI_BINARY} ]; then
 fi
 
 APPORT_CORE="/var/crash/$(echo -n ${KODI_BINARY}${postfix}|tr / _).$(id -u).crash"
-
-migrate_home()
-{
-  [ "$(basename $0)" = "xbmc" ] && echo "WARNING: Running ${bin_name} as "xbmc" is deprecated and will be removed in later versions, please switch to using the ${bin_name} binary"
-
-  #check if data migration is needed
-  if [ -d "${HOME}/.xbmc" ] && [ ! -d "${KODI_DATA}" ]; then
-      echo "INFO: migrating userdata folder. Renaming ${HOME}/.xbmc to $KODI_DATA"
-      mv ${HOME}/.xbmc $KODI_DATA
-      touch ${KODI_DATA}/.kodi_data_was_migrated
-  fi
-}
 
 command_exists()
 {
@@ -252,7 +193,6 @@ print_crash_report()
   echo "Crash report available at $FILE"
 }
 
-migrate_home
 propagate_sigterm() {
   kill -TERM "$CHILD" 2>/dev/null
 }
@@ -267,6 +207,12 @@ if command_exists gdb; then
   fi
 fi
 
+if [ "$WANT_PULSE" != "1" ] && pactl list > /dev/null 2>&1 ; then
+ systemctl --user stop pulseaudio.socket
+ systemctl --user stop pulseaudio.service
+ PULSE_STOPPED=1
+fi
+
 
 # Check if locale is affected by "Turkish I"
 # See https://github.com/xbmc/xbmc/issues/19883 for details
@@ -277,7 +223,13 @@ while [ $(( $LOOP )) = "1" ]
 do
   [ -f "${APPORT_CORE}" ] && rm -f "${APPORT_CORE}"
   LOOP=0
-  ${KODI_BINARY}${postfix} $SAVED_ARGS &
+  # if running X11 change VT
+  if pgrep "X" > /dev/null; then
+    vt=$(sudo /bin/fgconsole)
+    sudo /bin/chvt 8
+  fi
+  # kodi gbm objects to DISPLAY being set
+  unset DISPLAY; ${KODI_BINARY}${postfix} $SAVED_ARGS &
   CHILD=$!
   wait "${CHILD}"
   RET=$?
@@ -288,26 +240,19 @@ do
   then # Crashed with core dump
     print_crash_report
   fi
+  # if running X11 change VT back
+  if pgrep "X" > /dev/null; then
+    sudo /bin/chvt $vt
+  fi
 done
 
 # Raspberry Pi fixes
-if is_legacy ; then
- restore_screen_mode
- fbset -depth 8 > /dev/null 2>&1
- fbset -depth $ORIGINAL_DEPTH > /dev/null 2>&1
- if pgrep "X" > /dev/null
- then
-    xrefresh >/dev/null 2>&1
- fi
-else
- # if not legacy and running X11 change VT
- if pgrep "X" > /dev/null; then
-  sudo /bin/chvt $vt
- fi
-fi
-if [ -f "/usr/bin/cec-daemon" ]
-then
+if [ -f "/usr/bin/cec-daemon" ]; then
     sudo service cec start >/dev/null 2>&1
+fi
+if [ "$PULSE_STOPPED" = "1" ]; then
+ systemctl --user start pulseaudio.service
+ systemctl --user start pulseaudio.socket
 fi
 
 exit $RET
