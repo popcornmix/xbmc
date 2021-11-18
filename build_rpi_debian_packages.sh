@@ -1,16 +1,17 @@
 #!/bin/bash
 
+ARCH=$(dpkg --print-architecture)
 REPO_DIR=${REPO_DIR:-$(pwd)}
-KODI_BUILD_DIR=${KODI_BUILD_DIR:-"${REPO_DIR}/build"}
+KODI_BUILD_DIR=${KODI_BUILD_DIR:-"${REPO_DIR}/build_${ARCH}"}
 ADDONS_TO_BUILD=${ADDONS_TO_BUILD:-""}
-ADDONS_BUILD_DIR=${ADDONS_BUILD_DIR:-"${KODI_BUILD_DIR}/build/addons_build/"}
+ADDONS_BUILD_DIR=${ADDONS_BUILD_DIR:-"${KODI_BUILD_DIR}/addons_build/"}
 ADDONS_BUILD_NUMBER=${ADDONS_BUILD_NUMBER:-"1"}
 #CPU=${CPU:-"cortex-a7"}
 BUILD_TYPE=${BUILD_TYPE:-"Release"}
-DEB_ARCH=${DEB_ARCH:-"armhf"}
+DEB_ARCH=${DEB_ARCH:-${ARCH}}
 DEB_PACK_VERSION=${DEB_PACK_VERSION:-"1"}
 DEBUILD_OPTS=${DEBUILD_OPTS:-""}
-BUILD_THREADS=$(( $(nproc)+2))
+BUILD_THREADS=$(( $(nproc)*3/2 ))
 
 function usage {
     echo "$0: This script builds a Kodi debian package from a git repository optimized for Raspberry Pi 4.
