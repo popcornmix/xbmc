@@ -703,8 +703,8 @@ bool CDVDVideoCodecDRMPRIME::FilterOpen(const std::string& filters, bool test)
   const AVFilter* outFilter = avfilter_get_by_name("buffersink");
   enum AVPixelFormat pix_fmts[] = { AV_PIX_FMT_DRM_PRIME, AV_PIX_FMT_NONE };
 
-  std::string args = StringUtils::Format("video_size=%dx%d:pix_fmt=%d:time_base=%d/%d:"
-                                         "pixel_aspect=%d/%d:sws_param=flags=2",
+  std::string args = StringUtils::Format("video_size={}x{}:pix_fmt={}:time_base={}/{}:"
+                                         "pixel_aspect={}/{}:sws_param=flags=2",
                                          m_pCodecContext->width,
                                          m_pCodecContext->height,
                                          m_pCodecContext->pix_fmt,
@@ -824,7 +824,7 @@ bool CDVDVideoCodecDRMPRIME::FilterOpen(const std::string& filters, bool test)
     char* graphDump = avfilter_graph_dump(m_pFilterGraph, nullptr);
     if (graphDump)
     {
-      CLog::Log(LOGDEBUG, "CDVDVideoCodecDRMPRIME::FilterOpen - Final filter graph:\n%s",
+      CLog::Log(LOGDEBUG, "CDVDVideoCodecDRMPRIME::FilterOpen - Final filter graph:\n{}",
                 graphDump);
       av_freep(&graphDump);
     }
