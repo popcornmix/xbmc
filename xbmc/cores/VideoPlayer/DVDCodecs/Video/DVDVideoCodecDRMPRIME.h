@@ -54,6 +54,7 @@ protected:
   std::string m_filters;
   int m_codecControlFlags = 0;
   CDVDStreamInfo m_hints;
+  double m_DAR = 1.0;
   AVCodecContext* m_pCodecContext = nullptr;
   AVFrame* m_pFrame = nullptr;
   AVFrame* m_pFilterFrame = nullptr;
