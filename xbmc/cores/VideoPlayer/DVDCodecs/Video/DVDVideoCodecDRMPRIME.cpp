@@ -486,6 +486,12 @@ bool CDVDVideoCodecDRMPRIME::SetPictureParams(VideoPicture* pVideoPicture)
     aspect_ratio =
         static_cast<float>(pVideoPicture->iWidth) / static_cast<float>(pVideoPicture->iHeight);
 
+  if (m_DAR != aspect_ratio)
+  {
+    m_DAR = aspect_ratio;
+    m_processInfo.SetVideoDAR(static_cast<float>(m_DAR));
+  }
+
   pVideoPicture->iDisplayWidth =
       (static_cast<int>(lrint(pVideoPicture->iHeight * aspect_ratio))) & -3;
   pVideoPicture->iDisplayHeight = pVideoPicture->iHeight;
