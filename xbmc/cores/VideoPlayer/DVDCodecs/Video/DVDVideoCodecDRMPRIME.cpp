@@ -762,14 +762,7 @@ bool CDVDVideoCodecDRMPRIME::FilterOpen(const std::string& filters, bool test)
     return true;
   }
 
-  if (filters.find("deinterlace") != std::string::npos)
-  {
-    m_processInfo.SetVideoDeintMethod(filters);
-  }
-  else
-  {
-    m_processInfo.SetVideoDeintMethod("none");
-  }
+  m_processInfo.SetVideoDeintMethod(filters);
 
   if (CServiceBroker::GetLogging().CanLogComponent(LOGVIDEO))
   {
@@ -787,6 +780,7 @@ bool CDVDVideoCodecDRMPRIME::FilterOpen(const std::string& filters, bool test)
 
 void CDVDVideoCodecDRMPRIME::FilterClose()
 {
+  m_processInfo.SetVideoDeintMethod("none");
   if (m_pFilterGraph)
   {
     CLog::Log(LOGDEBUG, LOGVIDEO, "CDVDVideoCodecDRMPRIME::FilterClose - Freeing filter graph");
