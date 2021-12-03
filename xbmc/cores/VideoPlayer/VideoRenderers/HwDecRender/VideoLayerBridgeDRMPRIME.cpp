@@ -35,8 +35,15 @@ void CVideoLayerBridgeDRMPRIME::Disable()
   m_DRM->AddProperty(plane, "FB_ID", 0);
   m_DRM->AddProperty(plane, "CRTC_ID", 0);
 
-  // disable HDR metadata
   auto connector = m_DRM->GetConnector();
+
+  // reset max bpc back to default of 8
+  int bpc = 8;
+  bool result = m_DRM->AddProperty(connector, "max bpc", bpc);
+  CLog::Log(LOGDEBUG, "CVideoLayerBridgeDRMPRIME::{} - setting max bpc to {} ({})", __FUNCTION__,
+            bpc, result);
+
+  // disable HDR metadata
   if (connector->SupportsProperty("HDR_OUTPUT_METADATA"))
   {
     m_DRM->AddProperty(connector, "HDR_OUTPUT_METADATA", 0);
@@ -173,6 +180,13 @@ void CVideoLayerBridgeDRMPRIME::Configure(CVideoBufferDRMPRIME* buffer)
     m_DRM->AddProperty(plane, "COLOR_RANGE", value);
 
   auto connector = m_DRM->GetConnector();
+
+  // set max bpc to allow the drm driver to choose a deep colour mode
+  int bpc = picture.colorBits > 8 ? 12 : 8;
+  result = m_DRM->AddProperty(connector, "max bpc", bpc);
+  CLog::Log(LOGDEBUG, "CVideoLayerBridgeDRMPRIME::{} - setting max bpc to {} ({})", __FUNCTION__,
+            bpc, result);
+
   if (connector->SupportsProperty("HDR_OUTPUT_METADATA"))
   {
     m_hdr_metadata.metadata_type = HDMI_STATIC_METADATA_TYPE1;
