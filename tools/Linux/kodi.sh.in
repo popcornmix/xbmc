@@ -223,7 +223,13 @@ while [ $(( $LOOP )) = "1" ]
 do
   [ -f "${APPORT_CORE}" ] && rm -f "${APPORT_CORE}"
   LOOP=0
-  unset DISPLAY; sudo openvt -sw -- su -c "${KODI_BINARY}${postfix} $SAVED_ARGS" $USER &
+  # if running X11 change VT
+  if pgrep "X" > /dev/null; then
+    vt=$(sudo /bin/fgconsole)
+    sudo /bin/chvt 8
+  fi
+  # kodi gbm objects to DISPLAY being set
+  unset DISPLAY; ${KODI_BINARY}${postfix} $SAVED_ARGS &
   CHILD=$!
   wait "${CHILD}"
   RET=$?
@@ -233,6 +239,10 @@ do
   elif [ $(( ($RET >= 131 && $RET <= 136) || $RET == 139 )) = "1" ]
   then # Crashed with core dump
     print_crash_report
+  fi
+  # if running X11 change VT back
+  if pgrep "X" > /dev/null; then
+    sudo /bin/chvt $vt
   fi
 done
 
