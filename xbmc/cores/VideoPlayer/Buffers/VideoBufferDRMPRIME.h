@@ -37,6 +37,7 @@ enum hdmi_eotf
 std::string GetColorimetry(const VideoPicture& picture);
 std::string GetColorEncoding(const VideoPicture& picture);
 std::string GetColorRange(const VideoPicture& picture);
+uint32_t GetChromaSiting(const VideoPicture& picture, bool vert);
 uint8_t GetEOTF(const VideoPicture& picture);
 const AVMasteringDisplayMetadata* GetMasteringDisplayMetadata(const VideoPicture& picture);
 const AVContentLightMetadata* GetContentLightMetadata(const VideoPicture& picture);

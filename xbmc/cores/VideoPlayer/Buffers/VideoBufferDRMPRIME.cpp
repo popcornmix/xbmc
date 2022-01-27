@@ -61,6 +61,27 @@ std::string GetColorRange(const VideoPicture& picture)
   return "YCbCr limited range";
 }
 
+uint32_t GetChromaSiting(const VideoPicture& picture, bool vert)
+{
+  switch (picture.chroma_position)
+  {
+    case AVCHROMA_LOC_LEFT:
+      return vert ? 0x8000:0x0000;
+    case AVCHROMA_LOC_CENTER:
+      return vert ? 0x8000:0x8000;
+    case AVCHROMA_LOC_TOPLEFT:
+      return vert ? 0x0000:0x0000;
+    case AVCHROMA_LOC_TOP:
+      return vert ? 0x0000:0x8000;
+    case AVCHROMA_LOC_BOTTOMLEFT:
+      return vert ? 0x10000:0x0000;
+    case AVCHROMA_LOC_BOTTOM:
+      return vert ? 0x10000:0x8000;
+    default:
+      return 0;
+  }
+}
+
 uint8_t GetEOTF(const VideoPicture& picture)
 {
   switch (picture.color_transfer)
