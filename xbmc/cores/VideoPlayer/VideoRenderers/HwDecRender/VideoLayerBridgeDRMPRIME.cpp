@@ -189,6 +189,12 @@ void CVideoLayerBridgeDRMPRIME::Configure(CVideoBufferDRMPRIME* buffer)
   if (result)
     m_DRM->AddProperty(plane, "COLOR_RANGE", value);
 
+  std::tie(result, value) = plane->GetPropertyValue("CHROMA_SITING", GetChromaSiting(picture));
+  if (result)
+    m_DRM->AddProperty(plane, "CHROMA_SITING", value);
+  CLog::Log(LOGDEBUG, "CVideoLayerBridgeDRMPRIME::{} - setting CHROMA_SITING to {} ({})", __FUNCTION__,
+            GetChromaSiting(picture), result);
+
   auto connector = m_DRM->GetConnector();
 
   // set max bpc to allow the drm driver to choose a deep colour mode
