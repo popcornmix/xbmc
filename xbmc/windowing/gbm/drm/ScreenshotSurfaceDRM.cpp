@@ -27,9 +27,9 @@
 
 #include "system_gl.h"
 
+#if 0
 namespace
 {
-
 int GetColorSpace(int colorSpace)
 {
   switch (colorSpace)
@@ -57,7 +57,7 @@ int GetColorRange(int colorRange)
 }
 
 } // namespace
-
+#endif
 void CScreenshotSurfaceDRM::Register()
 {
   CScreenShot::Register(CScreenshotSurfaceDRM::CreateSurface);
@@ -141,8 +141,8 @@ bool CScreenshotSurfaceDRM::CaptureVideo()
   attribs.width = m_width;
   attribs.height = m_height;
   attribs.format = fb->pixel_format;
-  attribs.colorSpace = GetColorSpace(videoPlane->GetProperty("COLOR_ENCODING"));
-  attribs.colorRange = GetColorRange(videoPlane->GetProperty("COLOR_RANGE"));
+  //attribs.colorSpace = GetColorSpace(videoPlane->GetProperty("COLOR_ENCODING"));
+  //attribs.colorRange = GetColorRange(videoPlane->GetProperty("COLOR_RANGE"));
   attribs.planes = planes;
 
   CEGLImage image(winSystemEGL->GetEGLDisplay());
