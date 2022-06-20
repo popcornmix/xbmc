@@ -49,7 +49,7 @@ void CVideoLayerBridgeDRMPRIME::Disable()
   }
 
   uint64_t value;
-  std::tie(result, value) = connector->GetPropertyEnumValue("Colorspace", "Default");
+  std::tie(result, value) = connector->GetPropertyValue("Colorspace", "Default");
   if (result)
   {
     CLog::Log(LOGDEBUG, "CVideoLayerBridgeDRMPRIME::{} - setting connector colorspace to Default ({})",
@@ -224,7 +224,7 @@ void CVideoLayerBridgeDRMPRIME::Configure(CVideoBufferDRMPRIME* buffer)
     }
   }
 
-  std::tie(result, value) = connector->GetPropertyEnumValue("Colorspace", GetColorimetry(picture));
+  std::tie(result, value) = connector->GetPropertyValue("Colorspace", GetColorimetry(picture));
   if (result)
   {
     result = m_DRM->AddProperty(connector, "Colorspace", value);
