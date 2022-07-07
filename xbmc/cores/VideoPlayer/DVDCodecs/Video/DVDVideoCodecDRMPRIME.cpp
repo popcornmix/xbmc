@@ -568,6 +568,13 @@ bool CDVDVideoCodecDRMPRIME::SetPictureParams(VideoPicture* pVideoPicture)
                            : static_cast<double>(pts) * DVD_TIME_BASE / AV_TIME_BASE;
   pVideoPicture->dts = DVD_NOPTS_VALUE;
 
+
+  if (pVideoPicture->videoBuffer)
+  {
+    pVideoPicture->videoBuffer->Release();
+    pVideoPicture->videoBuffer = nullptr;
+  }
+
   if (m_pFrame->format == AV_PIX_FMT_DRM_PRIME)
   {
     CVideoBufferDRMPRIMEFFmpeg* buffer =
@@ -866,12 +873,6 @@ CDVDVideoCodec::VCReturn CDVDVideoCodecDRMPRIME::GetPicture(VideoPicture* pVideo
 {
   if (m_codecControlFlags & DVD_CODEC_CTRL_DRAIN)
     Drain();
-
-  if (pVideoPicture->videoBuffer)
-  {
-    pVideoPicture->videoBuffer->Release();
-    pVideoPicture->videoBuffer = nullptr;
-  }
 
   if (m_pFilterGraph)
   {
