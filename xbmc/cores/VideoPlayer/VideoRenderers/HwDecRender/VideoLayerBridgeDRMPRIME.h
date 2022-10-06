@@ -78,6 +78,9 @@ private:
 
   CVideoBufferDRMPRIME* m_buffer = nullptr;
   CVideoBufferDRMPRIME* m_prev_buffer = nullptr;
+  CVideoBufferDRMPRIME* m_prev_prev_buffer = nullptr;
+  CVideoBufferDRMPRIME* m_prev_prev_prev_buffer = nullptr;
+  CVideoBufferDRMPRIME* m_prev_prev_prev_prev_buffer = nullptr;
 
   uint32_t m_hdr_blob_id = 0;
   struct hdr_output_metadata m_hdr_metadata = {};

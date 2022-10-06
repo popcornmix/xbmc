@@ -24,6 +24,9 @@ CVideoLayerBridgeDRMPRIME::CVideoLayerBridgeDRMPRIME(std::shared_ptr<CDRMAtomic>
 
 CVideoLayerBridgeDRMPRIME::~CVideoLayerBridgeDRMPRIME()
 {
+  Release(m_prev_prev_prev_prev_buffer);
+  Release(m_prev_prev_prev_buffer);
+  Release(m_prev_prev_buffer);
   Release(m_prev_buffer);
   Release(m_buffer);
 }
@@ -72,9 +75,12 @@ void CVideoLayerBridgeDRMPRIME::Disable()
 void CVideoLayerBridgeDRMPRIME::Acquire(CVideoBufferDRMPRIME* buffer)
 {
   // release the buffer that is no longer presented on screen
-  Release(m_prev_buffer);
+  Release(m_prev_prev_prev_prev_buffer);
 
   // release the buffer currently being presented next call
+  m_prev_prev_prev_prev_buffer = m_prev_prev_prev_buffer;
+  m_prev_prev_prev_buffer = m_prev_prev_buffer;
+  m_prev_prev_buffer = m_prev_buffer;
   m_prev_buffer = m_buffer;
 
   // reference count the buffer that is going to be presented on screen
