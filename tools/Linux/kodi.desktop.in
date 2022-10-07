@@ -12,17 +12,3 @@ Icon=@APP_NAME_LC@
 Terminal=false
 Type=Application
 Categories=AudioVideo;Video;Player;TV;
-
-Actions=Fullscreen;Standalone;
-
-[Desktop Action Fullscreen]
-Name=Open in fullscreen
-Name[ru]=Открыть в полноэкранном режиме
-Name[zh_CN]=全屏打开
-Exec=@APP_NAME_LC@ -fs
-
-[Desktop Action Standalone]
-Name=Open in standalone mode
-Name[ru]=Открыть в режиме standalone
-Name[zh_CN]=在独立模式下打开
-Exec=@APP_NAME_LC@ --standalone

@@ -40,6 +40,8 @@ configure_file(${CMAKE_SOURCE_DIR}/tools/Linux/kodi-xsession.desktop.in
 # Configure desktop entry
 configure_file(${CMAKE_SOURCE_DIR}/tools/Linux/kodi.desktop.in
                ${CORE_BUILD_DIR}/${APP_NAME_LC}.desktop @ONLY)
+configure_file(${CMAKE_SOURCE_DIR}/tools/Linux/kodi-fs.desktop.in
+               ${CORE_BUILD_DIR}/${APP_NAME_LC}-fs.desktop @ONLY)
 
 # Configure metainfo
 configure_file(${CMAKE_SOURCE_DIR}/tools/Linux/kodi.metainfo.xml.in
@@ -93,6 +95,11 @@ install(FILES ${CMAKE_BINARY_DIR}/${CORE_BUILD_DIR}/${APP_NAME_LC}-xsession.desk
 
 # Install desktop entry
 install(FILES ${CMAKE_BINARY_DIR}/${CORE_BUILD_DIR}/${APP_NAME_LC}.desktop
+        DESTINATION ${datarootdir}/applications
+        COMPONENT kodi)
+
+# Install desktop entry
+install(FILES ${CMAKE_BINARY_DIR}/${CORE_BUILD_DIR}/${APP_NAME_LC}-fs.desktop
         DESTINATION ${datarootdir}/applications
         COMPONENT kodi)
 
