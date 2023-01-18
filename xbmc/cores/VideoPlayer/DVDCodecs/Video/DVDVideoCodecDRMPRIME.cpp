@@ -355,6 +355,7 @@ bool CDVDVideoCodecDRMPRIME::Open(CDVDStreamInfo& hints, CDVDCodecOptions& optio
   m_pCodecContext->bits_per_coded_sample = hints.bitsperpixel;
   m_pCodecContext->time_base.num = 1;
   m_pCodecContext->time_base.den = DVD_TIME_BASE;
+  m_pCodecContext->thread_safe_callbacks = 1;
   m_pCodecContext->thread_count = CServiceBroker::GetCPUInfo()->GetCPUCount();
 
   if (hints.extradata)
@@ -701,13 +702,13 @@ bool CDVDVideoCodecDRMPRIME::FilterOpen(const std::string& filters, bool test)
 
   const AVFilter* srcFilter = avfilter_get_by_name("buffer");
   const AVFilter* outFilter = avfilter_get_by_name("buffersink");
-  enum AVPixelFormat pix_fmts[] = { AV_PIX_FMT_DRM_PRIME, AV_PIX_FMT_YUV420P, AV_PIX_FMT_NONE };
+  enum AVPixelFormat pix_fmts[] = { AV_PIX_FMT_DRM_PRIME, AV_PIX_FMT_NONE };
 
   std::string args = StringUtils::Format("video_size={}x{}:pix_fmt={}:time_base={}/{}:"
-                                         "pixel_aspect={}/{}:sws_param=flags=2",
+                                         "pixel_aspect={}/{}",
                                          m_pCodecContext->width,
                                          m_pCodecContext->height,
-                                         m_pCodecContext->pix_fmt,
+                                         AV_PIX_FMT_DRM_PRIME,
                                          m_pCodecContext->time_base.num ?
                                            m_pCodecContext->time_base.num : 1,
                                          m_pCodecContext->time_base.num ?
@@ -859,6 +860,7 @@ CDVDVideoCodec::VCReturn CDVDVideoCodecDRMPRIME::ProcessFilterIn()
     m_pFrame->data[0] = reinterpret_cast<uint8_t*>(descriptor);
   }
 
+  m_pFrame->format = AV_PIX_FMT_DRM_PRIME;
   int ret = av_buffersrc_add_frame(m_pFilterIn, m_pFrame);
   if (ret < 0)
   {
