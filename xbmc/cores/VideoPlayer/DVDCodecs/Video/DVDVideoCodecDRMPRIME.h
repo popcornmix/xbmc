@@ -44,7 +44,8 @@ protected:
   CDVDVideoCodec::VCReturn ProcessFilterOut();
   static enum AVPixelFormat GetFormat(struct AVCodecContext* avctx, const enum AVPixelFormat* fmt);
   static int GetBuffer(struct AVCodecContext* avctx, AVFrame* frame, int flags);
-  bool FilterOpen(const std::string& filters, bool test);
+  static AVFrame *alloc_filter_frame(AVFilterContext * ctx, void * v, int w, int h);
+  bool FilterOpen(const std::string& filters, bool scale, bool test);
   void FilterClose();
   void FilterTest();
   std::string GetFilterChain(bool interlaced);
