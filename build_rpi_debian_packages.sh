@@ -58,7 +58,7 @@ function setEnv {
         DEBIAN_PACKAGE_TYPE="unstable"
     fi
 
-KODI_OPTS="\
+KODI_OPTS=(
 -DVERBOSE=1 \
 -DCORE_SYSTEM_NAME=linux \
 -DCORE_PLATFORM_NAME=gbm \
@@ -102,8 +102,8 @@ KODI_OPTS="\
 -DCPACK_GENERATOR=DEB \
 -DDEBIAN_PACKAGE_VERSION=${DEB_PACK_VERSION}~ \
 -DDEB_PACKAGE_ARCHITECTURE=${DEB_ARCH} \
--DDEBIAN_PACKAGE_TYPE=${DEBIAN_PACKAGE_TYPE}
-"
+-DDEBIAN_PACKAGE_TYPE=${DEBIAN_PACKAGE_TYPE} \
+)
 
 #EXTRA_FLAGS="-Os -fomit-frame-pointer -march=armv8-a+crc+simd -mfpu=neon-fp-armv8 -mfloat-abi=hard -mvectorize-with-neon-quad"
 
@@ -115,7 +115,7 @@ function configure {
     [ -d $KODI_BUILD_DIR ] || mkdir -p $KODI_BUILD_DIR || exit 1
     cd $KODI_BUILD_DIR || exit 1
     rm -rf $KODI_BUILD_DIR/CMakeCache.txt $KODI_BUILD_DIR/CMakeFiles $KODI_BUILD_DIR/CPackConfig.cmake $KODI_BUILD_DIR/CTestTestfile.cmake $KODI_BUILD_DIR/cmake_install.cmake > /dev/null
-    CXXFLAGS=${EXTRA_FLAGS} CFLAGS=${EXTRA_FLAGS} cmake ${KODI_OPTS} ${REPO_DIR}/ |& tee build.log
+    CXXFLAGS=${EXTRA_FLAGS} CFLAGS=${EXTRA_FLAGS} cmake "${KODI_OPTS[@]}" ${REPO_DIR}/ |& tee build.log
     # CMAKE Doesn't have a return code for errors yet..
     #if [ $? -ne 0 ]; then
     #   echo "ERROR: configure step failed.. Bailing out."
