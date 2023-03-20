@@ -1,14 +1,15 @@
 #!/bin/bash
 
-ARCH=$(dpkg --print-architecture)
 REPO_DIR=${REPO_DIR:-$(pwd)}
-KODI_BUILD_DIR=${KODI_BUILD_DIR:-"${REPO_DIR}/build_${ARCH}"}
+CORE_PLATFORM_NAME=${CORE_PLATFORM_NAME:-gbm}
+CORE_PLATFORM_DIR=${CORE_PLATFORM_DIR:-"${REPO_DIR}/build"}
+KODI_BUILD_DIR=${KODI_BUILD_DIR:-"${REPO_DIR}/${CORE_PLATFORM_DIR}"}
 ADDONS_TO_BUILD=${ADDONS_TO_BUILD:-""}
 ADDONS_BUILD_DIR=${ADDONS_BUILD_DIR:-"${KODI_BUILD_DIR}/addons_build/"}
 ADDONS_BUILD_NUMBER=${ADDONS_BUILD_NUMBER:-"1"}
 #CPU=${CPU:-"cortex-a7"}
 BUILD_TYPE=${BUILD_TYPE:-"Release"}
-DEB_ARCH=${DEB_ARCH:-${ARCH}}
+DEB_ARCH=${ARCH:-$(dpkg --print-architecture)}
 DEB_PACK_VERSION=${DEB_PACK_VERSION:-"1"}
 DEBUILD_OPTS=${DEBUILD_OPTS:-""}
 BUILD_THREADS=$(( $(nproc)*3/2 ))
@@ -35,7 +36,7 @@ function checkEnv {
     [[ -n $ADDONS_TO_BUILD ]] && echo "ADDONS_TO_BUILD: $ADDONS_TO_BUILD"
     [[ -n $ADDONS_TO_BUILD ]] && echo "ADDONS_BUILD_DIR: $ADDONS_BUILD_DIR"
     [[ -n $ADDONS_TO_BUILD ]] && echo "DEBUILD_OPTS: $DEBUILD_OPTS"
-   
+
     KODIPLATFORM=$(dpkg -l | grep libkodiplatform | wc -l)
 
     if [[ -n $ADDONS_TO_BUILD && ! $KODIPLATFORM ]];
@@ -61,7 +62,7 @@ function setEnv {
 KODI_OPTS=(
 -DVERBOSE=1 \
 -DCORE_SYSTEM_NAME=linux \
--DCORE_PLATFORM_NAME=gbm \
+-DCORE_PLATFORM_NAME="${CORE_PLATFORM_NAME}" \
 -DAPP_RENDER_SYSTEM=gles \
 -DENABLE_VAAPI=OFF \
 -DENABLE_VDPAU=OFF \
@@ -69,7 +70,8 @@ KODI_OPTS=(
 -DENABLE_DEBUGFISSION=OFF \
 -DENABLE_INTERNAL_SPDLOG=ON \
 -DCMAKE_CXX_STANDARD_LIBRARIES="-latomic" \
-#-DWITH_CPU=${CPU} \
+-DENABLE_INTERNAL_FFMPEG=${ENABLE_INTERNAL_FFMPEG:-OFF} \
+-DWITH_CPU=${CPU} \
 -DENABLE_OPENGLES=ON \
 -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
 -DCMAKE_INSTALL_PREFIX=/usr \
@@ -226,6 +228,7 @@ done
 
 setEnv
 checkEnv
+
 if [[ $ONLY_ADDONS == 0 ]]
 then
     configure
@@ -234,6 +237,6 @@ then
 fi
 
 if [[ $ADDONS_TO_BUILD != "" ]]
-then 
+then
 	compileAddons
 fi
