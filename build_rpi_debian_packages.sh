@@ -181,6 +181,9 @@ function compileAddons {
 		if [[ $D == "audioencoder"* || $D == "audiodecoder"* ]]; then
 			sed -i "s/-DUSE_LTO=1//g" debian/rules
 		fi
+		if [[ $D == "inputstream.adaptive" ]]; then
+			sed -i "s/\-DBENTO4_URL=bento4\.tar\.gz//" debian/rules
+		fi
 
 		dpkg-buildpackage $DEBUILD_OPTS -us -uc -b |& tee -a build_addons.log
 		cd ..
