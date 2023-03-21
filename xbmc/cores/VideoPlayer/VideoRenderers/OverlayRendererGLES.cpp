@@ -430,7 +430,7 @@ void COverlayGlyphGLES::Render(SRenderState& state)
   glEnableVertexAttribArray(colLoc);
   glEnableVertexAttribArray(tex0Loc);
 
-  glUniform1f(depthLoc, -1.0f);
+  glUniform1f(depthLoc, -0.99f);
 
   glDrawArrays(GL_TRIANGLES, 0, m_vertexCount);
   CRenderSystemBase::m_GUIElementCount++;

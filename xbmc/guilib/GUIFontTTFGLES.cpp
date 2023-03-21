@@ -253,7 +253,7 @@ void CGUIFontTTFGLES::LastEnd()
 
       // Apply the depth value of the layer
       float depth = CServiceBroker::GetWinSystem()->GetGfxContext().GetTransformDepth();
-      glUniform1f(depthLoc, depth);
+      glUniform1f(depthLoc, depth*0.99f);
 
       glUniformMatrix4fv(matrixUniformLoc, 1, GL_FALSE, matrix);
 
