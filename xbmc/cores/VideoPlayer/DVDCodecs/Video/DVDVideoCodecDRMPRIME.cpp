@@ -75,6 +75,18 @@ static void AlignedSize(AVCodecContext* avctx, int& width, int& height)
   height = h;
 }
 
+bool SupportsDRM()
+{
+  AVHWDeviceType type = AV_HWDEVICE_TYPE_NONE;
+  while ((type = av_hwdevice_iterate_types(type)) != AV_HWDEVICE_TYPE_NONE)
+  {
+    if (type == AV_HWDEVICE_TYPE_DRM)
+      return true;
+  }
+
+  return false;
+}
+
 } // namespace
 
 CDVDVideoCodecDRMPRIME::CDVDVideoCodecDRMPRIME(CProcessInfo& processInfo)
@@ -104,6 +116,12 @@ std::unique_ptr<CDVDVideoCodec> CDVDVideoCodecDRMPRIME::Create(CProcessInfo& pro
 
 void CDVDVideoCodecDRMPRIME::Register()
 {
+  if (!SupportsDRM())
+  {
+    CLog::Log(LOGINFO, "CDVDVideoCodecDRMPRIME: FFMPEG has no libdrm support");
+    return;
+  }
+
   auto settingsComponent = CServiceBroker::GetSettingsComponent();
   if (!settingsComponent)
     return;
