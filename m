@@ -3,7 +3,8 @@ set -e
 ARCH=$(dpkg --print-architecture)
 
 export ADDONS_BUILD_NUMBER=1
-export DEB_PACK_VERSION=1
+export DEBIAN_PACKAGE_VERSION=1
+export DEBIAN_PACKAGE_EPOCH=3
 export CORE_PLATFORM_NAME="gbm x11 wayland"
 export CORE_PLATFORM_DIR=build_$(echo $(printf "%s\n" ${CORE_PLATFORM_NAME} | sort) | tr ' ' '_')_${ARCH}
 #export ENABLE_INTERNAL_FFMPEG=ON
