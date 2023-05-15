@@ -965,7 +965,15 @@ CDVDVideoCodec::VCReturn CDVDVideoCodecDRMPRIME::GetPicture(VideoPicture* pVideo
   if (ret == AVERROR(EAGAIN))
     return VC_BUFFER;
   else if (ret == AVERROR_EOF)
+  {
+    if (m_codecControlFlags & DVD_CODEC_CTRL_DRAIN)
+    {
+      CLog::Log(LOGDEBUG, "CDVDVideoCodecDRMPRIME::{} - flush buffers", __FUNCTION__);
+      avcodec_flush_buffers(m_pCodecContext);
+      SetCodecControl(m_codecControlFlags & ~DVD_CODEC_CTRL_DRAIN);
+    }
     return VC_EOF;
+  }
   else if (ret)
   {
     char err[AV_ERROR_MAX_STRING_SIZE] = {};
