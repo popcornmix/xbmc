@@ -846,6 +846,7 @@ void CDVDVideoCodecDRMPRIME::FilterClose()
     // Disposed by above code
     m_pFilterIn = nullptr;
     m_pFilterOut = nullptr;
+    m_pFilterGraph = nullptr;
   }
 }
 
