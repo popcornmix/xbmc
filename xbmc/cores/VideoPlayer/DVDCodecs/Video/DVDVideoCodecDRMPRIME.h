@@ -45,9 +45,9 @@ protected:
   static enum AVPixelFormat GetFormat(struct AVCodecContext* avctx, const enum AVPixelFormat* fmt);
   static int GetBuffer(struct AVCodecContext* avctx, AVFrame* frame, int flags);
   static AVFrame *alloc_filter_frame(AVFilterContext * ctx, void * v, int w, int h);
-  bool FilterOpen(const std::string& filters, bool scale, bool test);
+  bool FilterOpen(const std::string& filters, AVPixelFormat pix_fmt, bool test);
   void FilterClose();
-  void FilterTest();
+  void FilterTest(AVPixelFormat pix_fmt);
   std::string GetFilterChain(bool interlaced);
 
   std::string m_name;
