@@ -387,15 +387,7 @@ bool CDVDVideoCodecDRMPRIME::Open(CDVDStreamInfo& hints, CDVDCodecOptions& optio
   m_processInfo.SetVideoDAR(hints.aspect);
   m_processInfo.SetVideoDeintMethod("none");
 
-  FilterTest();
-
-  if (!m_deintFilterName.empty())
-  {
-    std::list<EINTERLACEMETHOD> methods;
-    methods.push_back(EINTERLACEMETHOD::VS_INTERLACEMETHOD_DEINTERLACE);
-    m_processInfo.UpdateDeinterlacingMethods(methods);
-    m_processInfo.SetDeinterlacingMethodDefault(EINTERLACEMETHOD::VS_INTERLACEMETHOD_DEINTERLACE);
-  }
+  m_checkedDeinterlace = false;
 
   return true;
 }
@@ -982,6 +974,20 @@ CDVDVideoCodec::VCReturn CDVDVideoCodecDRMPRIME::GetPicture(VideoPicture* pVideo
     CLog::Log(LOGERROR, "CDVDVideoCodecDRMPRIME::{} - receive frame failed: {} ({})",
               __FUNCTION__, err, ret);
     return VC_ERROR;
+  }
+
+  if (!m_checkedDeinterlace)
+  {
+    FilterTest();
+
+    if (!m_deintFilterName.empty())
+    {
+      std::list<EINTERLACEMETHOD> methods;
+      methods.push_back(EINTERLACEMETHOD::VS_INTERLACEMETHOD_DEINTERLACE);
+      m_processInfo.UpdateDeinterlacingMethods(methods);
+      m_processInfo.SetDeinterlacingMethodDefault(EINTERLACEMETHOD::VS_INTERLACEMETHOD_DEINTERLACE);
+    }
+    m_checkedDeinterlace = true;
   }
 
   // we need to scale if the buffer isn't in DRM_PRIME format
