@@ -56,6 +56,7 @@ protected:
   int m_codecControlFlags = 0;
   CDVDStreamInfo m_hints;
   double m_DAR = 1.0;
+  bool m_checkedDeinterlace = false;
   AVCodecContext* m_pCodecContext = nullptr;
   AVFrame* m_pFrame = nullptr;
   AVFrame* m_pFilterFrame = nullptr;
