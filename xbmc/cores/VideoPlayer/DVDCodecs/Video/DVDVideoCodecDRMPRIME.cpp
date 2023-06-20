@@ -367,6 +367,10 @@ bool CDVDVideoCodecDRMPRIME::Open(CDVDStreamInfo& hints, CDVDCodecOptions& optio
   for (auto&& option : options.m_keys)
     av_opt_set(m_pCodecContext, option.m_name.c_str(), option.m_value.c_str(), 0);
 
+  // this requests v4l2 buffers are allocated through cache. It will work if this is not supported,
+  // but subsequent operations like deinterlace may be less efficient
+  av_opt_set(m_pCodecContext->priv_data, "dmabuf_alloc", "cma", 0);
+
   if (avcodec_open2(m_pCodecContext, pCodec, nullptr) < 0)
   {
     CLog::Log(LOGINFO, "CDVDVideoCodecDRMPRIME::{} - unable to open codec", __FUNCTION__);
