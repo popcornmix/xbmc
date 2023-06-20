@@ -701,6 +701,9 @@ bool CDVDVideoCodecDRMPRIME::FilterOpen(const std::string& filters, AVPixelForma
   if (filters.find("deinterlace") != std::string::npos && pix_fmt == AV_PIX_FMT_YUV420P)
      pix_fmt = AV_PIX_FMT_DRM_PRIME;
 
+  if (filters.find("bwdif") != std::string::npos && pix_fmt == AV_PIX_FMT_DRM_PRIME)
+     pix_fmt = AV_PIX_FMT_YUV420P;
+
   if (m_pFilterGraph)
     FilterClose();
 
@@ -866,6 +869,25 @@ CDVDVideoCodec::VCReturn CDVDVideoCodecDRMPRIME::ProcessFilterIn()
     auto descriptor = buffer->GetDescriptor();
     m_pFrame->data[0] = reinterpret_cast<uint8_t*>(descriptor);
     m_pFrame->format = AV_PIX_FMT_DRM_PRIME;
+  }
+  // hw decoded buffers submitted to sw decoder need mapping of planes for cpu to access
+  else if (m_pFrame->format == AV_PIX_FMT_DRM_PRIME && m_pFilterGraph && m_pFilterIn->outputs[0]->format == AV_PIX_FMT_YUV420P)
+  {
+    AVFrame *frame = av_frame_alloc();
+    frame->width = m_pFrame->width;
+    frame->height = m_pFrame->height;
+    frame->format = AV_PIX_FMT_YUV420P;
+    int ret = av_hwframe_map(frame, m_pFrame, (int)AV_HWFRAME_MAP_READ);
+    if (ret < 0)
+    {
+      char err[AV_ERROR_MAX_STRING_SIZE] = {};
+      av_strerror(ret, err, AV_ERROR_MAX_STRING_SIZE);
+      CLog::Log(LOGERROR, "CDVDVideoCodecDRMPRIME::{} - av_hwframe_map failed: {} ({})",
+                __FUNCTION__, err, ret);
+      return VC_ERROR;
+    }
+    av_frame_unref(m_pFrame);
+    av_frame_move_ref(m_pFrame, frame);
   }
 
   int ret = av_buffersrc_add_frame(m_pFilterIn, m_pFrame);
