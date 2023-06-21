@@ -41,6 +41,7 @@ namespace
 {
 
 constexpr const char* SETTING_VIDEOPLAYER_USEPRIMEDECODERFORHW{"videoplayer.useprimedecoderforhw"};
+constexpr const char* SETTING_VIDEOPLAYER_ALLOWHWDEINTERLACE{"videoplayer.primeallowhwdeinterlace"};
 
 static void ReleaseBuffer(void* opaque, uint8_t* data)
 {
@@ -144,6 +145,15 @@ void CDVDVideoCodecDRMPRIME::Register()
   if (!setting)
   {
     CLog::Log(LOGERROR, "Failed to load setting for: {}", SETTING_VIDEOPLAYER_USEPRIMEDECODERFORHW);
+    return;
+  }
+
+  setting->SetVisible(true);
+
+  setting = settings->GetSetting(SETTING_VIDEOPLAYER_ALLOWHWDEINTERLACE);
+  if (!setting)
+  {
+    CLog::Log(LOGERROR, "Failed to load setting for: {}", SETTING_VIDEOPLAYER_ALLOWHWDEINTERLACE);
     return;
   }
 
@@ -651,7 +661,11 @@ void CDVDVideoCodecDRMPRIME::FilterTest(AVPixelFormat pix_fmt)
   m_deintFilterName.clear();
 
   // look twice, first for DRM_PRIME support, then for actual pixel format
-  for (int i=0; i < 2; i++)
+
+  bool hw = CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(
+      SETTING_VIDEOPLAYER_ALLOWHWDEINTERLACE);
+
+  for (int i = hw ? 0 : 1; i < 2; i++)
   {
     const AVFilter* filter;
     void* opaque{};
