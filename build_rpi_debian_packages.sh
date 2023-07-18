@@ -188,6 +188,11 @@ function compileAddons {
 		if [[ $D == "inputstream.adaptive" ]]; then
 			sed -i "s/\-DBENTO4_URL=bento4\.tar\.gz//" debian/rules
 		fi
+		if [[ $D == "inputstream.ffmpegdirect" ]]; then
+			sed -i "s/kodi-ffmpeg-dev,//" debian/control
+			curl -L https://github.com/xbmc/inputstream.ffmpegdirect/commit/e6541a98b64631836336de17e57efa8e8e0b8425.diff | patch -Rp1
+			curl -L https://github.com/xbmc/inputstream.ffmpegdirect/pull/217.patch | patch -Rp1
+		fi
 
 		dpkg-buildpackage $DEBUILD_OPTS -us -uc -b |& tee -a build_addons.log
 		cd ..
