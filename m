@@ -2,8 +2,8 @@
 set -e
 ARCH=$(dpkg --print-architecture)
 
-export ADDONS_BUILD_NUMBER=1
-export DEBIAN_PACKAGE_VERSION=1
+export ADDONS_BUILD_NUMBER=2
+export DEBIAN_PACKAGE_VERSION=2
 export DEBIAN_PACKAGE_EPOCH=3
 export CORE_PLATFORM_NAME="gbm x11 wayland"
 export CORE_PLATFORM_DIR=build_$(echo $(printf "%s\n" ${CORE_PLATFORM_NAME} | sort) | tr ' ' '_')_${ARCH}
