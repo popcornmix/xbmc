@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 REPO_DIR=${REPO_DIR:-$(pwd)}
 CORE_PLATFORM_NAME=${CORE_PLATFORM_NAME:-gbm}
 CORE_PLATFORM_DIR=${CORE_PLATFORM_DIR:-"${REPO_DIR}/build"}
