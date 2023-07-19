@@ -187,6 +187,9 @@ function compileAddons {
 		if [[ $D == "audioencoder"* || $D == "audiodecoder"* ]]; then
 			sed -i "s/-DUSE_LTO=1//g" debian/rules
 		fi
+		if [[ $D = "audiodecoder.dumb" ]]; then
+			sed -i "1a set(CMAKE_POSITION_INDEPENDENT_CODE ON)" lib/dumb/CMakeLists.txt
+		fi
 		if [[ $D == "inputstream.adaptive" ]]; then
 			sed -i "s/\-DBENTO4_URL=bento4\.tar\.gz//" debian/rules
 		fi
