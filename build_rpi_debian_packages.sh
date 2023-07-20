@@ -192,6 +192,7 @@ function compileAddons {
 		fi
 		if [[ $D == "inputstream.adaptive" ]]; then
 			sed -i "s/\-DBENTO4_URL=bento4\.tar\.gz//" debian/rules
+			sed -i 's/\${CMAKE_DL_LIBS}/\${CMAKE_DL_LIBS} atomic/' src/test/CMakeLists.txt
 		fi
 		if [[ $D == "game.libretro" ]]; then
 			sed -i "s/\-DLIBRETROCOMMON_URL=libretro-common\.tar\.gz//" debian/rules
