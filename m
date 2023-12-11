@@ -3,8 +3,8 @@ set -e
 ARCH=$(dpkg --print-architecture)
 if [ "$ARCH" == "armhf" ]; then S="setarch linux32"; fi
 
-export ADDONS_BUILD_NUMBER=2
-export DEBIAN_PACKAGE_VERSION=2
+export ADDONS_BUILD_NUMBER=3
+export DEBIAN_PACKAGE_VERSION=3
 export DEBIAN_PACKAGE_EPOCH=3
 export CORE_PLATFORM_NAME="gbm x11 wayland"
 export CORE_PLATFORM_DIR=build_$(echo $(printf "%s\n" ${CORE_PLATFORM_NAME} | sort) | tr ' ' '_')_${ARCH}
