@@ -73,21 +73,17 @@ if(NOT PCRE::pcre)
   else()
     if(NOT TARGET PCRE::pcre)
       if(PKG_CONFIG_FOUND)
-        pkg_check_modules(PC_PCRE pcre QUIET)
+        pkg_check_modules(PC_PCRE pcre2-8 QUIET)
       endif()
 
-      find_path(PCRE_INCLUDE_DIR pcre.h
+      find_path(PCRE_INCLUDE_DIR pcre2.h
                                  HINTS ${DEPENDS_PATH}/include ${PC_PCRE_INCLUDEDIR}
                                  ${${CORE_PLATFORM_NAME_LC}_SEARCH_CONFIG}
                                  NO_CACHE)
-      find_library(PCRE_LIBRARY_RELEASE NAMES pcre
+      find_library(PCRE_LIBRARY_RELEASE NAMES pcre2-8
                                         HINTS ${DEPENDS_PATH}/lib ${PC_PCRE_LIBDIR}
                                         ${${CORE_PLATFORM_NAME_LC}_SEARCH_CONFIG}
                                         NO_CACHE)
-      find_library(PCRE_LIBRARY_DEBUG NAMES pcred
-                                      HINTS ${DEPENDS_PATH}/lib ${PC_PCRE_LIBDIR}
-                                      ${${CORE_PLATFORM_NAME_LC}_SEARCH_CONFIG}
-                                      NO_CACHE)
       set(PCRE_VERSION ${PC_PCRE_VERSION})
     else()
 
@@ -104,7 +100,7 @@ if(NOT PCRE::pcre)
       endforeach()
 
       # ToDo: patch PCRE cmake to include includedir in config file
-      find_path(PCRE_INCLUDE_DIR pcre.h
+      find_path(PCRE_INCLUDE_DIR pcre2.h
                                  HINTS ${DEPENDS_PATH}/include ${PC_PCRE_INCLUDEDIR}
                                  ${${CORE_PLATFORM_NAME_LC}_SEARCH_CONFIG}
                                  NO_CACHE)
