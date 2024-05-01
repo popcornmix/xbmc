@@ -42,6 +42,16 @@ void CVideoLayerBridgeDRMPRIME::Disable()
   CLog::Log(LOGDEBUG, "CVideoLayerBridgeDRMPRIME::{} - setting max bpc to {} ({})",
             __FUNCTION__, bpc, result);
 
+  uint64_t value;
+  std::tie(result, value) = connector->GetPropertyValue("Colorspace", "Default");
+  if (result)
+  {
+    CLog::Log(LOGDEBUG, "CVideoLayerBridgeDRMPRIME::{} - setting connector colorspace to Default",
+              __FUNCTION__);
+    m_DRM->AddProperty(connector, "Colorspace", value);
+    m_DRM->SetActive(true);
+  }
+
   m_DRM->AddProperty(plane, "FB_ID", 0);
   m_DRM->AddProperty(plane, "CRTC_ID", 0);
 
@@ -187,9 +197,19 @@ void CVideoLayerBridgeDRMPRIME::Configure(CVideoBufferDRMPRIME* buffer)
   // set max bpc to allow the drm driver to choose a deep colour mode
   int bpc = buffer->GetPicture().colorBits > 8 ? 12 : 8;
   auto connector = m_DRM->GetConnector();
-  bool result = m_DRM->AddProperty(connector, "max bpc", bpc);
+  result = m_DRM->AddProperty(connector, "max bpc", bpc);
   CLog::Log(LOGDEBUG, "CVideoLayerBridgeDRMPRIME::{} - setting max bpc to {} ({})", __FUNCTION__,
             bpc, result);
+
+  std::tie(result, value) = connector->GetPropertyValue("Colorspace", GetColorimetry(picture));
+  if (result)
+  {
+    CLog::Log(LOGDEBUG, "CVideoLayerBridgeDRMPRIME::{} - setting connector colorspace to {}",
+              __FUNCTION__, GetColorimetry(picture));
+    m_DRM->AddProperty(connector, "Colorspace", value);
+    m_DRM->SetActive(true);
+  }
+
 }
 
 void CVideoLayerBridgeDRMPRIME::SetVideoPlane(CVideoBufferDRMPRIME* buffer, const CRect& destRect)
