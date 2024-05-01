@@ -2,11 +2,12 @@
 ARCH=$(dpkg --print-architecture)
 if [ "$ARCH" == "armhf" ]; then S="setarch linux32"; fi
 
+export KODIVER=${KODIVER:-nexus}
 export ADDONS_BUILD_NUMBER=4
 export DEBIAN_PACKAGE_VERSION=4
 export DEBIAN_PACKAGE_EPOCH=3
 export CORE_PLATFORM_NAME="gbm x11 wayland"
-export CORE_PLATFORM_DIR=build_$(echo $(printf "%s\n" ${CORE_PLATFORM_NAME} | sort) | tr ' ' '_')_${ARCH}
+export CORE_PLATFORM_DIR=build_${KODIVER}_$(echo $(printf "%s\n" ${CORE_PLATFORM_NAME} | sort) | tr ' ' '_')_${ARCH}
 #export ENABLE_INTERNAL_FFMPEG=ON
 
 if [ "$1" == "compile" ]; then
