@@ -24,7 +24,8 @@
 namespace
 {
 
-std::array<const char*, 3> DMA_HEAP_PATHS = {
+std::array<const char*, 4> DMA_HEAP_PATHS = {
+    "/dev/dma_heap/vidbuf_cached",
     "/dev/dma_heap/reserved",
     "/dev/dma_heap/linux,cma",
     "/dev/dma_heap/system",
