@@ -134,7 +134,8 @@ void CURL::Parse(std::string strURL1)
     IsProtocol("virtualpath") ||
     IsProtocol("multipath") ||
     IsProtocol("special") ||
-    IsProtocol("resource")
+    IsProtocol("resource") ||
+    IsProtocol("file")
     )
   {
     SetFileName(std::move(strURL).substr(iPos));
