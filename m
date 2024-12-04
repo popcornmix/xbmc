@@ -18,12 +18,14 @@ if [ "$1" == "compile" ]; then
  exit
 fi
 
-if [ "$ADDONS_TO_BUILD" == "" ]; then
+if [ "$ADDONS_TO_BUILD" == "" ] || [ "$ADDONS_TO_BUILD" == "none" ]; then
  $S ./build_rpi_debian_packages.sh
  cd ${CORE_PLATFORM_DIR}/packages/ && sudo dpkg -i kodi-bin_*.deb kodi_*.*.deb kodi-addon-dev*.deb kodi-tools-texturepacker*.deb && cd -
 fi
-#ADDONS_TO_BUILD="inputstream.adaptive pvr.hts screensaver.shadertoy visualization.shadertoy" \
-ADDONS_TO_BUILD=${ADDONS_TO_BUILD:-"all"} \
-$S ./build_rpi_debian_packages.sh -a
+if [ "$ADDONS_TO_BUILD" != "none" ]; then
+ #ADDONS_TO_BUILD="inputstream.adaptive pvr.hts screensaver.shadertoy visualization.shadertoy" \
+ ADDONS_TO_BUILD=${ADDONS_TO_BUILD:-"all"} \
+ $S ./build_rpi_debian_packages.sh -a
+fi
 #sudo dpkg -i ${BUILD}/build/addons_build/*.deb
 command -v prowl && prowl "$(hostname) build complete!"
