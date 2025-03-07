@@ -2041,7 +2041,7 @@ index 1e5b48d1e0..1e689f9ee0 100644
  };
  
 diff --git a/libavcodec/rawenc.c b/libavcodec/rawenc.c
-index 8c577006d9..8ca0379e12 100644
+index 8c577006d9..b215577b75 100644
 --- a/libavcodec/rawenc.c
 +++ b/libavcodec/rawenc.c
 @@ -24,6 +24,7 @@
@@ -2084,10 +2084,10 @@ index 8c577006d9..8ca0379e12 100644
 +
 +    dst = pkt->data;
 +
-+    av_rpi_sand_to_planar_y8(dst, width, frame->data[0], frame->linesize[0], frame->linesize[3], x0, y0, width, height);
++    av_rpi_sand_to_planar_y8(dst, width, frame->data[0], frame->linesize[0], av_rpi_sand_frame_stride2_y(frame), x0, y0, width, height);
 +    dst += width * height;
 +    av_rpi_sand_to_planar_c8(dst, width / 2, dst + width * height / 4, width / 2,
-+                          frame->data[1], frame->linesize[1], av_rpi_sand_frame_stride2(frame), x0 / 2, y0 / 2, width / 2, height / 2);
++                          frame->data[1], frame->linesize[1], av_rpi_sand_frame_stride2_c(frame), x0 / 2, y0 / 2, width / 2, height / 2);
 +    return 0;
 +}
 +
@@ -2107,10 +2107,10 @@ index 8c577006d9..8ca0379e12 100644
 +
 +    dst = pkt->data;
 +
-+    av_rpi_sand_to_planar_y16(dst, width * 2, frame->data[0], frame->linesize[0], frame->linesize[3], x0 * 2, y0, width * 2, height);
++    av_rpi_sand_to_planar_y16(dst, width * 2, frame->data[0], frame->linesize[0], av_rpi_sand_frame_stride2_y(frame), x0 * 2, y0, width * 2, height);
 +    dst += width * height * 2;
 +    av_rpi_sand_to_planar_c16(dst, width, dst + width * height / 2, width,
-+                          frame->data[1], frame->linesize[1], av_rpi_sand_frame_stride2(frame), x0, y0 / 2, width, height / 2);
++                          frame->data[1], frame->linesize[1], av_rpi_sand_frame_stride2_c(frame), x0, y0 / 2, width, height / 2);
 +    return 0;
 +}
 +
@@ -2130,10 +2130,10 @@ index 8c577006d9..8ca0379e12 100644
 +
 +    dst = pkt->data;
 +
-+    av_rpi_sand30_to_planar_y16(dst, width * 2, frame->data[0], frame->linesize[0], frame->linesize[3], x0, y0, width, height);
++    av_rpi_sand30_to_planar_y16(dst, width * 2, frame->data[0], frame->linesize[0], av_rpi_sand_frame_stride2_y(frame), x0, y0, width, height);
 +    dst += width * height * 2;
 +    av_rpi_sand30_to_planar_c16(dst, width, dst + width * height / 2, width,
-+                          frame->data[1], frame->linesize[1], av_rpi_sand_frame_stride2(frame), x0/2, y0 / 2, width/2, height / 2);
++                          frame->data[1], frame->linesize[1], av_rpi_sand_frame_stride2_c(frame), x0/2, y0 / 2, width/2, height / 2);
 +    return 0;
 +}
 +#endif
@@ -7387,10 +7387,10 @@ index 0000000000..27eafbc42b
 +
 diff --git a/libavcodec/v4l2_req_devscan.c b/libavcodec/v4l2_req_devscan.c
 new file mode 100644
-index 0000000000..ee8527ba1f
+index 0000000000..6969fd4018
 --- /dev/null
 +++ b/libavcodec/v4l2_req_devscan.c
-@@ -0,0 +1,451 @@
+@@ -0,0 +1,450 @@
 +#include <errno.h>
 +#include <fcntl.h>
 +#include <libudev.h>
@@ -7529,9 +7529,8 @@ index 0000000000..ee8527ba1f
 +}
 +
 +#define REQ_BUF_CAPS (\
-+    V4L2_BUF_CAP_SUPPORTS_DMABUF |\
 +    V4L2_BUF_CAP_SUPPORTS_REQUESTS |\
-+    V4L2_BUF_CAP_SUPPORTS_M2M_HOLD_CAPTURE_BUF)
++    0)
 +
 +static void probe_formats(void * const dc,
 +              struct devscan *const scan,
@@ -8375,10 +8374,10 @@ index 0000000000..c35579d8e0
 +
 diff --git a/libavcodec/v4l2_req_hevc_vx.c b/libavcodec/v4l2_req_hevc_vx.c
 new file mode 100644
-index 0000000000..e1bd5c6a1f
+index 0000000000..b224fa338f
 --- /dev/null
 +++ b/libavcodec/v4l2_req_hevc_vx.c
-@@ -0,0 +1,1362 @@
+@@ -0,0 +1,1372 @@
 +// File included by v4l2_req_hevc_v* - not compiled on its own
 +
 +#include "decode.h"
@@ -8493,8 +8492,10 @@ index 0000000000..e1bd5c6a1f
 +        return AV_PIX_FMT_NV12;
 +#if CONFIG_SAND
 +    case V4L2_PIX_FMT_NV12_COL128:
++    case V4L2_PIX_FMT_NV12_COL128M:
 +        return AV_PIX_FMT_RPI4_8;
 +    case V4L2_PIX_FMT_NV12_10_COL128:
++    case V4L2_PIX_FMT_NV12_10_COL128M:
 +        return AV_PIX_FMT_RPI4_10;
 +#endif
 +    default:
@@ -9089,7 +9090,10 @@ index 0000000000..e1bd5c6a1f
 +    unsigned int width;
 +    unsigned int height;
 +    unsigned int bpl;
++    unsigned int bpl2;
 +    uint32_t pixelformat;
++    uint64_t mod = DRM_FORMAT_MOD_LINEAR;
++    unsigned int object_count = 1;
 +
 +    if (V4L2_TYPE_IS_MULTIPLANAR(format->type)) {
 +        width       = format->fmt.pix_mp.width;
@@ -9103,51 +9107,65 @@ index 0000000000..e1bd5c6a1f
 +        pixelformat = format->fmt.pix.pixelformat;
 +        bpl         = format->fmt.pix.bytesperline;
 +    }
++    bpl2 = bpl;
 +
 +    switch (pixelformat) {
 +    case V4L2_PIX_FMT_NV12:
 +        layer->format = DRM_FORMAT_NV12;
-+        desc->objects[0].format_modifier = DRM_FORMAT_MOD_LINEAR;
 +        break;
 +#if CONFIG_SAND
 +    case V4L2_PIX_FMT_NV12_COL128:
 +        layer->format = DRM_FORMAT_NV12;
-+        desc->objects[0].format_modifier = DRM_FORMAT_MOD_BROADCOM_SAND128_COL_HEIGHT(bpl);
++        mod = DRM_FORMAT_MOD_BROADCOM_SAND128_COL_HEIGHT(bpl);
 +        break;
 +    case V4L2_PIX_FMT_NV12_10_COL128:
 +        layer->format = DRM_FORMAT_P030;
-+        desc->objects[0].format_modifier = DRM_FORMAT_MOD_BROADCOM_SAND128_COL_HEIGHT(bpl);
++        mod = DRM_FORMAT_MOD_BROADCOM_SAND128_COL_HEIGHT(bpl);
++        break;
++    case V4L2_PIX_FMT_NV12_COL128M:
++        layer->format = DRM_FORMAT_NV12;
++        mod = DRM_FORMAT_MOD_BROADCOM_SAND128_COL_HEIGHT(0);
++        bpl = height;
++        bpl2 = height / 2;
++        object_count = 2;
++        break;
++    case V4L2_PIX_FMT_NV12_10_COL128M:
++        layer->format = DRM_FORMAT_P030;
++        mod = DRM_FORMAT_MOD_BROADCOM_SAND128_COL_HEIGHT(0);
++        bpl = height;
++        bpl2 = height / 2;
++        object_count = 2;
 +        break;
 +#endif
 +#ifdef DRM_FORMAT_MOD_ALLWINNER_TILED
 +    case V4L2_PIX_FMT_SUNXI_TILED_NV12:
 +        layer->format = DRM_FORMAT_NV12;
-+        desc->objects[0].format_modifier = DRM_FORMAT_MOD_ALLWINNER_TILED;
++        mod = DRM_FORMAT_MOD_ALLWINNER_TILED;
 +        break;
 +#endif
 +#if defined(V4L2_PIX_FMT_NV15) && defined(DRM_FORMAT_NV15)
 +    case V4L2_PIX_FMT_NV15:
 +        layer->format = DRM_FORMAT_NV15;
-+        desc->objects[0].format_modifier = DRM_FORMAT_MOD_LINEAR;
 +        break;
 +#endif
 +    case V4L2_PIX_FMT_NV16:
 +        layer->format = DRM_FORMAT_NV16;
-+        desc->objects[0].format_modifier = DRM_FORMAT_MOD_LINEAR;
 +        break;
 +#if defined(V4L2_PIX_FMT_NV20) && defined(DRM_FORMAT_NV20)
 +    case V4L2_PIX_FMT_NV20:
 +        layer->format = DRM_FORMAT_NV20;
-+        desc->objects[0].format_modifier = DRM_FORMAT_MOD_LINEAR;
 +        break;
 +#endif
 +    default:
 +        return -1;
 +    }
 +
-+    desc->nb_objects = 1;
-+    desc->objects[0].fd = -1;
-+    desc->objects[0].size = 0;
++    desc->nb_objects = object_count;
++    for (unsigned int i = 0; i != AV_DRM_MAX_PLANES; ++i) {
++        desc->objects[i].fd = -1;
++        desc->objects[i].size = 0;
++        desc->objects[i].format_modifier = (i >= object_count) ? DRM_FORMAT_MOD_INVALID : mod;
++    }
 +
 +    desc->nb_layers = 1;
 +    layer->nb_planes = 2;
@@ -9171,9 +9189,9 @@ index 0000000000..e1bd5c6a1f
 +    else
 +#endif
 +    {
-+        layer->planes[1].object_index = 0;
-+        layer->planes[1].offset = layer->planes[0].pitch * height;
-+        layer->planes[1].pitch = layer->planes[0].pitch;
++        layer->planes[1].object_index = (object_count > 1) ? 1 : 0;
++        layer->planes[1].offset = (object_count > 1) ? 0 : layer->planes[0].pitch * height;
++        layer->planes[1].pitch = bpl2;
 +    }
 +
 +    return 0;
@@ -9269,17 +9287,6 @@ index 0000000000..e1bd5c6a1f
 +            av_log(avctx, AV_LOG_ERROR, "Start code requested but missing %02x:%02x:%02x\n",
 +                   buffer[0], buffer[1], buffer[2]);
 +        }
-+    }
-+
-+    if (ctx->decode_mode == V4L2_STATELESS_HEVC_DECODE_MODE_FRAME_BASED) {
-+        if (rd->slices == NULL) {
-+            if ((rd->slices = av_mallocz(sizeof(*rd->slices))) == NULL)
-+                return AVERROR(ENOMEM);
-+            rd->slices->ptr = buffer;
-+            rd->num_slices = 1;
-+        }
-+        rd->slices->len = buffer - rd->slices->ptr + size;
-+        return 0;
 +    }
 +
 +    if ((rv = slice_add(rd)) != 0)
@@ -9447,8 +9454,10 @@ index 0000000000..e1bd5c6a1f
 +
 +    // Set the drm_prime desriptor
 +    drm_from_format(&rd->drm, mediabufs_dst_fmt(ctx->mbufs));
-+    rd->drm.objects[0].fd = dmabuf_fd(qent_dst_dmabuf(rd->qe_dst, 0));
-+    rd->drm.objects[0].size = dmabuf_size(qent_dst_dmabuf(rd->qe_dst, 0));
++    for (i = 0; i != rd->drm.nb_objects; ++i) {
++        rd->drm.objects[i].fd = dmabuf_fd(qent_dst_dmabuf(rd->qe_dst, i));
++        rd->drm.objects[i].size = dmabuf_size(qent_dst_dmabuf(rd->qe_dst, i));
++    }
 +
 +    decode_q_remove(&ctx->decode_q, &rd->decode_ent);
 +    return 0;
@@ -9507,11 +9516,7 @@ index 0000000000..e1bd5c6a1f
 +
 +    mediabufs_ctl_query_ext_ctrls(ctx->mbufs, qc, noof_ctrls);
 +    i = 0;
-+#if HEVC_CTRLS_VERSION >= 4
-+    // Skip slice check if no slice mode
-+    if (qc[1].type != 0 && !ctrl_valid(qc + 1, V4L2_STATELESS_HEVC_DECODE_MODE_SLICE_BASED))
-+        i = 1;
-+#else
++#if HEVC_CTRLS_VERSION < 4
 +    // Fail frame mode silently for anything prior to V4
 +    if (qc[1].type == 0 || !ctrl_valid(qc + 1, V4L2_STATELESS_HEVC_DECODE_MODE_SLICE_BASED))
 +        return AVERROR(EINVAL);
@@ -9717,6 +9722,10 @@ index 0000000000..e1bd5c6a1f
 +    frame->data[0] = frame->buf[0]->data;
 +
 +    frame->hw_frames_ctx = av_buffer_ref(avctx->hw_frames_ctx);
++    // Cropping will be applied by hevc_refs.c:ff_hevc_set_new_ref
++    // Mirrors hwaccel path in avcodec_default_get_buffer2
++    frame->width = avctx->coded_width;
++    frame->height = avctx->coded_height;
 +
 +    if ((rv = ff_attach_decode_data(frame)) != 0) {
 +        av_log(avctx, AV_LOG_ERROR, "Failed to attach decode data to frame\n");
@@ -9743,10 +9752,10 @@ index 0000000000..e1bd5c6a1f
 +
 diff --git a/libavcodec/v4l2_req_media.c b/libavcodec/v4l2_req_media.c
 new file mode 100644
-index 0000000000..c94cc5b0f6
+index 0000000000..79dffa2ff9
 --- /dev/null
 +++ b/libavcodec/v4l2_req_media.c
-@@ -0,0 +1,1808 @@
+@@ -0,0 +1,1806 @@
 +/*
 + * Copyright (C) 2018 Paul Kocialkowski <paul.kocialkowski@bootlin.com>
 + *
@@ -10572,7 +10581,7 @@ index 0000000000..c94cc5b0f6
 +{
 +    if (!be->dh[0] || len > dmabuf_size(be->dh[0])) {
 +        size_t newsize = round_up_size(len);
-+        request_log("%s: Overrun %zd > %zd; trying %zd\n", __func__, len, dmabuf_size(be->dh[0]), newsize);
++        request_debug(NULL, "%s: Overrun %zd > %zd; trying %zd\n", __func__, len, dmabuf_size(be->dh[0]), newsize);
 +        if (!dbsc) {
 +            request_log("%s: No dmbabuf_ctrl for realloc\n", __func__);
 +            return -ENOMEM;
@@ -11034,7 +11043,9 @@ index 0000000000..c94cc5b0f6
 +
 +            if (create_dst_bufs(mbc, 1, &be_dst) != 1) {
 +                qe_dst_free(be_dst);
-+                return NULL;
++                // We can't extend any more - try again but wait
++                mbc->dst_fixed = true;
++                return mediabufs_dst_qent_alloc(mbc, dbsc);
 +            }
 +        }
 +    }
@@ -11316,7 +11327,7 @@ index 0000000000..c94cc5b0f6
 +    return status;
 +}
 +
-+int mediabufs_ctl_set_ext_ctrls(struct mediabufs_ctl * mbc, struct media_request * const mreq, struct v4l2_ext_control control_array[], unsigned int n)
++int mediabufs_ctl_set_ext_ctrls(struct mediabufs_ctl * mbc, struct media_request * const mreq, struct v4l2_ext_control * const control_array, unsigned int n)
 +{
 +    struct v4l2_ext_controls controls = {
 +        .controls = control_array,
@@ -11368,7 +11379,7 @@ index 0000000000..c94cc5b0f6
 +    return rv;
 +}
 +
-+int mediabufs_ctl_query_ext_ctrls(struct mediabufs_ctl * mbc, struct v4l2_query_ext_ctrl ctrls[], unsigned int n)
++int mediabufs_ctl_query_ext_ctrls(struct mediabufs_ctl * mbc, struct v4l2_query_ext_ctrl * ctrls, unsigned int n)
 +{
 +    int rv = 0;
 +    while (n--) {
@@ -11389,13 +11400,9 @@ index 0000000000..c94cc5b0f6
 +
 +int mediabufs_src_resizable(const struct mediabufs_ctl *const mbc)
 +{
-+#if 1
-+    return 0;
-+#else
 +    // Single planar OUTPUT can only take exact size buffers
 +    // Multiplanar will take larger than negotiated
 +    return V4L2_TYPE_IS_MULTIPLANAR(mbc->src_fmt.type);
-+#endif
 +}
 +
 +static void mediabufs_ctl_delete(struct mediabufs_ctl *const mbc)
@@ -11557,10 +11564,10 @@ index 0000000000..c94cc5b0f6
 +
 diff --git a/libavcodec/v4l2_req_media.h b/libavcodec/v4l2_req_media.h
 new file mode 100644
-index 0000000000..890947b2e2
+index 0000000000..84ef6bcf95
 --- /dev/null
 +++ b/libavcodec/v4l2_req_media.h
-@@ -0,0 +1,171 @@
+@@ -0,0 +1,176 @@
 +/*
 +e.h
 +*
@@ -11634,6 +11641,11 @@ index 0000000000..890947b2e2
 +struct dmabuf_h;
 +struct dmabufs_ctl;
 +
++struct timeval;
++enum v4l2_buf_type;
++struct v4l2_ext_control;
++struct v4l2_query_ext_ctrl;
++
 +// 1-1 mammping to V4L2 type - just defined separetely to avoid some include versioning difficulties
 +enum mediabufs_memory {
 +   MEDIABUFS_MEMORY_UNSET            = 0,
@@ -11698,12 +11710,12 @@ index 0000000000..890947b2e2
 +void mediabufs_src_qent_abort(struct mediabufs_ctl *const mbc, struct qent_src **const pqe_src);
 +
 +int mediabufs_ctl_set_ext_ctrls(struct mediabufs_ctl * mbc, struct media_request * const mreq,
-+                                struct v4l2_ext_control control_array[], unsigned int n);
++                                struct v4l2_ext_control * const control_array, unsigned int n);
 +MediaBufsStatus mediabufs_set_ext_ctrl(struct mediabufs_ctl *const mbc,
 +                struct media_request * const mreq,
 +                unsigned int id, void *data,
 +                unsigned int size);
-+int mediabufs_ctl_query_ext_ctrls(struct mediabufs_ctl * mbc, struct v4l2_query_ext_ctrl ctrls[], unsigned int n);
++int mediabufs_ctl_query_ext_ctrls(struct mediabufs_ctl * mbc, struct v4l2_query_ext_ctrl * ctrls, unsigned int n);
 +
 +int mediabufs_src_resizable(const struct mediabufs_ctl *const mbc);
 +
@@ -12158,10 +12170,10 @@ index 0000000000..a31cc1f4ec
 +#endif
 diff --git a/libavcodec/v4l2_request_hevc.c b/libavcodec/v4l2_request_hevc.c
 new file mode 100644
-index 0000000000..5b37319d6a
+index 0000000000..95d78e2f13
 --- /dev/null
 +++ b/libavcodec/v4l2_request_hevc.c
-@@ -0,0 +1,351 @@
+@@ -0,0 +1,353 @@
 +/*
 + * This file is part of FFmpeg.
 + *
@@ -12288,12 +12300,14 @@ index 0000000000..5b37319d6a
 +
 +    if (h->ps.sps->bit_depth == 8) {
 +        if (fmtdesc->pixelformat == V4L2_PIX_FMT_NV12_COL128 ||
++            fmtdesc->pixelformat == V4L2_PIX_FMT_NV12_COL128M ||
 +            fmtdesc->pixelformat == V4L2_PIX_FMT_NV12) {
 +            return 1;
 +        }
 +    }
 +    else if (h->ps.sps->bit_depth == 10) {
-+        if (fmtdesc->pixelformat == V4L2_PIX_FMT_NV12_10_COL128) {
++        if (fmtdesc->pixelformat == V4L2_PIX_FMT_NV12_10_COL128 ||
++            fmtdesc->pixelformat == V4L2_PIX_FMT_NV12_10_COL128M) {
 +            return 1;
 +        }
 +    }
@@ -12515,10 +12529,10 @@ index 0000000000..5b37319d6a
 +};
 diff --git a/libavcodec/v4l2_request_hevc.h b/libavcodec/v4l2_request_hevc.h
 new file mode 100644
-index 0000000000..99c90064ea
+index 0000000000..d673c73c9d
 --- /dev/null
 +++ b/libavcodec/v4l2_request_hevc.h
-@@ -0,0 +1,102 @@
+@@ -0,0 +1,109 @@
 +#ifndef AVCODEC_V4L2_REQUEST_HEVC_H
 +#define AVCODEC_V4L2_REQUEST_HEVC_H
 +
@@ -12546,6 +12560,13 @@ index 0000000000..99c90064ea
 +
 +#ifndef DRM_FORMAT_NV20
 +#define DRM_FORMAT_NV20 fourcc_code('N', 'V', '2', '0')
++#endif
++
++#ifndef V4L2_PIX_FMT_NV12_COL128M
++#define V4L2_PIX_FMT_NV12_COL128M v4l2_fourcc('N', 'c', '1', '2') /* 12  Y/CbCr 4:2:0 128 pixel wide column */
++#define V4L2_PIX_FMT_NV12_10_COL128M v4l2_fourcc('N', 'c', '3', '0')
++								/* Y/CbCr 4:2:0 10bpc, 3x10 packed as 4 bytes in
++								 * a 128 bytes / 96 pixel wide column */
 +#endif
 +
 +#include <linux/videodev2.h>
@@ -17921,6 +17942,289 @@ index e24e5cd9b1..ba7bc40c3d 100644
  
      if (bit_depth <= 8) {
          if (EXTERNAL_SSE2(cpu_flags))
+diff --git a/libavformat/Makefile b/libavformat/Makefile
+index 47bbbbfb2a..ba7334dc08 100644
+--- a/libavformat/Makefile
++++ b/libavformat/Makefile
+@@ -164,6 +164,7 @@ OBJS-$(CONFIG_CODEC2_MUXER)              += codec2.o rawenc.o
+ OBJS-$(CONFIG_CODEC2RAW_DEMUXER)         += codec2.o pcm.o
+ OBJS-$(CONFIG_CODEC2RAW_MUXER)           += rawenc.o
+ OBJS-$(CONFIG_CONCAT_DEMUXER)            += concatdec.o
++OBJS-$(CONFIG_CONFORM_MUXER)             += conformenc.o
+ OBJS-$(CONFIG_CRC_MUXER)                 += crcenc.o
+ OBJS-$(CONFIG_DATA_DEMUXER)              += rawdec.o
+ OBJS-$(CONFIG_DATA_MUXER)                += rawenc.o
+diff --git a/libavformat/allformats.c b/libavformat/allformats.c
+index cb5b69e9cd..ecd8065924 100644
+--- a/libavformat/allformats.c
++++ b/libavformat/allformats.c
+@@ -122,6 +122,7 @@ extern const AVInputFormat  ff_codec2raw_demuxer;
+ extern const FFOutputFormat ff_codec2raw_muxer;
+ extern const AVInputFormat  ff_concat_demuxer;
+ extern const FFOutputFormat ff_crc_muxer;
++extern const FFOutputFormat ff_conform_muxer;
+ extern const AVInputFormat  ff_dash_demuxer;
+ extern const FFOutputFormat ff_dash_muxer;
+ extern const AVInputFormat  ff_data_demuxer;
+diff --git a/libavformat/conformenc.c b/libavformat/conformenc.c
+new file mode 100644
+index 0000000000..2220bbf6d5
+--- /dev/null
++++ b/libavformat/conformenc.c
+@@ -0,0 +1,253 @@
++/*
++ * Copyright (c) 2020 John Cox for Raspberry Pi Trading
++ *
++ * This file is part of FFmpeg.
++ *
++ * FFmpeg is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * FFmpeg is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with FFmpeg; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
++ */
++
++
++// *** This module is a work in progress and its utility is strictly
++//     limited to testing.
++
++#include "libavutil/opt.h"
++#include "libavutil/frame.h"
++#include "libavutil/md5.h"
++#include "libavutil/mem.h"
++#include "libavutil/pixdesc.h"
++#include "libavutil/hwcontext.h"
++#include "libavutil/hwcontext_drm.h"
++#include "mux.h"
++
++#include "pthread.h"
++#include <semaphore.h>
++#include <unistd.h>
++
++#define TRACE_ALL 1
++
++#define DRM_MODULE "vc4"
++
++// Aux size should only need to be 2, but on a few streams (Hobbit) under FKMS
++// we get initial flicker probably due to dodgy drm timing
++#define AUX_SIZE 3
++typedef struct conform_display_env_s
++{
++    AVClass *class;
++
++    void * line_buf;
++    size_t line_size;
++
++    struct AVMD5 * md5;
++
++    int conform_file;
++
++    unsigned long long foffset;
++    unsigned int fno;
++} conform_display_env_t;
++
++
++static int conform_vout_write_trailer(AVFormatContext *s)
++{
++    conform_display_env_t * const de = s->priv_data;
++
++#if TRACE_ALL
++    av_log(s, AV_LOG_DEBUG, "%s\n", __func__);
++#endif
++
++    if (de->md5) {
++        uint8_t m[16];
++        av_md5_final(de->md5, m);
++        avio_printf(s->pb, "MD5=%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x\n",
++                    m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8], m[9], m[10], m[11], m[12], m[13], m[14], m[15]);
++    }
++
++    return 0;
++}
++
++static int conform_vout_write_header(AVFormatContext *s)
++{
++    conform_display_env_t * const de = s->priv_data;
++
++#if TRACE_ALL
++    av_log(s, AV_LOG_DEBUG, "%s\n", __func__);
++#endif
++
++    if (de->md5)
++        av_md5_init(de->md5);
++    de->fno = 1;
++    de->foffset = 0;
++
++    return 0;
++}
++
++static int conform_vout_write_packet(AVFormatContext *s, AVPacket *pkt)
++{
++    const AVFrame * const sf = (AVFrame *)pkt->data;
++    AVFrame * cf = NULL;
++    const AVFrame * f = sf;
++
++    conform_display_env_t * const de = s->priv_data;
++    const AVPixFmtDescriptor * pix_desc = av_pix_fmt_desc_get(sf->format);
++    int is_hw = (pix_desc->flags & AV_PIX_FMT_FLAG_HWACCEL) != 0;
++    enum AVPixelFormat fmt = is_hw ? AV_PIX_FMT_NONE : sf->format;
++    unsigned int i;
++
++    if (is_hw) {
++        enum AVPixelFormat *xfmts = NULL;
++        av_hwframe_transfer_get_formats(sf->hw_frames_ctx, AV_HWFRAME_TRANSFER_DIRECTION_FROM, &xfmts, 0);
++        fmt = *xfmts;
++        av_free(xfmts);
++    }
++
++    av_log(s, AV_LOG_DEBUG, "%s: Frame %3d: %#08llx %dx%d crop(ltrb) %zd,%zd,%zd,%zd fmt %s -> %s\n", __func__,
++           de->fno, de->foffset,
++           sf->width, sf->height, sf->crop_left, sf->crop_top, sf->crop_right, sf->crop_bottom,
++           av_get_pix_fmt_name(sf->format), av_get_pix_fmt_name(fmt));
++
++    if ((sf->flags & AV_FRAME_FLAG_CORRUPT) != 0) {
++        av_log(s, AV_LOG_WARNING, "Discard corrupt frame: fmt=%d, ts=%" PRId64 "\n", sf->format, sf->pts);
++        return 0;
++    }
++
++    if (!is_hw)
++        f = sf;
++    else
++    {
++        cf = av_frame_alloc();
++        cf->format = fmt;
++        av_hwframe_transfer_data(cf, sf, AV_HWFRAME_TRANSFER_DIRECTION_FROM);
++        pix_desc = av_pix_fmt_desc_get(cf->format);
++        f = cf;
++    }
++
++    // This is fully generic - much optimisation possible
++    for (i = 0; i != pix_desc->nb_components; ++i) {
++        const AVComponentDescriptor * const cd = pix_desc->comp + i;
++        const unsigned int srw = ((i == 1 || i == 2) ? pix_desc->log2_chroma_w : 0);
++        const unsigned int rndw = (1 << srw) - 1;
++        const unsigned int srh = ((i == 1 || i == 2) ? pix_desc->log2_chroma_h : 0);
++        const unsigned int rndh = (1 << srh) - 1;
++        const unsigned int srp = cd->shift;
++        const unsigned int bpp = cd->depth > 8 ? 2 : 1;
++        const unsigned int h = (f->height - (f->crop_top + f->crop_bottom) + rndh) >> srh;
++        unsigned int y;
++        for (y = 0; y < h; ++y) {
++            const void *const lstart = f->data[cd->plane] + (y + (f->crop_top >> srh)) * f->linesize[cd->plane] + cd->offset + (f->crop_left >> srw) * cd->step;
++            const unsigned int w = (f->width - (f->crop_left + f->crop_right) + rndw) >> srw;
++            unsigned int x;
++            if (bpp == 1) {
++                uint8_t *d = de->line_buf;
++                const uint8_t *s = lstart;
++                for (x = 0; x != w; ++x) {
++                    *d++ = *s >> srp;
++                    s += cd->step;
++                }
++            }
++            else {
++                uint16_t *d = de->line_buf;
++                const uint8_t *s = lstart;
++                for (x = 0; x != w; ++x) {
++                    *d++ = *(uint16_t*)s >> srp;
++                    s += cd->step;
++                }
++            }
++
++            // We have one line
++
++            if (de->md5)
++                av_md5_update(de->md5, de->line_buf, w * bpp);
++            else {
++                avio_write(s->pb, de->line_buf, w * bpp);
++                de->foffset += w * bpp;
++            }
++        }
++    }
++    ++de->fno;
++
++    av_frame_free(&cf);
++
++    return 0;
++}
++
++static int conform_vout_write_frame(AVFormatContext *s, int stream_index, AVFrame **ppframe,
++                          unsigned flags)
++{
++    av_log(s, AV_LOG_ERROR, "%s: NIF: idx=%d, flags=%#x\n", __func__, stream_index, flags);
++    return AVERROR_PATCHWELCOME;
++}
++
++// deinit is called if init fails so no need to clean up explicity here
++static int conform_vout_init(struct AVFormatContext * s)
++{
++    conform_display_env_t * const de = s->priv_data;
++
++    av_log(s, AV_LOG_DEBUG, "<<< %s\n", __func__);
++
++    de->line_size = (8192 * 4); // 4bpp * 8k seems plenty
++    de->line_buf = av_malloc(de->line_size);
++
++    if (!de->conform_file)
++        de->md5 = av_md5_alloc();
++
++    av_log(s, AV_LOG_DEBUG, ">>> %s\n", __func__);
++
++    return 0;
++}
++
++static void conform_vout_deinit(struct AVFormatContext * s)
++{
++    conform_display_env_t * const de = s->priv_data;
++
++    av_log(s, AV_LOG_DEBUG, "<<< %s\n", __func__);
++
++    av_freep(&de->line_buf);
++    av_freep(&de->md5);
++
++    av_log(s, AV_LOG_DEBUG, ">>> %s\n", __func__);
++}
++
++
++#define OFFSET(x) offsetof(conform_display_env_t, x)
++static const AVOption options[] = {
++    { "conform_yuv", "Output yuv file rather than md5", OFFSET(conform_file), AV_OPT_TYPE_BOOL, { .i64 = 0 }, 0, 1, AV_OPT_FLAG_ENCODING_PARAM },
++    { NULL }
++};
++
++static const AVClass conform_vid_class = {
++    .class_name = "conform vid muxer",
++    .item_name  = av_default_item_name,
++    .option     = options,
++    .version    = LIBAVUTIL_VERSION_INT,
++    .category   = AV_CLASS_CATEGORY_DEVICE_VIDEO_OUTPUT,
++};
++
++const FFOutputFormat ff_conform_muxer = {
++    .p = {
++        .name           = "conform",
++        .long_name      = NULL_IF_CONFIG_SMALL("Video out conformance test helper"),
++        .audio_codec    = AV_CODEC_ID_NONE,
++        .video_codec    = AV_CODEC_ID_WRAPPED_AVFRAME,
++        .flags          = AVFMT_VARIABLE_FPS | AVFMT_NOTIMESTAMPS,
++        .priv_class     = &conform_vid_class,
++    },
++    .priv_data_size = sizeof(conform_display_env_t),
++    .write_header   = conform_vout_write_header,
++    .write_packet   = conform_vout_write_packet,
++    .write_uncoded_frame = conform_vout_write_frame,
++    .write_trailer  = conform_vout_write_trailer,
++    .init           = conform_vout_init,
++    .deinit         = conform_vout_deinit,
++};
++
 diff --git a/libavformat/matroskaenc.c b/libavformat/matroskaenc.c
 index 113541bd9a..131ad31d1b 100644
 --- a/libavformat/matroskaenc.c
@@ -19885,7 +20189,7 @@ index 0000000000..d457c10870
 +#endif // AVUTIL_ARM_SAND_NEON_H
 +
 diff --git a/libavutil/frame.c b/libavutil/frame.c
-index 9545477acc..48621e4098 100644
+index 9545477acc..94678fe3b2 100644
 --- a/libavutil/frame.c
 +++ b/libavutil/frame.c
 @@ -16,6 +16,8 @@
@@ -19907,13 +20211,14 @@ index 9545477acc..48621e4098 100644
  
  #if FF_API_OLD_CHANNEL_LAYOUT
  #define CHECK_CHANNELS_CONSISTENCY(frame) \
-@@ -874,6 +879,12 @@ int av_frame_apply_cropping(AVFrame *frame, int flags)
+@@ -874,6 +879,13 @@ int av_frame_apply_cropping(AVFrame *frame, int flags)
          (frame->crop_top + frame->crop_bottom) >= frame->height)
          return AVERROR(ERANGE);
  
 +#if CONFIG_SAND
 +    // Sand cannot be cropped - do not try
-+    if (av_rpi_is_sand_format(frame->format))
++    // If it might be encapsulated in DRM_PRIME don't crop that either
++    if (av_rpi_is_sand_format(frame->format) || frame->format == AV_PIX_FMT_DRM_PRIME)
 +        return 0;
 +#endif
 +
@@ -19942,7 +20247,7 @@ index 2580269549..3a9d323325 100644
   * @}
   */
 diff --git a/libavutil/hwcontext_drm.c b/libavutil/hwcontext_drm.c
-index 7a9fdbd263..137a952d2c 100644
+index 7a9fdbd263..49f4177c34 100644
 --- a/libavutil/hwcontext_drm.c
 +++ b/libavutil/hwcontext_drm.c
 @@ -21,6 +21,7 @@
@@ -19993,14 +20298,11 @@ index 7a9fdbd263..137a952d2c 100644
  #if HAVE_LINUX_DMA_BUF_H
      if (flags & AV_HWFRAME_MAP_READ)
          map->sync_flags |= DMA_BUF_SYNC_READ;
-@@ -185,6 +196,23 @@ static int drm_map_frame(AVHWFramesContext *hwfc,
+@@ -185,12 +196,34 @@ static int drm_map_frame(AVHWFramesContext *hwfc,
  
      dst->width  = src->width;
      dst->height = src->height;
-+    dst->crop_top    = src->crop_top;
-+    dst->crop_bottom = src->crop_bottom;
-+    dst->crop_left   = src->crop_left;
-+    dst->crop_right  = src->crop_right;
++    // Crop copied with props
 +
 +#if CONFIG_SAND
 +    // Rework for sand frames
@@ -20008,16 +20310,31 @@ index 7a9fdbd263..137a952d2c 100644
 +        // As it stands the sand formats hold stride2 in linesize[3]
 +        // linesize[0] & [1] contain stride1 which is always 128 for everything we do
 +        // * Arguably this should be reworked s.t. stride2 is in linesize[0] & [1]
-+        dst->linesize[3] = fourcc_mod_broadcom_param(desc->objects[0].format_modifier);
++        int mod_stride = fourcc_mod_broadcom_param(desc->objects[0].format_modifier);
++        if (mod_stride == 0) {
++            dst->linesize[3] = dst->linesize[0];
++            dst->linesize[4] = dst->linesize[1];
++        }
++        else {
++            dst->linesize[3] = mod_stride;
++            dst->linesize[4] = mod_stride;
++        }
 +        dst->linesize[0] = 128;
 +        dst->linesize[1] = 128;
-+        // *** Are we sure src->height is actually what we want ???
 +    }
 +#endif
  
      err = ff_hwframe_map_create(src->hw_frames_ctx, dst, src,
-                                 &drm_unmap_frame, map);
-@@ -206,16 +234,29 @@ static int drm_transfer_get_formats(AVHWFramesContext *ctx,
+-                                &drm_unmap_frame, map);
++                                drm_unmap_frame, map);
+     if (err < 0)
+         goto fail;
+ 
++    av_frame_copy_props(dst, src);
+     return 0;
+ 
+ fail:
+@@ -206,16 +239,29 @@ static int drm_transfer_get_formats(AVHWFramesContext *ctx,
                                      enum AVHWFrameTransferDirection dir,
                                      enum AVPixelFormat **formats)
  {
@@ -20053,7 +20370,7 @@ index 7a9fdbd263..137a952d2c 100644
      return 0;
  }
  
-@@ -231,18 +272,62 @@ static int drm_transfer_data_from(AVHWFramesContext *hwfc,
+@@ -231,18 +277,62 @@ static int drm_transfer_data_from(AVHWFramesContext *hwfc,
      map = av_frame_alloc();
      if (!map)
          return AVERROR(ENOMEM);
@@ -20082,8 +20399,6 @@ index 7a9fdbd263..137a952d2c 100644
 +#endif
 +#if CONFIG_SAND
 +    if (av_rpi_is_sand_frame(map)) {
-+        // Preserve crop - later ffmpeg code assumes that we have in that it
-+        // overwrites any crop that we create with the old values
 +        const unsigned int w = FFMIN(dst->width, map->width);
 +        const unsigned int h = FFMIN(dst->height, map->height);
 +
@@ -20101,15 +20416,17 @@ index 7a9fdbd263..137a952d2c 100644
 +
 +        dst->width = w;
 +        dst->height = h;
++        // Cropping restored as part of props
 +    }
 +    else
 +#endif
 +    {
-+        // Kludge mapped h/w s.t. frame_copy works
-+        map->width  = dst->width;
-+        map->height = dst->height;
++        dst->width  = map->width;
++        dst->height = map->height;
 +        err = av_frame_copy(dst, map);
 +    }
++
++    av_frame_copy_props(dst, src);
  
 -    err = av_frame_copy(dst, map);
      if (err)
@@ -20120,7 +20437,7 @@ index 7a9fdbd263..137a952d2c 100644
  
      err = 0;
  fail:
-@@ -257,7 +342,10 @@ static int drm_transfer_data_to(AVHWFramesContext *hwfc,
+@@ -257,7 +347,10 @@ static int drm_transfer_data_to(AVHWFramesContext *hwfc,
      int err;
  
      if (src->width > hwfc->width || src->height > hwfc->height)
@@ -20459,10 +20776,10 @@ index 0000000000..0d5d203dc3
 +
 diff --git a/libavutil/rpi_sand_fns.c b/libavutil/rpi_sand_fns.c
 new file mode 100644
-index 0000000000..0626bb06cb
+index 0000000000..f4bb680d03
 --- /dev/null
 +++ b/libavutil/rpi_sand_fns.c
-@@ -0,0 +1,447 @@
+@@ -0,0 +1,449 @@
 +/*
 +Copyright (c) 2018 Raspberry Pi (Trading) Ltd.
 +All rights reserved.
@@ -20824,6 +21141,8 @@ index 0000000000..0626bb06cb
 +    const int h = av_frame_cropped_height(src);
 +    const int x = src->crop_left;
 +    const int y = src->crop_top;
++    const unsigned int stride2_y = av_rpi_sand_frame_stride2_y(src);
++    const unsigned int stride2_c = av_rpi_sand_frame_stride2_c(src);
 +
 +    // We will crop as part of the conversion
 +    dst->crop_top = 0;
@@ -20838,22 +21157,22 @@ index 0000000000..0626bb06cb
 +                case AV_PIX_FMT_YUV420P:
 +                    av_rpi_sand_to_planar_y8(dst->data[0], dst->linesize[0],
 +                                             src->data[0],
-+                                             av_rpi_sand_frame_stride1(src), av_rpi_sand_frame_stride2(src),
++                                             av_rpi_sand_frame_stride1(src), stride2_y,
 +                                             x, y, w, h);
 +                    av_rpi_sand_to_planar_c8(dst->data[1], dst->linesize[1],
 +                                             dst->data[2], dst->linesize[2],
 +                                             src->data[1],
-+                                             av_rpi_sand_frame_stride1(src), av_rpi_sand_frame_stride2(src),
++                                             av_rpi_sand_frame_stride1(src), stride2_c,
 +                                             x/2, y/2,  w/2, h/2);
 +                    break;
 +                case AV_PIX_FMT_NV12:
 +                    av_rpi_sand_to_planar_y8(dst->data[0], dst->linesize[0],
 +                                             src->data[0],
-+                                             av_rpi_sand_frame_stride1(src), av_rpi_sand_frame_stride2(src),
++                                             av_rpi_sand_frame_stride1(src), stride2_y,
 +                                             x, y, w, h);
 +                    av_rpi_sand_to_planar_y8(dst->data[1], dst->linesize[1],
 +                                             src->data[1],
-+                                             av_rpi_sand_frame_stride1(src), av_rpi_sand_frame_stride2(src),
++                                             av_rpi_sand_frame_stride1(src), stride2_c,
 +                                             x/2, y/2, w, h/2);
 +                    break;
 +                default:
@@ -20865,12 +21184,12 @@ index 0000000000..0626bb06cb
 +                case AV_PIX_FMT_YUV420P10:
 +                    av_rpi_sand_to_planar_y16(dst->data[0], dst->linesize[0],
 +                                             src->data[0],
-+                                             av_rpi_sand_frame_stride1(src), av_rpi_sand_frame_stride2(src),
++                                             av_rpi_sand_frame_stride1(src), stride2_y,
 +                                             x*2, y, w*2, h);
 +                    av_rpi_sand_to_planar_c16(dst->data[1], dst->linesize[1],
 +                                             dst->data[2], dst->linesize[2],
 +                                             src->data[1],
-+                                             av_rpi_sand_frame_stride1(src), av_rpi_sand_frame_stride2(src),
++                                             av_rpi_sand_frame_stride1(src), stride2_c,
 +                                             x, y/2,  w, h/2);
 +                    break;
 +                default:
@@ -20882,22 +21201,22 @@ index 0000000000..0626bb06cb
 +                case AV_PIX_FMT_YUV420P10:
 +                    av_rpi_sand30_to_planar_y16(dst->data[0], dst->linesize[0],
 +                                             src->data[0],
-+                                             av_rpi_sand_frame_stride1(src), av_rpi_sand_frame_stride2(src),
++                                             av_rpi_sand_frame_stride1(src), stride2_y,
 +                                             x, y, w, h);
 +                    av_rpi_sand30_to_planar_c16(dst->data[1], dst->linesize[1],
 +                                             dst->data[2], dst->linesize[2],
 +                                             src->data[1],
-+                                             av_rpi_sand_frame_stride1(src), av_rpi_sand_frame_stride2(src),
++                                             av_rpi_sand_frame_stride1(src), stride2_c,
 +                                             x/2, y/2, w/2, h/2);
 +                    break;
 +                case AV_PIX_FMT_NV12:
 +                    av_rpi_sand30_to_planar_y8(dst->data[0], dst->linesize[0],
 +                                             src->data[0],
-+                                             av_rpi_sand_frame_stride1(src), av_rpi_sand_frame_stride2(src),
++                                             av_rpi_sand_frame_stride1(src), stride2_y,
 +                                             x, y, w, h);
 +                    av_rpi_sand30_to_planar_y8(dst->data[1], dst->linesize[1],
 +                                             src->data[1],
-+                                             av_rpi_sand_frame_stride1(src), av_rpi_sand_frame_stride2(src),
++                                             av_rpi_sand_frame_stride1(src), stride2_c,
 +                                             x/2, y/2, w, h/2);
 +                    break;
 +                default:
@@ -20912,10 +21231,10 @@ index 0000000000..0626bb06cb
 +}
 diff --git a/libavutil/rpi_sand_fns.h b/libavutil/rpi_sand_fns.h
 new file mode 100644
-index 0000000000..462ccb8abd
+index 0000000000..e0b18a3661
 --- /dev/null
 +++ b/libavutil/rpi_sand_fns.h
-@@ -0,0 +1,188 @@
+@@ -0,0 +1,157 @@
 +/*
 +Copyright (c) 2018 Raspberry Pi (Trading) Ltd.
 +All rights reserved.
@@ -21031,11 +21350,15 @@ index 0000000000..462ccb8abd
 +#endif
 +}
 +
-+static inline unsigned int av_rpi_sand_frame_stride2(const AVFrame * const frame)
++static inline unsigned int av_rpi_sand_frame_stride2_y(const AVFrame * const frame)
 +{
 +    return frame->linesize[3];
 +}
 +
++static inline unsigned int av_rpi_sand_frame_stride2_c(const AVFrame * const frame)
++{
++    return frame->linesize[4];
++}
 +
 +static inline int av_rpi_is_sand_format(const int format)
 +{
@@ -21065,41 +21388,6 @@ index 0000000000..462ccb8abd
 +static inline int av_rpi_sand_frame_xshl(const AVFrame * const frame)
 +{
 +    return av_rpi_is_sand8_frame(frame) ? 0 : 1;
-+}
-+
-+// If x is measured in bytes (not pixels) then this works for sand64_16 as
-+// well as sand128 - but in the general case we work that out
-+
-+static inline unsigned int av_rpi_sand_frame_off_y(const AVFrame * const frame, const unsigned int x_y, const unsigned int y)
-+{
-+    const unsigned int stride1 = av_rpi_sand_frame_stride1(frame);
-+    const unsigned int stride2 = av_rpi_sand_frame_stride2(frame);
-+    const unsigned int x = x_y << av_rpi_sand_frame_xshl(frame);
-+    const unsigned int x1 = x & (stride1 - 1);
-+    const unsigned int x2 = x ^ x1;
-+
-+    return x1 + stride1 * y + stride2 * x2;
-+}
-+
-+static inline unsigned int av_rpi_sand_frame_off_c(const AVFrame * const frame, const unsigned int x_c, const unsigned int y_c)
-+{
-+    const unsigned int stride1 = av_rpi_sand_frame_stride1(frame);
-+    const unsigned int stride2 = av_rpi_sand_frame_stride2(frame);
-+    const unsigned int x = x_c << (av_rpi_sand_frame_xshl(frame) + 1);
-+    const unsigned int x1 = x & (stride1 - 1);
-+    const unsigned int x2 = x ^ x1;
-+
-+    return x1 + stride1 * y_c + stride2 * x2;
-+}
-+
-+static inline uint8_t * av_rpi_sand_frame_pos_y(const AVFrame * const frame, const unsigned int x, const unsigned int y)
-+{
-+    return frame->data[0] + av_rpi_sand_frame_off_y(frame, x, y);
-+}
-+
-+static inline uint8_t * av_rpi_sand_frame_pos_c(const AVFrame * const frame, const unsigned int x, const unsigned int y)
-+{
-+    return frame->data[1] + av_rpi_sand_frame_off_c(frame, x, y);
 +}
 +
 +#endif
@@ -22472,7 +22760,7 @@ index 0000000000..9e3bbfa190
 +# -Wa,-ahls
 diff --git a/pi-util/conf_h265.2016.csv b/pi-util/conf_h265.2016.csv
 new file mode 100644
-index 0000000000..4efd5d1c67
+index 0000000000..177f1c8111
 --- /dev/null
 +++ b/pi-util/conf_h265.2016.csv
 @@ -0,0 +1,195 @@
@@ -22606,7 +22894,7 @@ index 0000000000..4efd5d1c67
 +3,HEVC_v1/TSUNEQBD_A_MAIN10_Technicolor_2,TSUNEQBD_A_MAIN10_Technicolor_2.bit,TSUNEQBD_A_MAIN10_Technicolor_2_yuv.md5, # unequal bit depth,10
 +1,HEVC_v1/TUSIZE_A_Samsung_1,TUSIZE_A_Samsung_1.bin,TUSIZE_A_Samsung_1.md5,8
 +1,HEVC_v1/VPSID_A_VIDYO_2,VPSID_A_VIDYO_2.bit,VPSID_A_VIDYO_2_yuv.md5,8
-+3,HEVC_v1/VPSSPSPPS_A_MainConcept_1,VPSSPSPPS_A_MainConcept_1.bin,VPSSPSPPS_A_MainConcept_1_md5.txt, # ???,8
++2,HEVC_v1/VPSSPSPPS_A_MainConcept_1,VPSSPSPPS_A_MainConcept_1.bin,VPSSPSPPS_A_MainConcept_1_md5.txt, # ???,8
 +1,HEVC_v1/WP_A_MAIN10_Toshiba_3,WP_A_MAIN10_Toshiba_3.bit,WP_A_MAIN10_Toshiba_3_yuv.md5,10
 +1,HEVC_v1/WP_A_Toshiba_3,WP_A_Toshiba_3.bit,WP_A_Toshiba_3_yuv.md5,8
 +1,HEVC_v1/WP_B_Toshiba_3,WP_B_Toshiba_3.bit,WP_B_Toshiba_3_yuv.md5,8
@@ -23117,10 +23405,10 @@ index 0000000000..0dbaa53e97
 +# -Wa,-ahls
 diff --git a/pi-util/ffconf.py b/pi-util/ffconf.py
 new file mode 100755
-index 0000000000..657568014e
+index 0000000000..02af4583ae
 --- /dev/null
 +++ b/pi-util/ffconf.py
-@@ -0,0 +1,215 @@
+@@ -0,0 +1,268 @@
 +#!/usr/bin/env python3
 +
 +import string
@@ -23132,27 +23420,21 @@ index 0000000000..657568014e
 +import csv
 +from stat import *
 +
-+CODEC_HEVC_RPI  = 1
-+HWACCEL_RPI     = 2
-+HWACCEL_DRM     = 3
-+HWACCEL_VAAPI   = 4
++class DecodeType:
++    def __init__(self, textname, hwaccel):
++        self.textname = textname
++        self.hwaccel = hwaccel
 +
-+def testone(fileroot, srcname, es_file, md5_file, pix, dectype, vcodec, ffmpeg_exec):
-+    hwaccel = ""
-+    if dectype == HWACCEL_RPI:
-+        hwaccel = "rpi"
-+    elif dectype == HWACCEL_DRM:
-+        hwaccel = "drm"
-+    elif dectype == HWACCEL_VAAPI:
-+        hwaccel = "vaapi"
++hwaccel_rpi = DecodeType("RPI Test/Legacy", "rpi")
++hwaccel_sw = DecodeType("Software", None)
++hwaccel_drm = DecodeType("DRM Prime", "drm")
++hwaccel_vaapi = DecodeType("VAAPI", "vaapi")
 +
-+    pix_fmt = []
-+    if pix == "8":
-+        pix_fmt = ["-pix_fmt", "yuv420p"]
-+    elif pix == "10":
-+        pix_fmt = ["-pix_fmt", "yuv420p10le"]
-+    elif pix == "12":
-+        pix_fmt = ["-pix_fmt", "yuv420p12le"]
++def testone(fileroot, srcname, es_file, md5_file, pix, dectype, vcodec, args):
++    ffmpeg_exec = args.ffmpeg
++    gen_yuv = args.gen_yuv
++    valgrind = args.valgrind
++    rv = 0
 +
 +    tmp_root = "/tmp"
 +
@@ -23171,17 +23453,29 @@ index 0000000000..657568014e
 +    except:
 +        pass
 +
-+    flog = open(os.path.join(tmp_root, name + ".log"), "wt")
++    yuv_file = os.path.join(tmp_root, name + ".dec.yuv")
++    try:
++        os.remove(yuv_file)
++    except:
++        pass
 +
-+    ffargs = [ffmpeg_exec, "-flags", "unaligned", "-hwaccel", hwaccel, "-vcodec", "hevc", "-i", os.path.join(fileroot, es_file)] + pix_fmt + ["-f", "md5", dec_file]
++    flog = open(os.path.join(tmp_root, name + ".log"), "w+t")
++
++    ffargs = [ffmpeg_exec, "-flags", "unaligned"] +\
++        ["-no_cvt_hw"] +\
++        (["-hwaccel", dectype.hwaccel] if dectype.hwaccel else []) +\
++        ["-vcodec", "hevc", "-i", os.path.join(fileroot, es_file)] +\
++        (["-conform_yuv", "1", "-f", "conform", yuv_file] if gen_yuv else ["-f", "conform", dec_file])
++
++    if valgrind:
++        ffargs = ['valgrind', '--leak-check=full'] + ffargs
 +
 +    # Unaligned needed for cropping conformance
-+    if hwaccel:
-+        rstr = subprocess.call(ffargs, stdout=flog, stderr=subprocess.STDOUT)
-+    else:
-+        rstr = subprocess.call(
-+            [ffmpeg_exec, "-flags", "unaligned", "-vcodec", vcodec, "-i", os.path.join(fileroot, es_file), "-f", "md5", dec_file],
-+            stdout=flog, stderr=subprocess.STDOUT)
++    rstr = subprocess.call(ffargs, stdout=flog, stderr=subprocess.STDOUT)
++
++    if gen_yuv:
++        with open(dec_file, 'wt') as f:
++            subprocess.call(["md5sum", yuv_file], stdout=f, stderr=subprocess.STDOUT)
 +
 +    try:
 +        m1 = None
@@ -23197,9 +23491,21 @@ index 0000000000..657568014e
 +    except:
 +        pass
 +
++    if valgrind:
++        flog.seek(0)
++        leak = True
++        valerr = True
++
++        for line in flog:
++            if re.search("^==[0-9]+== All heap blocks were freed", line):
++                leak = False
++            if re.search("^==[0-9]+== ERROR SUMMARY: 0 errors", line):
++                valerr = False
++        if leak or valerr:
++            rv = 4
++
 +    if  m1 and m2 and m1.group() == m2.group():
 +        print("Match: " + m1.group(), file=flog)
-+        rv = 0
 +    elif not m1:
 +        print("****** Cannot find m1", file=flog)
 +        rv = 3
@@ -23244,7 +23550,7 @@ index 0000000000..657568014e
 +            return True
 +    return False
 +
-+def doconf(csva, tests, test_root, vcodec, dectype, ffmpeg_exec):
++def doconf(csva, tests, test_root, vcodec, dectype, args):
 +    unx_failures = []
 +    unx_success = []
 +    failures = 0
@@ -23256,7 +23562,7 @@ index 0000000000..657568014e
 +            print ("==== ", name, end="")
 +            sys.stdout.flush()
 +
-+            rv = testone(os.path.join(test_root, name), name, a[2], a[3], a[4], dectype=dectype, vcodec=vcodec, ffmpeg_exec=ffmpeg_exec)
++            rv = testone(os.path.join(test_root, name), name, a[2], a[3], a[4], dectype=dectype, vcodec=vcodec, args=args)
 +            if (rv == 0):
 +                successes += 1
 +            else:
@@ -23281,14 +23587,20 @@ index 0000000000..657568014e
 +                    print(": * CRASH *")
 +                elif (rv == 3) :
 +                    print(": * MD5 MISSING *")
++                elif (rv == 4) :
++                    print(": * VALGRIND *")
 +                else :
 +                    print(": * BANG *")
 +
++    print()
++    print("Tested using decode type:", dectype.textname)
 +    if unx_failures or unx_success:
 +        print("Unexpected Failures:", unx_failures)
 +        print("Unexpected Success: ", unx_success)
 +    else:
 +        print("All tests normal:", successes, "ok,", failures, "failed")
++
++    return unx_failures + unx_success
 +
 +
 +class ConfCSVDialect(csv.Dialect):
@@ -23300,19 +23612,29 @@ index 0000000000..657568014e
 +    skipinitialspace = True
 +    strict = True
 +
++
++
 +if __name__ == '__main__':
 +
 +    argp = argparse.ArgumentParser(description="FFmpeg h265 conformance tester")
 +    argp.add_argument("tests", nargs='*')
 +    argp.add_argument("--pi4", action='store_true', help="Force pi4 cmd line")
 +    argp.add_argument("--drm", action='store_true', help="Force v4l2 drm cmd line")
++    argp.add_argument("--sw", action='store_true', help="Use software decode")
 +    argp.add_argument("--vaapi", action='store_true', help="Force vaapi cmd line")
 +    argp.add_argument("--test_root", default="/opt/conform/h265.2016", help="Root dir for test")
 +    argp.add_argument("--csvgen", action='store_true', help="Generate CSV file for dir")
 +    argp.add_argument("--csv", default="pi-util/conf_h265.2016.csv", help="CSV filename")
 +    argp.add_argument("--vcodec", default="hevc_rpi", help="vcodec name to use")
-+    argp.add_argument("--ffmpeg", default="./ffmpeg", help="ffmpeg exec name")
++    argp.add_argument("--ffmpeg", default="./ffmpeg", help="ffmpeg exec name; if directory given use <dir>/ffmpeg")
++    argp.add_argument("--valgrind", action='store_true', help="Run valgrind on tests")
++    argp.add_argument("--gen_yuv", action='store_true', help="Create yuv file (stored with log under /tmp)")
++    argp.add_argument("--loop", default=0, type=int, help="Loop n times, or until unexpected result")
 +    args = argp.parse_args()
++
++    if not os.path.isdir(args.test_root):
++        print("Test root dir '%s' not found" % args.test_root)
++        exit(1)
 +
 +    if args.csvgen:
 +        csv.writer(sys.stdout).writerows(scandir(args.test_root))
@@ -23321,29 +23643,49 @@ index 0000000000..657568014e
 +    with open(args.csv, 'rt') as csvfile:
 +        csva = [a for a in csv.reader(csvfile, ConfCSVDialect())]
 +
-+    dectype = CODEC_HEVC_RPI
++    dectype = None
 +    if os.path.exists("/dev/rpivid-hevcmem"):
-+        dectype = HWACCEL_RPI
-+    if args.drm or os.path.exists("/sys/module/rpivid_hevc"):
-+        dectype = HWACCEL_DRM
++        dectype = hwaccel_rpi
++    if args.drm or os.path.exists("/sys/module/rpivid_hevc") or os.path.exists("/sys/module/rpi_hevc_dec"):
++        dectype = hwaccel_drm
 +
 +    if args.pi4:
-+        dectype = HWACCEL_RPI
++        dectype = hwaccel_rpi
 +    elif args.drm:
-+        dectype = HWACCEL_DRM
++        dectype = hwaccel_drm
 +    elif args.vaapi:
-+        dectype = HWACCEL_VAAPI
++        dectype = hwaccel_vaapi
++    elif args.sw:
++        dectype = hwaccel_sw
 +
-+    doconf(csva, args.tests, args.test_root, args.vcodec, dectype, args.ffmpeg)
++    if os.path.isdir(args.ffmpeg):
++        args.ffmpeg = os.path.join(args.ffmpeg, "ffmpeg")
++    if not os.path.isfile(args.ffmpeg):
++        print("FFmpeg file '%s' not found" % args.ffmpeg)
++        exit(1)
++
++    if not dectype:
++        print("No decode type selected and no h/w detected")
++        exit(1)
++    print("Running test using decode:", dectype.textname)
++
++    i = 0
++    while True:
++        i = i + 1
++        if args.loop:
++            print("== Loop ", i)
++        if doconf(csva, args.tests, args.test_root, args.vcodec, dectype, args) or (args.loop >= 0 and i > args.loop):
++            break
 +
 diff --git a/pi-util/ffperf.py b/pi-util/ffperf.py
 new file mode 100755
-index 0000000000..65c5224cd8
+index 0000000000..767efe2de2
 --- /dev/null
 +++ b/pi-util/ffperf.py
-@@ -0,0 +1,128 @@
+@@ -0,0 +1,140 @@
 +#!/usr/bin/env python3
 +
++import shlex
 +import time
 +import string
 +import os
@@ -23380,14 +23722,20 @@ index 0000000000..65c5224cd8
 +    def __gt__(self, other):
 +        return self.elapsed > other.elapsed
 +
-+    def time_file(name, prefix, ffmpeg="./ffmpeg"):
++    def time_file(name, prefix, args):
++        cmdargs = [args.ffmpeg]
++        for x in args.args :
++            if x == '{INPUT}':
++                cmdargs.append(prefix + name)
++            elif x == '{NULL}':
++                cmdargs.append(os.devnull)
++            else:
++                cmdargs.append(x)
++
 +        stats = tstats()
 +        stats.name = name
 +        start_time = time.clock_gettime(time.CLOCK_MONOTONIC);
-+        cproc = subprocess.Popen([ffmpeg, "-no_cvt_hw",
-+                                  "-vcodec", "hevc_rpi",
-+                                  "-t", "30", "-i", prefix + name,
-+                                  "-f", "vout_rpi", os.devnull], bufsize=-1, stdout=flog, stderr=flog);
++        cproc = subprocess.Popen(cmdargs, bufsize=-1, stdout=flog, stderr=flog);
 +        pinfo = os.wait4(cproc.pid, 0)
 +        end_time = time.clock_gettime(time.CLOCK_MONOTONIC);
 +        stats.elapsed = end_time - start_time
@@ -23411,6 +23759,10 @@ index 0000000000..65c5224cd8
 +""")
 +
 +    argp.add_argument("streams", nargs='*')
++    argp.add_argument("--args", default='-t 30 -i {INPUT} -f null {NULL}', help="""
++ffmpeg arguments, default='-t 30 -i {INPUT} -f null {NULL}';
++  {INPUT} is replaced by current inputfile path;
++  {NULL} is replaced by the system null device""")
 +    argp.add_argument("--csv_out", default="ffperf_out.csv", help="CSV output filename")
 +    argp.add_argument("--csv_in", help="CSV input filename")
 +    argp.add_argument("--prefix", help="Filename prefix (include terminal '/' if a directory).")
@@ -23418,6 +23770,7 @@ index 0000000000..65c5224cd8
 +    argp.add_argument("--ffmpeg", default="./ffmpeg", help="FFmpeg executable")
 +
 +    args = argp.parse_args()
++    args.args = shlex.split(args.args)
 +
 +    csv_out = csv.DictWriter(open(args.csv_out, 'w', newline=''), ["name", "elapsed", "user", "sys"])
 +    csv_out.writeheader()
@@ -23451,7 +23804,7 @@ index 0000000000..65c5224cd8
 +
 +        t0 = tstats({"name":f, "elapsed":999, "user":999, "sys":999})
 +        for i in range(args.repeat):
-+            t = tstats.time_file(f, prefix, args.ffmpeg)
++            t = tstats.time_file(f, prefix, args)
 +            print ("...", t.times_str())
 +            if t0 > t:
 +                t0 = t
