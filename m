@@ -5,8 +5,8 @@ if [ "$ARCH" == "armhf" ]; then S="setarch linux32"; fi
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
 VERSION=${BRANCH/#rpios}
 
-export ADDONS_BUILD_NUMBER=6
-export DEBIAN_PACKAGE_VERSION=6
+export ADDONS_BUILD_NUMBER=7
+export DEBIAN_PACKAGE_VERSION=7
 export DEBIAN_PACKAGE_EPOCH=3
 export CORE_PLATFORM_NAME="gbm x11 wayland"
 export CORE_PLATFORM_DIR=build${VERSION}_$(echo $(printf "%s\n" ${CORE_PLATFORM_NAME} | sort) | tr ' ' '_')_${ARCH}
