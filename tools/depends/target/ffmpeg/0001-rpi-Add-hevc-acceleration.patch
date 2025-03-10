@@ -20189,7 +20189,7 @@ index 0000000000..d457c10870
 +#endif // AVUTIL_ARM_SAND_NEON_H
 +
 diff --git a/libavutil/frame.c b/libavutil/frame.c
-index 9545477acc..94678fe3b2 100644
+index 9545477acc..48621e4098 100644
 --- a/libavutil/frame.c
 +++ b/libavutil/frame.c
 @@ -16,6 +16,8 @@
@@ -20211,14 +20211,13 @@ index 9545477acc..94678fe3b2 100644
  
  #if FF_API_OLD_CHANNEL_LAYOUT
  #define CHECK_CHANNELS_CONSISTENCY(frame) \
-@@ -874,6 +879,13 @@ int av_frame_apply_cropping(AVFrame *frame, int flags)
+@@ -874,6 +879,12 @@ int av_frame_apply_cropping(AVFrame *frame, int flags)
          (frame->crop_top + frame->crop_bottom) >= frame->height)
          return AVERROR(ERANGE);
  
 +#if CONFIG_SAND
 +    // Sand cannot be cropped - do not try
-+    // If it might be encapsulated in DRM_PRIME don't crop that either
-+    if (av_rpi_is_sand_format(frame->format) || frame->format == AV_PIX_FMT_DRM_PRIME)
++    if (av_rpi_is_sand_format(frame->format))
 +        return 0;
 +#endif
 +
