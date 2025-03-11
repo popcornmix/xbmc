@@ -88,7 +88,7 @@ bool CWinSystemGbmGLESContext::InitWindowSystem()
   CGBMBufferObject::Register();
 #endif
 #if defined(HAVE_LINUX_MEMFD) && defined(HAVE_LINUX_UDMABUF)
-  CUDMABufferObject::Register();
+  //CUDMABufferObject::Register();
 #endif
 #if defined(HAVE_LINUX_DMA_HEAP)
   CDMAHeapBufferObject::Register();
