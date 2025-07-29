@@ -168,7 +168,7 @@ function compileAddons {
         cd  $ADDONS_BUILD_DIR && rm -rf *
    fi
    echo "#------ Configuring addons   ------#"
-   cmake -DOVERRIDE_PATHS=1 -DBUILD_DIR=$(pwd) -DCORE_SOURCE_DIR="${REPO_DIR}" -DADDONS_TO_BUILD="${ADDONS_TO_BUILD}" -DADDON_DEPENDS_PATH="${KODI_BUILD_DIR}/build" $REPO_DIR/cmake/addons/ |& tee -a build_addons.log
+   cmake -DDOWNLOAD_EXTRACT_TIMESTAMP=1 -DOVERRIDE_PATHS=1 -DBUILD_DIR=$(pwd) -DCORE_SOURCE_DIR="${REPO_DIR}" -DADDONS_TO_BUILD="${ADDONS_TO_BUILD}" -DADDON_DEPENDS_PATH="${KODI_BUILD_DIR}/build" $REPO_DIR/cmake/addons/ |& tee -a build_addons.log
    if [ ${PIPESTATUS[0]} -ne 0 ]; then
       echo "ADDONS ERROR: configure step failed.. Bailing out."
       exit 1
