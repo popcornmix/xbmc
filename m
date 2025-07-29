@@ -10,7 +10,7 @@ export DEBIAN_PACKAGE_VERSION=7
 export DEBIAN_PACKAGE_EPOCH=3
 export CORE_PLATFORM_NAME="gbm x11 wayland"
 export CORE_PLATFORM_DIR=build${VERSION}_$(echo $(printf "%s\n" ${CORE_PLATFORM_NAME} | sort) | tr ' ' '_')_${ARCH}
-export ENABLE_INTERNAL_FFMPEG=ON
+#export ENABLE_INTERNAL_FFMPEG=ON
 
 if [ "$1" == "compile" ]; then
  REPO_DIR=${REPO_DIR:-$(pwd)}

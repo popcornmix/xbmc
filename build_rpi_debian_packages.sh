@@ -208,8 +208,7 @@ function compileAddons {
 		fi
 		if [[ $D == "inputstream.ffmpegdirect" ]]; then
 			sed -i "s/kodi-ffmpeg-dev,//" debian/control
-			sed -i "s/-DBUILD_SHARED_LIBS=1/-DBUILD_SHARED_LIBS=1 -DENABLE_INTERNAL_FFMPEG=${ENABLE_INTERNAL_FFMPEG:-OFF} /g" debian/rules
-			#curl -L https://github.com/xbmc/inputstream.ffmpegdirect/commit/e6541a98b64631836336de17e57efa8e8e0b8425.diff | patch -Rp1
+			curl -L https://github.com/xbmc/inputstream.ffmpegdirect/commit/e6541a98b64631836336de17e57efa8e8e0b8425.diff | patch -Rp1
 		fi
 
 		dpkg-buildpackage $DEBUILD_OPTS -us -uc -b |& tee -a build_addons.log
