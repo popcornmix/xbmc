@@ -10,7 +10,6 @@ if [ -f "/etc/udev/rules.d/99-kodi.rules" ]; then
 rm /etc/udev/rules.d/99-kodi.rules
 fi
 
-if [ -f "/etc/polkit-1/localauthority/50-local.d/kodi.pkla" ]; then
-rm /etc/polkit-1/localauthority/50-local.d/kodi.pkla
+if [ -f /etc/polkit-1/rules.d/50-kodi.rules ]; then
+rm /etc/polkit-1/rules.d/50-kodi.rules
 fi
-

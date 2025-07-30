@@ -19,21 +19,35 @@ SUBSYSTEM=="tty", KERNEL=="tty[0-9]*", GROUP="tty", MODE="0660"
 _EOF_
 fi
 
-if [ ! -f "/etc/polkit-1/localauthority/50-local.d/kodi.pkla" ]; then
-tee -a /etc/polkit-1/localauthority/50-local.d/kodi.pkla > /dev/null 2>&1 <<_EOF_
-[Allow users in the plugdev group to reboot and shutdown]
-Identity=unix-group:plugdev
-Action=org.freedesktop.consolekit*;org.freedesktop.upower*;org.freedesktop.login1*
-ResultAny=yes
-ResultInactive=yes
-ResultActive=yes
+if [ "$1" = "configure" ]; then
+  # Ensure polkit directories exist
+  mkdir -p /etc/polkit-1/rules.d
 
-[Allow users in the plugdev group to mount/unmount devices]
-Identity=unix-group:plugdev
-Action=org.freedesktop.udisks*
-ResultAny=yes
-ResultInactive=yes
-ResultActive=yes
-_EOF_
+  cat <<'EOF' > /etc/polkit-1/rules.d/50-kodi.rules
+// PolicyKit override for Kodi: allow users in plugdev group to reboot, shutdown, mount
+polkit.addRule(function(action, subject) {
+  if (subject.isInGroup("plugdev")) {
+    var allowed = [
+      "org.freedesktop.consolekit.*",
+      "org.freedesktop.upower.*",
+      "org.freedesktop.login1.*",
+      "org.freedesktop.udisks.*"
+    ];
+    for (var i = 0; i < allowed.length; i++) {
+      var regex = new RegExp("^" + allowed[i].replace(".", "\\.").replace("*", ".*") + "$");
+      if (regex.test(action.id)) {
+        return polkit.Result.YES;
+      }
+    }
+  }
+  return polkit.Result.NOT_HANDLED;
+});
+EOF
+
+  chmod 0644 /etc/polkit-1/rules.d/50-kodi.rules
+  # optional: reload polkit daemon if supported
+  if command -v systemctl >/dev/null; then
+    systemctl reload polkitd || true
+  fi
 fi
 
