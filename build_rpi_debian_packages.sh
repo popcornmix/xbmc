@@ -110,7 +110,6 @@ KODI_OPTS=(
 -DDEBIAN_PACKAGE_EPOCH=${DEBIAN_PACKAGE_EPOCH} \
 -DDEB_PACKAGE_ARCHITECTURE=${DEB_ARCH} \
 -DDEBIAN_PACKAGE_TYPE=${DEBIAN_PACKAGE_TYPE} \
--DCMAKE_EXE_LINKER_FLAGS="-ldvdread" \
 )
 
 #EXTRA_FLAGS="-Os -fomit-frame-pointer -march=armv8-a+crc+simd -mfpu=neon-fp-armv8 -mfloat-abi=hard -mvectorize-with-neon-quad"
