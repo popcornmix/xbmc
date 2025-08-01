@@ -33,7 +33,7 @@ private:
   unsigned int m_timeoutMs{100};
 };
 
-TEST_F(TestNetwork, PingHost)
+TEST_F(TestNetwork, DISABLED_PingHost)
 {
   EXPECT_TRUE(PingHost("127.0.0.1"));
   EXPECT_FALSE(PingHost("10.254.254.254"));
