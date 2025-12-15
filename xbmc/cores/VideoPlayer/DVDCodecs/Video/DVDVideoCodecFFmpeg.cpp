@@ -73,7 +73,7 @@ enum EFilterFlags {
 class CVideoBufferFFmpeg : public CVideoBuffer
 {
 public:
-  CVideoBufferFFmpeg(IVideoBufferPool &pool, int id);
+  CVideoBufferFFmpeg(int id);
   ~CVideoBufferFFmpeg() override;
   void GetPlanes(uint8_t*(&planes)[YuvImage::MAX_PLANES]) override;
   void GetStrides(int(&strides)[YuvImage::MAX_PLANES]) override;
@@ -85,7 +85,7 @@ protected:
   AVFrame* m_pFrame;
 };
 
-CVideoBufferFFmpeg::CVideoBufferFFmpeg(IVideoBufferPool &pool, int id)
+CVideoBufferFFmpeg::CVideoBufferFFmpeg(int id)
 : CVideoBuffer(id)
 {
   m_pFrame = av_frame_alloc();
@@ -161,7 +161,7 @@ CVideoBuffer* CVideoBufferPoolFFmpeg::Get()
   else
   {
     int id = m_all.size();
-    buf = new CVideoBufferFFmpeg(*this, id);
+    buf = new CVideoBufferFFmpeg(id);
     m_all.push_back(buf);
     m_used.push_back(id);
   }
