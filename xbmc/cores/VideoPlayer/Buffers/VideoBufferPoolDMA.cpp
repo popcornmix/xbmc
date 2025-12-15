@@ -44,7 +44,7 @@ CVideoBuffer* CVideoBufferPoolDMA::Get()
   else
   {
     int id = m_all.size();
-    buf = new CVideoBufferDMA(*this, id, m_fourcc, m_planes, m_size);
+    buf = new CVideoBufferDMA(id, m_fourcc, m_planes, m_size);
 
     if (!buf->Alloc())
     {
