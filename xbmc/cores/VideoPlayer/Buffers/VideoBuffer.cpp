@@ -178,7 +178,7 @@ bool CVideoBuffer::CopyYUV422PackedPicture(YuvImage* pDst, YuvImage *pSrc)
   return true;
 }
 
-CVideoBufferSysMem::CVideoBufferSysMem(IVideoBufferPool &pool, int id, AVPixelFormat format, int size)
+CVideoBufferSysMem::CVideoBufferSysMem(int id, AVPixelFormat format, int size)
 : CVideoBuffer(id)
 {
   m_pixFormat = format;
@@ -295,7 +295,7 @@ CVideoBuffer* CVideoBufferPoolSysMem::Get()
   else
   {
     int id = m_all.size();
-    buf = new CVideoBufferSysMem(*this, id, m_pixFormat, m_size);
+    buf = new CVideoBufferSysMem(id, m_pixFormat, m_size);
     buf->Alloc();
     m_all.push_back(buf);
     m_used.push_back(id);

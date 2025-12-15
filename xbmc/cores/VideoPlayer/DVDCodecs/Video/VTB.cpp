@@ -43,7 +43,7 @@ bool CanDisplayHLG(const CHDRCapabilities& caps)
 // Video Buffers
 //------------------------------------------------------------------------------
 
-CVideoBufferVTB::CVideoBufferVTB(IVideoBufferPool &pool, int id)
+CVideoBufferVTB::CVideoBufferVTB(int id)
 : CVideoBuffer(id)
 {
   m_pFrame = av_frame_alloc();
@@ -157,7 +157,7 @@ CVideoBuffer* CVideoBufferPoolVTB::Get()
   else
   {
     int id = m_all.size();
-    buf = new CVideoBufferVTB(*this, id);
+    buf = new CVideoBufferVTB(id);
     m_all.push_back(buf);
     m_used.push_back(id);
   }
