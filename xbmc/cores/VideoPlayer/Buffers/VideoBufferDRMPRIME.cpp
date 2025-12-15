@@ -63,7 +63,7 @@ bool CVideoBufferDRMPRIME::IsValid() const
   return descriptor && descriptor->nb_layers;
 }
 
-CVideoBufferDRMPRIMEFFmpeg::CVideoBufferDRMPRIMEFFmpeg(IVideoBufferPool& pool, int id)
+CVideoBufferDRMPRIMEFFmpeg::CVideoBufferDRMPRIMEFFmpeg(int id)
   : CVideoBufferDRMPRIME(id)
 {
   m_pFrame = av_frame_alloc();
@@ -106,7 +106,7 @@ CVideoBufferDRMPRIMEFFmpeg* CVideoBufferPoolDRMPRIMEFFmpeg::Get()
   else
   {
     int id = m_all.size();
-    buf = new CVideoBufferDRMPRIMEFFmpeg(*this, id);
+    buf = new CVideoBufferDRMPRIMEFFmpeg(id);
     m_all.push_back(buf);
     m_used.push_back(id);
   }

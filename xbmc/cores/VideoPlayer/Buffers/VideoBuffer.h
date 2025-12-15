@@ -147,7 +147,7 @@ protected:
 class CVideoBufferSysMem : public CVideoBuffer
 {
 public:
-  CVideoBufferSysMem(IVideoBufferPool &pool, int id, AVPixelFormat format, int size);
+  CVideoBufferSysMem(int id, AVPixelFormat format, int size);
   ~CVideoBufferSysMem() override;
   uint8_t* GetMemPtr() override;
   void GetPlanes(uint8_t*(&planes)[YuvImage::MAX_PLANES]) override;

@@ -30,7 +30,7 @@ class CVideoBufferPoolVTB;
 class CVideoBufferVTB: public CVideoBuffer
 {
 public:
-  CVideoBufferVTB(IVideoBufferPool &pool, int id);
+  CVideoBufferVTB(int id);
   ~CVideoBufferVTB() override;
   void SetRef(AVFrame *frame);
   void Unref();
