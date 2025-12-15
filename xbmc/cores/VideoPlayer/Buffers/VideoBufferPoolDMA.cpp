@@ -64,7 +64,6 @@ void CVideoBufferPoolDMA::Return(int id)
 {
   std::unique_lock lock(m_critSection);
 
-  m_all[id]->Unref();
   auto it = m_used.begin();
   while (it != m_used.end())
   {
