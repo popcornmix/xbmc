@@ -213,6 +213,10 @@ void CVideoLayerBridgeDRMPRIME::UpdateVideoPlane()
   if (!m_buffer || !m_buffer->m_fb_id)
     return;
 
+  // release the buffer that is no longer presented on screen
+  Release(m_prev_buffer);
+  m_prev_buffer = nullptr;
+
   auto plane = m_DRM->GetVideoPlane();
   if (!plane)
     return;
