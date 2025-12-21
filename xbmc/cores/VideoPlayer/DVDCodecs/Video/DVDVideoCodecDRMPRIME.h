@@ -45,6 +45,7 @@ protected:
   CDVDVideoCodec::VCReturn ProcessFilterOut();
   static enum AVPixelFormat GetFormat(struct AVCodecContext* avctx, const enum AVPixelFormat* fmt);
   static int GetBuffer(struct AVCodecContext* avctx, AVFrame* frame, int flags);
+  static AVFrame *alloc_filter_frame(AVFilterContext * ctx, void * v, int w, int h);
   bool FilterOpen(const std::string& filters, bool test);
   void FilterClose();
   void FilterTest();
@@ -69,4 +70,7 @@ protected:
   int m_iLastKeyframe = 0;
 
   CDropControl m_dropCtrl;
+
+  AVBufferRef *m_hw_device_ref = nullptr;
+  AVBufferRef *m_hw_frames_ref = nullptr;
 };
