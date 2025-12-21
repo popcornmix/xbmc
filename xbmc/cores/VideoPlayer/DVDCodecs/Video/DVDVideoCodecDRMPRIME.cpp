@@ -213,11 +213,7 @@ static const AVCodec* FindDecoder(CDVDStreamInfo& hints)
         return codec;
     }
 
-  codec = avcodec_find_decoder(hints.codec);
-  if (codec && (codec->capabilities & AV_CODEC_CAP_DR1) == AV_CODEC_CAP_DR1)
-    return codec;
-
-  return nullptr;
+  return avcodec_find_decoder(hints.codec);
 }
 
 enum AVPixelFormat CDVDVideoCodecDRMPRIME::GetFormat(struct AVCodecContext* avctx,
@@ -225,7 +221,7 @@ enum AVPixelFormat CDVDVideoCodecDRMPRIME::GetFormat(struct AVCodecContext* avct
 {
   for (int n = 0; fmt[n] != AV_PIX_FMT_NONE; n++)
   {
-    if (IsSupportedHwFormat(fmt[n]) || IsSupportedSwFormat(fmt[n]))
+    //if (IsSupportedHwFormat(fmt[n]) || IsSupportedSwFormat(fmt[n]))
     {
       CDVDVideoCodecDRMPRIME* ctx = static_cast<CDVDVideoCodecDRMPRIME*>(avctx->opaque);
       ctx->UpdateProcessInfo(avctx, fmt[n]);
@@ -246,7 +242,8 @@ enum AVPixelFormat CDVDVideoCodecDRMPRIME::GetFormat(struct AVCodecContext* avct
 
 int CDVDVideoCodecDRMPRIME::GetBuffer(struct AVCodecContext* avctx, AVFrame* frame, int flags)
 {
-  if (IsSupportedSwFormat(static_cast<AVPixelFormat>(frame->format)))
+  AVPixelFormat pix_fmt = static_cast<AVPixelFormat>(frame->format);
+  if (IsSupportedSwFormat(pix_fmt))
   {
     int width = frame->width;
     int height = frame->height;
@@ -254,7 +251,7 @@ int CDVDVideoCodecDRMPRIME::GetBuffer(struct AVCodecContext* avctx, AVFrame* fra
     AlignedSize(avctx, width, height);
 
     int size;
-    switch (avctx->pix_fmt)
+    switch (pix_fmt)
     {
       case AV_PIX_FMT_YUV420P:
       case AV_PIX_FMT_YUVJ420P:
@@ -274,7 +271,7 @@ int CDVDVideoCodecDRMPRIME::GetBuffer(struct AVCodecContext* avctx, AVFrame* fra
 
     CDVDVideoCodecDRMPRIME* ctx = static_cast<CDVDVideoCodecDRMPRIME*>(avctx->opaque);
     auto buffer = dynamic_cast<CVideoBufferDMA*>(
-        ctx->m_processInfo.GetVideoBufferManager().Get(avctx->pix_fmt, size, nullptr));
+        ctx->m_processInfo.GetVideoBufferManager().Get(pix_fmt, size, nullptr));
     if (!buffer)
       return -1;
 
@@ -382,6 +379,10 @@ bool CDVDVideoCodecDRMPRIME::Open(CDVDStreamInfo& hints, CDVDCodecOptions& optio
 
   for (auto&& option : options.m_keys)
     av_opt_set(m_pCodecContext, option.m_name.c_str(), option.m_value.c_str(), 0);
+
+  // this requests v4l2 buffers are allocated through cache. It will work if this is not supported,
+  // but subsequent operations like deinterlace may be less efficient
+  av_opt_set(m_pCodecContext->priv_data, "dmabuf_alloc", "cma", 0);
 
   if (avcodec_open2(m_pCodecContext, pCodec, nullptr) < 0)
   {
@@ -641,7 +642,7 @@ bool CDVDVideoCodecDRMPRIME::SetPictureParams(VideoPicture* pVideoPicture)
     pVideoPicture->videoBuffer = nullptr;
   }
 
-  if (IsSupportedHwFormat(static_cast<AVPixelFormat>(m_pFrame->format)))
+  if (m_pFrame->format == AV_PIX_FMT_DRM_PRIME)
   {
     CVideoBufferDRMPRIMEFFmpeg* buffer =
         dynamic_cast<CVideoBufferDRMPRIMEFFmpeg*>(m_videoBufferPool->Get());
@@ -649,9 +650,9 @@ bool CDVDVideoCodecDRMPRIME::SetPictureParams(VideoPicture* pVideoPicture)
     buffer->SetRef(m_pFrame);
     pVideoPicture->videoBuffer = buffer;
   }
-  else if (m_pFrame->opaque)
+  else if (IsSupportedSwFormat(static_cast<AVPixelFormat>(m_pFrame->format)))
   {
-    CVideoBufferDMA* buffer = static_cast<CVideoBufferDMA*>(m_pFrame->opaque);
+    CVideoBufferDMA* buffer = static_cast<CVideoBufferDMA*>(av_buffer_get_opaque(m_pFrame->buf[0]));
     buffer->SetPictureParams(*pVideoPicture);
     buffer->Acquire();
     buffer->SyncEnd();
@@ -679,15 +680,26 @@ void CDVDVideoCodecDRMPRIME::FilterTest()
 
   m_deintFilterName.clear();
 
-  while ((filter = av_filter_iterate(&opaque)) != nullptr)
-  {
-    std::string name(filter->name);
+  // look twice, first for DRM_PRIME support, then for actual pixel format
 
-    if (name.find("deinterlace") != std::string::npos)
+  bool hw = CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(
+      SETTING_VIDEOPLAYER_ALLOWHWDEINTERLACE);
+
+  for (int i = hw ? 0 : 1; i < 2; i++)
+  {
+    while ((filter = av_filter_iterate(&opaque)) != nullptr)
     {
+      std::string name(filter->name);
+
+      if (name.find(i == 0 ? "deinterlace" : "bwdif") == std::string::npos)
+        continue;
+
       if (FilterOpen(name, true))
       {
+        FilterClose();
         m_deintFilterName = name;
+        if (name == "bwdif" || name == "yadif")
+          m_deintFilterName += "=1:-1:1";
 
         CLog::Log(LOGDEBUG, "CDVDVideoCodecDRMPRIME::{} - found deinterlacing filter {}",
                   __FUNCTION__, name);
@@ -701,9 +713,33 @@ void CDVDVideoCodecDRMPRIME::FilterTest()
             __FUNCTION__);
 }
 
-bool CDVDVideoCodecDRMPRIME::FilterOpen(const std::string& filters, bool test)
+AVFrame *CDVDVideoCodecDRMPRIME::alloc_filter_frame(AVFilterContext * ctx, void * v, int w, int h)
 {
   int result;
+  CDVDVideoCodecDRMPRIME* me = static_cast<CDVDVideoCodecDRMPRIME*>(v);
+  AVFrame *frame = av_frame_alloc();
+  frame->width = w;
+  frame->height = h;
+  frame->format = AV_PIX_FMT_YUV420P;
+
+  if ((result = CDVDVideoCodecDRMPRIME::GetBuffer(me->m_pCodecContext, frame, 0)) < 0)
+  {
+    CLog::Log(LOGERROR, "CDVDVideoCodecDRMPRIME::alloc_filter_frame - failed to GetBuffer ({})", result);
+    return nullptr;
+  }
+  return frame;
+}
+
+bool CDVDVideoCodecDRMPRIME::FilterOpen(const std::string& filters, bool test)
+{
+  AVPixelFormat pix_fmt = static_cast<AVPixelFormat>(m_pFrame->format);
+  int result;
+
+  if (filters.find("deinterlace") != std::string::npos && pix_fmt == AV_PIX_FMT_YUV420P)
+     pix_fmt = AV_PIX_FMT_DRM_PRIME;
+
+  if (filters.find("bwdif") != std::string::npos && pix_fmt == AV_PIX_FMT_DRM_PRIME)
+     pix_fmt = AV_PIX_FMT_YUV420P;
 
   if (m_pFilterGraph)
     FilterClose();
@@ -721,7 +757,6 @@ bool CDVDVideoCodecDRMPRIME::FilterOpen(const std::string& filters, bool test)
   if (!par)
   {
     CLog::Log(LOGERROR, "CDVDVideoCodecDRMPRIME::FilterOpen - unable to alloc buffersrc params");
-    FilterClose();
     return false;
   }
 
@@ -730,11 +765,10 @@ bool CDVDVideoCodecDRMPRIME::FilterOpen(const std::string& filters, bool test)
   if (!m_pFilterIn)
   {
     CLog::Log(LOGERROR, "CDVDVideoCodecDRMPRIME::FilterOpen - unable to alloc in buffer");
-    FilterClose();
     return false;
   }
 
-  par->format = AV_PIX_FMT_DRM_PRIME;
+  par->format = pix_fmt;
   par->hw_frames_ctx = m_pFrame->hw_frames_ctx;
   par->time_base = m_pCodecContext->time_base;
   par->width = m_pCodecContext->width;
@@ -744,6 +778,37 @@ bool CDVDVideoCodecDRMPRIME::FilterOpen(const std::string& filters, bool test)
   par->color_range = m_pCodecContext->color_range;
   par->color_space = m_pCodecContext->colorspace;
 #endif
+
+  if (pix_fmt == AV_PIX_FMT_DRM_PRIME && !m_pFrame->hw_frames_ctx)
+  {
+    if (av_hwdevice_ctx_create(&m_hw_device_ref, AV_HWDEVICE_TYPE_DRM, NULL, NULL, 0) < 0)
+    {
+      CLog::Log(LOGERROR, "CDVDVideoCodecDRMPRIME::FilterOpen - failed to create DRM device");
+      return false;
+    }
+    m_hw_frames_ref = av_hwframe_ctx_alloc(m_hw_device_ref);
+    if (!m_hw_frames_ref)
+    {
+      CLog::Log(LOGERROR, "CDVDVideoCodecDRMPRIME::FilterOpen - failed to allocate hwframe context");
+      av_buffer_unref(&m_hw_device_ref);
+      return false;
+    }
+
+    auto* frames_ctx = reinterpret_cast<AVHWFramesContext*>(m_hw_frames_ref->data);
+    frames_ctx->format = AV_PIX_FMT_DRM_PRIME;
+    frames_ctx->sw_format = static_cast<AVPixelFormat>(m_pFrame->format);
+    frames_ctx->width = m_pCodecContext->width;
+    frames_ctx->height = m_pCodecContext->height;
+
+    if (av_hwframe_ctx_init(m_hw_frames_ref) < 0)
+    {
+      CLog::Log(LOGERROR, "CDVDVideoCodecDRMPRIME::FilterOpen - failed to init hwframe context");
+      av_buffer_unref(&m_hw_frames_ref);
+      av_buffer_unref(&m_hw_device_ref);
+      return false;
+    }
+    par->hw_frames_ctx = av_buffer_ref(m_hw_frames_ref);
+  }
 
   result = av_buffersrc_parameters_set(m_pFilterIn, par);
   if (result < 0)
@@ -779,7 +844,7 @@ bool CDVDVideoCodecDRMPRIME::FilterOpen(const std::string& filters, bool test)
     return false;
   }
 
-  enum AVPixelFormat pix_fmts[] = { AV_PIX_FMT_DRM_PRIME, AV_PIX_FMT_NONE };
+  enum AVPixelFormat pix_fmts[] = { AV_PIX_FMT_DRM_PRIME, AV_PIX_FMT_YUV420P, AV_PIX_FMT_NONE };
 #if LIBAVFILTER_BUILD >= AV_VERSION_INT(10, 6, 100)
   result = av_opt_set_array(m_pFilterOut, "pixel_formats",
                             AV_OPT_SEARCH_CHILDREN | AV_OPT_ARRAY_REPLACE,
@@ -809,6 +874,11 @@ bool CDVDVideoCodecDRMPRIME::FilterOpen(const std::string& filters, bool test)
     return false;
   }
 
+  if ((result = av_buffersink_set_alloc_video_frame(m_pFilterOut, alloc_filter_frame, static_cast<void*>(this))) < 0)
+  {
+    CLog::Log(LOGERROR, "CDVDVideoCodecDRMPRIME::FilterOpen - av_buffersink_set_alloc_video_frame = {}", result);
+    return result;
+  }
   AVFilterInOut* outputs = avfilter_inout_alloc();
   AVFilterInOut* inputs  = avfilter_inout_alloc();
 
@@ -849,8 +919,6 @@ bool CDVDVideoCodecDRMPRIME::FilterOpen(const std::string& filters, bool test)
     return true;
   }
 
-  m_processInfo.SetVideoDeintMethod(filters);
-
   if (CServiceBroker::GetLogging().CanLogComponent(LOGVIDEO))
   {
     char* graphDump = avfilter_graph_dump(m_pFilterGraph, nullptr);
@@ -876,11 +944,44 @@ void CDVDVideoCodecDRMPRIME::FilterClose()
     // Disposed by above code
     m_pFilterIn = nullptr;
     m_pFilterOut = nullptr;
+    m_pFilterGraph = nullptr;
+    av_buffer_unref(&m_hw_frames_ref);
+    av_buffer_unref(&m_hw_device_ref);
   }
 }
 
 CDVDVideoCodec::VCReturn CDVDVideoCodecDRMPRIME::ProcessFilterIn()
 {
+  // sw decoded buffers submitted to hw decoder need cache flush and for descripter to be set
+  if (m_pFrame->format != AV_PIX_FMT_DRM_PRIME && m_pFilterGraph && m_pFilterIn->outputs[0]->format == AV_PIX_FMT_DRM_PRIME)
+  {
+    CVideoBufferDMA* buffer = static_cast<CVideoBufferDMA*>(av_buffer_get_opaque(m_pFrame->buf[0]));
+    buffer->SetDimensions(m_pFrame->width, m_pFrame->height);
+    buffer->SyncEnd();
+    auto descriptor = buffer->GetDescriptor();
+    m_pFrame->data[0] = reinterpret_cast<uint8_t*>(descriptor);
+    m_pFrame->format = AV_PIX_FMT_DRM_PRIME;
+  }
+  // hw decoded buffers submitted to sw decoder need mapping of planes for cpu to access
+  else if (m_pFrame->format == AV_PIX_FMT_DRM_PRIME && m_pFilterGraph && m_pFilterIn->outputs[0]->format == AV_PIX_FMT_YUV420P)
+  {
+    AVFrame *frame = av_frame_alloc();
+    frame->width = m_pFrame->width;
+    frame->height = m_pFrame->height;
+    frame->format = AV_PIX_FMT_YUV420P;
+    int ret = av_hwframe_map(frame, m_pFrame, (int)AV_HWFRAME_MAP_READ);
+    if (ret < 0)
+    {
+      char err[AV_ERROR_MAX_STRING_SIZE] = {};
+      av_strerror(ret, err, AV_ERROR_MAX_STRING_SIZE);
+      CLog::Log(LOGERROR, "CDVDVideoCodecDRMPRIME::{} - av_hwframe_map failed: {} ({})",
+                __FUNCTION__, err, ret);
+      return VC_ERROR;
+    }
+    av_frame_unref(m_pFrame);
+    av_frame_move_ref(m_pFrame, frame);
+  }
+
   int ret = av_buffersrc_add_frame(m_pFilterIn, m_pFrame);
   if (ret < 0)
   {
@@ -1017,6 +1118,7 @@ CDVDVideoCodec::VCReturn CDVDVideoCodecDRMPRIME::GetPicture(VideoPicture* pVideo
     }
   }
 
+  AVPixelFormat pix_fmt = static_cast<AVPixelFormat>(m_pFrame->format);
   if (!m_checkedDeinterlace)
   {
     FilterTest();
@@ -1035,6 +1137,14 @@ CDVDVideoCodec::VCReturn CDVDVideoCodecDRMPRIME::GetPicture(VideoPicture* pVideo
     m_processInfo.SetVideoInterlaced(true);
 
   std::string filterChain = GetFilterChain((m_pFrame->flags & AV_FRAME_FLAG_INTERLACED) != 0);
+
+  // we need to scale if the buffer isn't in DRM_PRIME format
+  if (!IsSupportedSwFormat(pix_fmt) && !IsSupportedHwFormat(pix_fmt))
+    filterChain = "scale";
+  // we need to copy if the buffer wasn't allocated by us
+  else if (!IsSupportedHwFormat(pix_fmt) && !(m_pCodecContext->codec->capabilities & AV_CODEC_CAP_DR1))
+    filterChain = "copy";
+
   if (!filterChain.empty())
   {
     bool reopenFilter = false;
@@ -1042,13 +1152,15 @@ CDVDVideoCodec::VCReturn CDVDVideoCodecDRMPRIME::GetPicture(VideoPicture* pVideo
       reopenFilter = true;
 
     if (m_pFilterGraph &&
-        (m_pFilterIn->outputs[0]->w != m_pCodecContext->width ||
-         m_pFilterIn->outputs[0]->h != m_pCodecContext->height))
+        (m_pFilterIn->outputs[0]->w != m_pFrame->width ||
+         m_pFilterIn->outputs[0]->h != m_pFrame->height))
       reopenFilter = true;
 
     if (reopenFilter)
     {
       m_filters = filterChain;
+      m_processInfo.SetVideoDeintMethod(m_filters);
+
       if (!FilterOpen(filterChain, false))
         FilterClose();
     }
