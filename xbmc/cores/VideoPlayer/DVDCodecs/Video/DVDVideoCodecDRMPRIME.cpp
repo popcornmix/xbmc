@@ -652,7 +652,7 @@ CDVDVideoCodec::VCReturn CDVDVideoCodecDRMPRIME::GetPicture(VideoPicture* pVideo
   int64_t framePTS = m_pFrame->best_effort_timestamp;
   m_dropCtrl.Process(framePTS, m_pCodecContext->skip_frame > AVDISCARD_DEFAULT);
 
-  if (m_pFrame->flags & AV_FRAME_FLAG_KEY)
+  if ((m_pFrame->flags & AV_FRAME_FLAG_KEY) != 0 || m_pFrame->pict_type == AV_PICTURE_TYPE_NONE)
   {
     m_started = true;
     m_iLastKeyframe = m_pCodecContext->has_b_frames + 2;
@@ -668,7 +668,7 @@ CDVDVideoCodec::VCReturn CDVDVideoCodecDRMPRIME::GetPicture(VideoPicture* pVideo
     int frames = 300;
     if (m_dropCtrl.m_state == CDropControl::VALID)
       frames = static_cast<int>(6000000 / m_dropCtrl.m_diffPTS);
-    if (m_iLastKeyframe >= frames && m_pFrame->pict_type == AV_PICTURE_TYPE_I)
+    if (m_iLastKeyframe >= frames && (m_pFrame->pict_type == AV_PICTURE_TYPE_I || m_pFrame->pict_type == AV_PICTURE_TYPE_NONE))
     {
       m_started = true;
     }
