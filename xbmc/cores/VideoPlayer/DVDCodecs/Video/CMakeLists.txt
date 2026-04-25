@@ -1,13 +1,15 @@
 set(SOURCES AddonVideoCodec.cpp
             DVDVideoCodec.cpp
             DVDVideoCodecFFmpeg.cpp
-            DVDVideoCodecWebCodecsBitstream.cpp)
+            DVDVideoCodecWebCodecsBitstream.cpp
+            DropControl.cpp)
 
 set(HEADERS AddonVideoCodec.h
             DVDVideoCodec.h
             DVDVideoCodecFFmpeg.h
             DVDVideoCodecWebCodecsBitstream.h
-            DVDVideoPP.h)
+            DVDVideoPP.h
+            DropControl.h)
 
 if(TARGET ffmpeg::libpostproc)
   list(APPEND SOURCES DVDVideoPPFFmpeg.cpp)
