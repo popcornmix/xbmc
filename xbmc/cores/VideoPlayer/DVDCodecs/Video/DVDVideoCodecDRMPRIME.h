@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "DropControl.h"
 #include "cores/VideoPlayer/Buffers/VideoBuffer.h"
 #include "cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.h"
 #include "cores/VideoPlayer/DVDStreamInfo.h"
@@ -45,4 +46,9 @@ protected:
   AVCodecContext* m_pCodecContext = nullptr;
   AVFrame* m_pFrame = nullptr;
   std::shared_ptr<IVideoBufferPool> m_videoBufferPool;
+  bool m_started = false;
+  bool m_startedInput = false;
+  int m_iLastKeyframe = 0;
+
+  CDropControl m_dropCtrl;
 };

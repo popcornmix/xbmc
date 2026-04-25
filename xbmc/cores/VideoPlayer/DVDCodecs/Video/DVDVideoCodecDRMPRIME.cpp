@@ -409,6 +409,9 @@ bool CDVDVideoCodecDRMPRIME::AddData(const DemuxPacket& packet)
   if (!packet.pData)
     return true;
 
+  if (packet.recoveryPoint)
+    m_started = true;
+
   AVPacket* avpkt = av_packet_alloc();
   if (!avpkt)
   {
@@ -448,6 +451,12 @@ bool CDVDVideoCodecDRMPRIME::AddData(const DemuxPacket& packet)
       return false;
   }
 
+  m_iLastKeyframe++;
+  if (m_iLastKeyframe > 300)
+    m_iLastKeyframe = 300;
+
+  m_startedInput = true;
+
   return true;
 }
 
@@ -455,6 +464,11 @@ void CDVDVideoCodecDRMPRIME::Reset()
 {
   if (!m_pCodecContext)
     return;
+
+  m_started = false;
+  m_startedInput = false;
+  m_iLastKeyframe = m_pCodecContext->has_b_frames;
+  m_dropCtrl.Reset(false);
 
   Drain();
 
@@ -604,6 +618,9 @@ void CDVDVideoCodecDRMPRIME::SetPictureParams(VideoPicture* pVideoPicture)
 
 CDVDVideoCodec::VCReturn CDVDVideoCodecDRMPRIME::GetPicture(VideoPicture* pVideoPicture)
 {
+  if (!m_startedInput)
+    return VC_BUFFER;
+
   if (m_codecControlFlags & DVD_CODEC_CTRL_DRAIN)
     Drain();
 
@@ -627,6 +644,39 @@ CDVDVideoCodec::VCReturn CDVDVideoCodecDRMPRIME::GetPicture(VideoPicture* pVideo
     CLog::Log(LOGERROR, "CDVDVideoCodecDRMPRIME::{} - receive frame failed: {} ({})", __FUNCTION__,
               err, ret);
     return VC_ERROR;
+  }
+
+  if (m_pCodecContext->has_b_frames + 2 > m_iLastKeyframe)
+    m_iLastKeyframe = m_pCodecContext->has_b_frames + 2;
+
+  int64_t framePTS = m_pFrame->best_effort_timestamp;
+  m_dropCtrl.Process(framePTS, m_pCodecContext->skip_frame > AVDISCARD_DEFAULT);
+
+  if (m_pFrame->flags & AV_FRAME_FLAG_KEY)
+  {
+    m_started = true;
+    m_iLastKeyframe = m_pCodecContext->has_b_frames + 2;
+  }
+  else if (m_pCodecContext->codec_id == AV_CODEC_ID_AV1 && !m_started)
+  {
+    m_started = true;
+    m_iLastKeyframe = m_pCodecContext->has_b_frames + 2;
+  }
+
+  if (!m_started)
+  {
+    int frames = 300;
+    if (m_dropCtrl.m_state == CDropControl::VALID)
+      frames = static_cast<int>(6000000 / m_dropCtrl.m_diffPTS);
+    if (m_iLastKeyframe >= frames && m_pFrame->pict_type == AV_PICTURE_TYPE_I)
+    {
+      m_started = true;
+    }
+    else
+    {
+      av_frame_unref(m_pFrame);
+      return VC_BUFFER;
+    }
   }
 
   SetPictureParams(pVideoPicture);
