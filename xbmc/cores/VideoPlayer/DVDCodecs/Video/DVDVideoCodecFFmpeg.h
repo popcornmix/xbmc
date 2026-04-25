@@ -10,6 +10,7 @@
 
 #include "DVDVideoCodec.h"
 #include "DVDVideoPP.h"
+#include "DropControl.h"
 #include "cores/VideoPlayer/DVDCodecs/DVDCodecs.h"
 #include "cores/VideoPlayer/DVDStreamInfo.h"
 
@@ -106,19 +107,5 @@ protected:
   bool m_exportDoviRpu = false;
   std::map<int64_t, std::vector<uint8_t>> m_av1DoviRpus; // by packet pts
 
-  struct CDropControl
-  {
-    CDropControl();
-    void Reset(bool init);
-    void Process(int64_t pts, bool drop);
-
-    int64_t m_lastPTS;
-    int64_t m_diffPTS;
-    int m_count;
-    enum
-    {
-      INIT,
-      VALID
-    } m_state;
-  } m_dropCtrl;
+  CDropControl m_dropCtrl;
 };
