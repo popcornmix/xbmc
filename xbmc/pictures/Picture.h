@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "guilib/TextureFormats.h"
 #include "jobs/Job.h"
 #include "pictures/PictureScalingAlgorithm.h"
 
@@ -28,7 +29,7 @@ class CPicture
 {
 public:
   static bool GetThumbnailFromSurface(const unsigned char* buffer, int width, int height, int stride, const std::string &thumbFile, uint8_t* &result, size_t& result_size);
-  static bool CreateThumbnailFromSurface(const unsigned char* buffer, int width, int height, int stride, const std::string &thumbFile);
+  static bool CreateThumbnailFromSurface(const unsigned char* buffer, int width, int height, int stride, const std::string &thumbFile, unsigned int format = XB_FMT_A8R8G8B8);
 
   static std::unique_ptr<CTexture> CreateTiledThumb(const std::vector<std::string>& files);
 
@@ -117,7 +118,7 @@ class CThumbnailWriter : public CJob
 {
   public:
     //WARNING: buffer is deleted from DoWork()
-    CThumbnailWriter(unsigned char* buffer, int width, int height, int stride, const std::string& thumbFile);
+    CThumbnailWriter(unsigned char* buffer, int width, int height, int stride, const std::string& thumbFile, unsigned int format = XB_FMT_A8R8G8B8);
     ~CThumbnailWriter() override;
     bool DoWork() override;
 
@@ -126,6 +127,7 @@ class CThumbnailWriter : public CJob
     int            m_width;
     int            m_height;
     int            m_stride;
+    unsigned int   m_format;
     std::string    m_thumbFile;
 };
 
