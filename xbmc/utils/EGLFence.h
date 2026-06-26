@@ -34,7 +34,7 @@ public:
   void CreateKMSFence(int fd);
   void CreateGPUFence();
   EGLint FlushFence();
-  void WaitSyncGPU();
+  void WaitSyncGPU(int fd);
   void WaitSyncCPU();
 #endif
 
