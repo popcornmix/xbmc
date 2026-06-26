@@ -14,6 +14,8 @@
 #include "cores/VideoPlayer/VideoRenderers/RenderFactory.h"
 #include "utils/log.h"
 
+#include <unistd.h>
+
 using namespace KODI::WINDOWING::GBM;
 using namespace KODI::WINDOWING::LINUX;
 
@@ -190,8 +192,70 @@ bool CWinSystemGbmEGLContext::DestroyWindow()
 {
   m_eglContext.DestroySurface();
 
+  // Release the deferred out-fence that would otherwise be consumed (and
+  // closed) by the next frame's FencePreSwap(), which will not run now.
+  if (m_kmsFenceFd != -1)
+  {
+    close(m_kmsFenceFd);
+    m_kmsFenceFd = -1;
+  }
+
   CLog::Log(LOGDEBUG, "CWinSystemGbmEGLContext::{} - deinitialized GBM", __FUNCTION__);
   return true;
+}
+
+void CWinSystemGbmEGLContext::FencePreSwap()
+{
+#if defined(EGL_ANDROID_native_fence_sync) && defined(EGL_KHR_fence_sync)
+  if (!m_eglFence)
+    return;
+
+  // out-fence of the previous commit (call it frame N-1).
+  int fd = m_DRM->TakeOutFenceFd();
+
+  // GPU side: gate this frame's render on the flip *before* last (N-2), not the
+  // previous flip. N-2's out-fence guards the buffer mesa is about to recycle
+  // as this frame's render target; gating on the previous flip instead pinned
+  // every render to a vblank boundary, held the pipeline one frame deep, and on
+  // a heavier-than-trivial composite lost a vblank intermittently - capping
+  // throughput (~40fps on a 60Hz panel) with the GPU idle-waiting. Gating on
+  // N-2 lets the GPU render this frame while frame N-1 is still pending its
+  // flip. It stays safe: the recycled buffer is older than N-2, and KMS still
+  // waits for this render via IN_FENCE_FD (set in FencePostSwap).
+  if (m_kmsFenceFd != -1)
+    m_eglFence->WaitSyncGPU(m_kmsFenceFd); // consumes (closes) the N-2 fd
+  m_kmsFenceFd = (fd != -1) ? dup(fd) : -1; // keep a copy of N-1 for next frame's GPU gate
+
+  // CPU side: WaitSyncCPU (in FencePostSwap) blocks on this same N-1 out-fence,
+  // i.e. until the previous flip actually lands. That is the back-pressure that
+  // paces the GUI loop to the display refresh; gating the GPU on N-2 while the
+  // CPU waits on N-1 is what caps fps at refresh *and* keeps one frame of slack
+  // to absorb a long composite. The wait overlaps this frame's render, so it
+  // does not reintroduce the stall.
+  if (fd != -1)
+    m_eglFence->CreateKMSFence(fd); // CPU fence = N-1; consumed by WaitSyncCPU
+
+  m_eglFence->CreateGPUFence();
+#endif
+}
+
+void CWinSystemGbmEGLContext::FencePostSwap()
+{
+#if defined(EGL_ANDROID_native_fence_sync) && defined(EGL_KHR_fence_sync)
+  if (!m_eglFence)
+    return;
+
+  // Hand this frame's GPU render fence to KMS as IN_FENCE_FD so the kernel
+  // defers scanout until the render completes (tear-free).
+  int fd = m_eglFence->FlushFence();
+  m_DRM->SetInFenceFd(fd);
+
+  // CPU back-pressure: block until the previous flip (the N-1 out-fence wrapped
+  // in FencePreSwap) lands, pacing the GUI loop to the display refresh. This
+  // overlaps the render just submitted, so it caps fps at refresh without
+  // stalling. See WaitSyncCPU().
+  m_eglFence->WaitSyncCPU();
+#endif
 }
 
 bool CWinSystemGbmEGLContext::SetVideoOutput(const VideoPicture* videoPicture)

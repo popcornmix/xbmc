@@ -119,13 +119,21 @@ EGLint CEGLFence::FlushFence()
   return fd;
 }
 
-void CEGLFence::WaitSyncGPU()
+void CEGLFence::WaitSyncGPU(int fd)
 {
-  if (!m_kmsFence)
+  // Wrap an external KMS out-fence fd and queue a GPU-side wait on it, then
+  // release the wrapper. eglWaitSyncKHR only enqueues the wait into the current
+  // context's command stream - it does not block the CPU - and the queued wait
+  // keeps the underlying fence alive, so the EGLSync (which takes ownership of
+  // fd and closes it on destroy) can be torn down immediately.
+  EGLSyncKHR fence = CreateFence(fd);
+  if (fence == EGL_NO_SYNC_KHR)
     return;
 
-  if (m_eglWaitSyncKHR(m_display, m_kmsFence, 0) != EGL_TRUE)
-    CEGLUtils::Log(LOGERROR, "failed to create EGL sync point");
+  if (m_eglWaitSyncKHR(m_display, fence, 0) != EGL_TRUE)
+    CEGLUtils::Log(LOGERROR, "failed to insert KMS out-fence GPU wait");
+
+  m_eglDestroySyncKHR(m_display, fence);
 }
 
 void CEGLFence::WaitSyncCPU()
@@ -133,7 +141,20 @@ void CEGLFence::WaitSyncCPU()
   if (!m_kmsFence)
     return;
 
-  if (m_eglClientWaitSyncKHR(m_display, m_kmsFence, 0, EGL_FOREVER_KHR) != EGL_FALSE)
-    m_eglDestroySyncKHR(m_display, m_kmsFence);
+  // CPU-block until this KMS out-fence signals, then destroy it. The caller
+  // hands us the out-fence of the *previous* flip, so blocking here paces the
+  // present thread to one committed frame per flip - i.e. to the display
+  // refresh. Without this back-pressure the GUI render loop (which has no other
+  // frame limiter) free-runs above refresh on light scenes, burning GPU on
+  // frames that are never scanned out. The wait overlaps this frame's render,
+  // which was already submitted by the preceding eglSwapBuffers, so capping at
+  // refresh does not stall the pipeline.
+  m_eglClientWaitSyncKHR(m_display, m_kmsFence, 0, EGL_FOREVER_KHR);
+  m_eglDestroySyncKHR(m_display, m_kmsFence);
+
+  // Clear after destroy. CreateKMSFence is skipped on a frame whose previous
+  // commit produced no out-fence (fd == -1), so without this a later call would
+  // re-destroy this already-freed handle.
+  m_kmsFence = EGL_NO_SYNC_KHR;
 }
 #endif
