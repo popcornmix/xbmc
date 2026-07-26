@@ -33,6 +33,7 @@ extern "C"
 #include <libavfilter/buffersrc.h>
 #include <libavutil/error.h>
 #include <libavutil/imgutils.h>
+#include <libavutil/mathematics.h>
 #include <libavutil/opt.h>
 #include <libavutil/pixdesc.h>
 }
@@ -791,6 +792,9 @@ bool CDVDVideoCodecDRMPRIME::FilterOpen(const std::string& filters, bool test)
   par->width = m_pCodecContext->width;
   par->height = m_pCodecContext->height;
   par->sample_aspect_ratio = m_pCodecContext->sample_aspect_ratio;
+  // Deinterlacers derive their (doubled) output frame rate from the input link's
+  // frame rate; leaving it unset makes the graph's rate metadata meaningless.
+  par->frame_rate = m_pCodecContext->framerate;
 #if LIBAVFILTER_BUILD >= AV_VERSION_INT(10, 1, 100)
   par->color_range = m_pCodecContext->color_range;
   par->color_space = m_pCodecContext->colorspace;
@@ -1030,6 +1034,34 @@ CDVDVideoCodec::VCReturn CDVDVideoCodecDRMPRIME::ProcessFilterOut()
     CLog::Log(LOGERROR, "CDVDVideoCodecDRMPRIME::{} - buffersink get frame failed: {} ({})",
               __FUNCTION__, err, ret);
     return VC_ERROR;
+  }
+
+  // Fix up the timestamps of a filtered frame.
+  //
+  // The filter graph may use a different time base than the decoder: bwdif and
+  // yadif are configured here in send_field mode ("=1:-1:1"), which emits one
+  // frame per field and halves the output time base, expressing pts in that
+  // halved base. Rescale back to the codec time base.
+  //
+  // best_effort_timestamp is a decoder-only field that filters do not maintain.
+  // av_frame_copy_props() carries the source frame's value over unchanged, so
+  // both fields deinterlaced from one input frame report the same timestamp.
+  // GetPicture() reads best_effort_timestamp, so the frame duration then
+  // alternates between zero and a whole frame, which defeats
+  // CVideoPlayerVideo::CalcFrameRate() - it cannot resolve a pattern, gives up
+  // and leaves the frame rate unknown (reported as 0). Refresh it from pts.
+  const AVRational filterTimeBase = av_buffersink_get_time_base(m_pFilterOut);
+  if (m_pFilterFrame->pts != AV_NOPTS_VALUE)
+  {
+    if (filterTimeBase.num > 0 && filterTimeBase.den > 0 &&
+        (filterTimeBase.num != m_pCodecContext->time_base.num ||
+         filterTimeBase.den != m_pCodecContext->time_base.den))
+    {
+      m_pFilterFrame->pts =
+          av_rescale_q(m_pFilterFrame->pts, filterTimeBase, m_pCodecContext->time_base);
+    }
+
+    m_pFilterFrame->best_effort_timestamp = m_pFilterFrame->pts;
   }
 
   av_frame_unref(m_pFrame);
