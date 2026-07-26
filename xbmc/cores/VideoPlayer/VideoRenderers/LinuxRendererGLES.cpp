@@ -15,6 +15,7 @@
 #include "VideoShaders/dither.h"
 #include "application/Application.h"
 #include "cores/IPlayer.h"
+#include "cores/VideoPlayer/VideoRenderers/RenderFlags.h"
 #include "guilib/Texture.h"
 #include "rendering/GLExtensions.h"
 #include "rendering/MatrixGL.h"
@@ -188,6 +189,9 @@ bool CLinuxRendererGLES::Configure(const VideoPicture &picture, float fps, unsig
   m_sourceWidth = picture.iWidth;
   m_sourceHeight = picture.iHeight;
   m_renderOrientation = orientation;
+
+  m_iFlags =
+      GetFlagsChromaPosition(picture.chroma_position) | GetFlagsStereoMode(picture.stereoMode);
 
   m_srcPrimaries = picture.color_primaries;
   m_srcColorBits = picture.colorBits;
@@ -1101,34 +1105,39 @@ bool CLinuxRendererGLES::UploadTexture(int index)
     return false;
   }
 
-  if (m_buffers[index].loaded)
+  bool ret{true};
+
+  if (!m_buffers[index].loaded)
   {
-    return true;
+    YuvImage& dst = m_buffers[index].image;
+    m_buffers[index].videoBuffer->GetPlanes(dst.plane);
+    m_buffers[index].videoBuffer->GetStrides(dst.stride);
+
+    if (m_format == AV_PIX_FMT_NV12)
+    {
+      ret = UploadNV12Texture(index);
+    }
+    else if (m_format == AV_PIX_FMT_YUYV422 || m_format == AV_PIX_FMT_UYVY422)
+    {
+      ret = UploadPackedYUVTexture(index);
+    }
+    else
+    {
+      // default to planar YUV texture handlers
+      ret = UploadPlanarYUVTexture(index);
+    }
+
+    if (ret)
+    {
+      m_buffers[index].loaded = true;
+    }
   }
 
-  bool ret{false};
-
-  YuvImage &dst = m_buffers[index].image;
-  m_buffers[index].videoBuffer->GetPlanes(dst.plane);
-  m_buffers[index].videoBuffer->GetStrides(dst.stride);
-
-  if (m_format == AV_PIX_FMT_NV12)
-  {
-    ret = UploadNV12Texture(index);
-  }
-  else if (m_format == AV_PIX_FMT_YUYV422 || m_format == AV_PIX_FMT_UYVY422)
-  {
-    ret = UploadPackedYUVTexture(index);
-  }
-  else
-  {
-    // default to planar YUV texture handlers
-    ret = UploadPlanarYUVTexture(index);
-  }
-
+  // recalculate on every render, not just on upload: ManageRenderArea() moves
+  // m_sourceRect between the two eyes of a stereoscopic source
   if (ret)
   {
-    m_buffers[index].loaded = true;
+    CalculateTextureSourceRects(index, 3);
   }
 
   return ret;
@@ -1602,8 +1611,6 @@ bool CLinuxRendererGLES::UploadPlanarYUVTexture(int source)
 
   VerifyGLState();
 
-  CalculateTextureSourceRects(source, 3);
-
   return true;
 }
 
@@ -1807,8 +1814,6 @@ bool CLinuxRendererGLES::UploadNV12Texture(int source)
 
   VerifyGLState();
 
-  CalculateTextureSourceRects(source, 3);
-
   return true;
 }
 
@@ -1963,8 +1968,6 @@ bool CLinuxRendererGLES::UploadPackedYUVTexture(int source)
             im->bpp, im->plane[0]);
 
   VerifyGLState();
-
-  CalculateTextureSourceRects(source, 3);
 
   return true;
 }
