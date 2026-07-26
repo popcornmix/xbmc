@@ -767,6 +767,12 @@ RESOLUTION_INFO CDRMUtils::GetResolutionInfo(drmModeModeInfoPtr mode)
   RESOLUTION_INFO res;
   res.iScreenWidth = mode->hdisplay;
   res.iScreenHeight = mode->vdisplay;
+
+  // Frame packing scans out both eyes plus an active-space gap, i.e.
+  // (vdisplay + vtotal) lines. The kernel doubles the CRTC timing to match.
+  if ((mode->flags & DRM_MODE_FLAG_3D_MASK) == DRM_MODE_FLAG_3D_FRAME_PACKING)
+    res.iScreenHeight = mode->vdisplay + mode->vtotal;
+
   res.iWidth = res.iScreenWidth;
   res.iHeight = res.iScreenHeight;
 
@@ -821,17 +827,33 @@ RESOLUTION_INFO CDRMUtils::GetResolutionInfo(drmModeModeInfoPtr mode)
   res.fPixelRatio = 1.0f;
   res.bFullScreen = true;
 
-  if (mode->flags & DRM_MODE_FLAG_3D_MASK)
+  res.dwFlags = mode->flags & DRM_MODE_FLAG_INTERLACE ? D3DPRESENTFLAG_INTERLACED
+                                                      : D3DPRESENTFLAG_PROGRESSIVE;
+
+  // The 3D layout is a masked enum, not independent bits (TOP_AND_BOTTOM is
+  // 7<<14 and shares bit 14 with FRAME_PACKING 1<<14), so match the whole field.
+  switch (mode->flags & DRM_MODE_FLAG_3D_MASK)
   {
-    if (mode->flags & DRM_MODE_FLAG_3D_TOP_AND_BOTTOM)
-      res.dwFlags = D3DPRESENTFLAG_MODE3DTB;
-    else if (mode->flags & DRM_MODE_FLAG_3D_SIDE_BY_SIDE_HALF)
-      res.dwFlags = D3DPRESENTFLAG_MODE3DSBS;
+    case DRM_MODE_FLAG_3D_TOP_AND_BOTTOM:
+      // Half layout: each eye is sent at half height and displayed full height,
+      // so its pixels are twice as tall. CGraphicContext trusts the stored ratio
+      // for a natively flagged 3D mode, so it has to be set here.
+      res.dwFlags |= D3DPRESENTFLAG_MODE3DTB;
+      res.fPixelRatio = 0.5f;
+      break;
+    case DRM_MODE_FLAG_3D_SIDE_BY_SIDE_HALF:
+      res.dwFlags |= D3DPRESENTFLAG_MODE3DSBS;
+      res.fPixelRatio = 2.0f;
+      break;
+    case DRM_MODE_FLAG_3D_FRAME_PACKING:
+      // Two full-size eyes stacked with an active-space gap: a top-and-bottom
+      // layout whose right eye sits at iHeight + iBlanking (StereoCorrection).
+      res.dwFlags |= D3DPRESENTFLAG_MODE3DTB;
+      res.iBlanking = mode->vtotal - mode->vdisplay;
+      break;
+    default:
+      break;
   }
-  else if (mode->flags & DRM_MODE_FLAG_INTERLACE)
-    res.dwFlags = D3DPRESENTFLAG_INTERLACED;
-  else
-    res.dwFlags = D3DPRESENTFLAG_PROGRESSIVE;
 
   res.strMode =
       StringUtils::Format("{}x{}{} @ {:.6f} Hz", res.iScreenWidth, res.iScreenHeight,
@@ -851,7 +873,16 @@ std::vector<RESOLUTION_INFO> CDRMUtils::GetModes()
 
   for (auto i = 0; i < m_connector->GetModesCount(); i++)
   {
-    RESOLUTION_INFO res = GetResolutionInfo(m_connector->GetModeForIndex(i));
+    drmModeModeInfoPtr mode = m_connector->GetModeForIndex(i);
+
+    // Interlaced frame packing cannot be driven from a progressive framebuffer;
+    // hide it so it is never picked for 3D playback. strId stays the connector
+    // mode index (SetMode() looks the mode up by it), so skip without renumbering.
+    if ((mode->flags & DRM_MODE_FLAG_3D_MASK) == DRM_MODE_FLAG_3D_FRAME_PACKING &&
+        (mode->flags & DRM_MODE_FLAG_INTERLACE))
+      continue;
+
+    RESOLUTION_INFO res = GetResolutionInfo(mode);
     res.strId = std::to_string(i);
     resolutions.push_back(res);
   }
