@@ -102,10 +102,16 @@ void CDRMAtomic::DrmAtomicCommit(int fb_id, int flags, bool rendered, bool video
     AddProperty(outputPlane, "SRC_Y", 0);
     AddProperty(outputPlane, "SRC_W", m_width << 16);
     AddProperty(outputPlane, "SRC_H", m_height << 16);
+    // Frame packing scans out (vdisplay + vtotal) lines - the kernel doubles the
+    // CRTC timing - and the framebuffer is sized to match, so cover all of it.
+    uint32_t crtcHeight = m_mode->vdisplay;
+    if ((m_mode->flags & DRM_MODE_FLAG_3D_MASK) == DRM_MODE_FLAG_3D_FRAME_PACKING)
+      crtcHeight += m_mode->vtotal;
+
     AddProperty(outputPlane, "CRTC_X", 0);
     AddProperty(outputPlane, "CRTC_Y", 0);
     AddProperty(outputPlane, "CRTC_W", m_mode->hdisplay);
-    AddProperty(outputPlane, "CRTC_H", m_mode->vdisplay);
+    AddProperty(outputPlane, "CRTC_H", crtcHeight);
 
     if (m_inFenceFd != -1)
     {
