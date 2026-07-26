@@ -126,6 +126,18 @@ protected:
   void CalcNormalRenderRect(float offsetX, float offsetY, float width, float height,
                             float inputFrameRatio, float zoomAmount, float verticalShift);
   void CalculateFrameAspectRatio(unsigned int desired_width, unsigned int desired_height);
+
+  /*!
+   * \brief Aspect ratio of a single eye of a packed stereoscopic source.
+   *
+   * For a "full" side-by-side / top-and-bottom source the declared aspect ratio
+   * describes the whole packed frame, so one eye is half (SBS) or double (TAB)
+   * that. Corrected only when the declared ratio falls outside the range a
+   * single frame can plausibly have, so "half" packed sources and all
+   * non-stereoscopic sources are returned unchanged.
+   */
+  float GetPerEyeAspectRatio() const;
+
   virtual void ManageRenderArea();
   virtual void ReorderDrawPoints();
   virtual EShaderFormat GetShaderFormat();
