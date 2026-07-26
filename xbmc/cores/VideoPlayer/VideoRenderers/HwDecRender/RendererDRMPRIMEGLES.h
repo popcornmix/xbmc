@@ -44,10 +44,14 @@ public:
   static CBaseRenderer* Create(CVideoBuffer* buffer);
   static void Register();
 
-  //! Draw an imported DRMPRIME OES texture as a quad at dest (4 points,
-  //! full-frame texcoords) with SM_TEXTURE_RGBA_OES; sets no contrast or
-  //! brightness. Shared by Render() and direct-to-plane screencap.
-  static void DrawTexture(CRenderSystemGLES& renderSystem, GLuint texture, const CPoint dest[4]);
+  //! Draw an imported DRMPRIME OES texture as a quad at dest (4 points),
+  //! sampling the normalised crop (0..1 for the whole frame), with
+  //! SM_TEXTURE_RGBA_OES; sets no contrast or brightness. Shared by Render()
+  //! and direct-to-plane screencap.
+  static void DrawTexture(CRenderSystemGLES& renderSystem,
+                          GLuint texture,
+                          const CPoint dest[4],
+                          const CRect& crop);
 
   // Player functions
   bool Configure(const VideoPicture& picture, float fps, unsigned int orientation) override;
@@ -73,6 +77,10 @@ public:
 private:
   void DrawBlackBars();
   void Render(unsigned int flags, int index);
+
+  //! \brief m_sourceRect as texture coordinates (0..1); the whole frame unless
+  //!        ManageRenderArea() has cropped it to one eye of a stereo source.
+  CRect GetNormalisedSourceRect() const;
 
   bool m_configured = false;
   bool m_passthroughHDR{false};

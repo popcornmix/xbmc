@@ -446,6 +446,12 @@ bool CRendererDRMPRIMEGLES::ConfigChanged(const VideoPicture& picture)
   return false;
 }
 
+CRect CRendererDRMPRIMEGLES::GetNormalisedSourceRect() const
+{
+  return CRect(m_sourceRect.x1 / m_sourceWidth, m_sourceRect.y1 / m_sourceHeight,
+               m_sourceRect.x2 / m_sourceWidth, m_sourceRect.y2 / m_sourceHeight);
+}
+
 void CRendererDRMPRIMEGLES::Render(unsigned int flags, int index)
 {
   BUFFER& buf = m_buffers[index];
@@ -523,18 +529,19 @@ void CRendererDRMPRIMEGLES::Render(unsigned int flags, int index)
       vert[i][2] = 0.0f;
     }
 
-    // Per-plane texcoords are 0..1; each EGL-imported texture covers the
-    // whole plane regardless of chroma subsampling.
+    // Per-plane texcoords are normalised; each EGL-imported texture covers the
+    // whole plane regardless of chroma subsampling, so one crop fits all three.
+    const CRect crop = GetNormalisedSourceRect();
     for (int p = 0; p < 3; p++)
     {
-      tex[p][0][0] = 0.0f;
-      tex[p][0][1] = 0.0f;
-      tex[p][1][0] = 1.0f;
-      tex[p][1][1] = 0.0f;
-      tex[p][2][0] = 1.0f;
-      tex[p][2][1] = 1.0f;
-      tex[p][3][0] = 0.0f;
-      tex[p][3][1] = 1.0f;
+      tex[p][0][0] = crop.x1;
+      tex[p][0][1] = crop.y1;
+      tex[p][1][0] = crop.x2;
+      tex[p][1][1] = crop.y1;
+      tex[p][2][0] = crop.x2;
+      tex[p][2][1] = crop.y2;
+      tex[p][3][0] = crop.x1;
+      tex[p][3][1] = crop.y2;
     }
 
     glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_BYTE, idx);
@@ -563,7 +570,8 @@ void CRendererDRMPRIMEGLES::Render(unsigned int flags, int index)
   if (!texture)
     return;
 
-  DrawTexture(*renderSystem, texture->GetTexture(), m_rotatedDestCoords);
+  DrawTexture(*renderSystem, texture->GetTexture(), m_rotatedDestCoords,
+              GetNormalisedSourceRect());
 
   buf.fence->DestroyFence();
   buf.fence->CreateFence();
@@ -571,7 +579,8 @@ void CRendererDRMPRIMEGLES::Render(unsigned int flags, int index)
 
 void CRendererDRMPRIMEGLES::DrawTexture(CRenderSystemGLES& renderSystem,
                                         GLuint texture,
-                                        const CPoint dest[4])
+                                        const CPoint dest[4],
+                                        const CRect& crop)
 {
   glBindTexture(GL_TEXTURE_EXTERNAL_OES, texture);
 
@@ -596,29 +605,29 @@ void CRendererDRMPRIMEGLES::DrawTexture(CRenderSystemGLES& renderSystem,
   vertex[0].x = dest[0].x;
   vertex[0].y = dest[0].y;
   vertex[0].z = 0.0f;
-  vertex[0].u1 = 0.0f;
-  vertex[0].v1 = 0.0f;
+  vertex[0].u1 = crop.x1;
+  vertex[0].v1 = crop.y1;
 
   // top right
   vertex[1].x = dest[1].x;
   vertex[1].y = dest[1].y;
   vertex[1].z = 0.0f;
-  vertex[1].u1 = 1.0f;
-  vertex[1].v1 = 0.0f;
+  vertex[1].u1 = crop.x2;
+  vertex[1].v1 = crop.y1;
 
   // bottom right
   vertex[2].x = dest[2].x;
   vertex[2].y = dest[2].y;
   vertex[2].z = 0.0f;
-  vertex[2].u1 = 1.0f;
-  vertex[2].v1 = 1.0f;
+  vertex[2].u1 = crop.x2;
+  vertex[2].v1 = crop.y2;
 
   // bottom left
   vertex[3].x = dest[3].x;
   vertex[3].y = dest[3].y;
   vertex[3].z = 0.0f;
-  vertex[3].u1 = 0.0f;
-  vertex[3].v1 = 1.0f;
+  vertex[3].u1 = crop.x1;
+  vertex[3].v1 = crop.y2;
 
   glGenBuffers(1, &vertexVBO);
   glBindBuffer(GL_ARRAY_BUFFER, vertexVBO);
