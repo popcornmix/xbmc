@@ -110,7 +110,10 @@ bool CaptureDRMPRIMEVideo(CVideoBufferDRMPRIME* buffer,
                             {static_cast<float>(width), 0.0f},
                             {static_cast<float>(width), static_cast<float>(height)},
                             {0.0f, static_cast<float>(height)}};
-    CRendererDRMPRIMEGLES::DrawTexture(*renderSystem, texture.GetTexture(), dest);
+    // whole buffer: a stereoscopic source is captured packed, as the plane
+    // scans it out, rather than cropped to whichever eye is drawing now
+    CRendererDRMPRIMEGLES::DrawTexture(*renderSystem, texture.GetTexture(), dest,
+                                       CRect(0.0f, 0.0f, 1.0f, 1.0f));
 
     glMatrixProject.PopLoad();
     glMatrixModview.PopLoad();
