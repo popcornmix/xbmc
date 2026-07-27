@@ -13,6 +13,7 @@
 #include "windowing/gbm/VideoLayerBridge.h"
 
 #include <memory>
+#include <span>
 
 #include <drm_mode.h>
 
@@ -23,6 +24,7 @@ namespace WINDOWING
 namespace GBM
 {
 class CDRMAtomic;
+class CDRMPlane;
 }
 } // namespace WINDOWING
 } // namespace KODI
@@ -32,12 +34,27 @@ class CVideoBufferDRMPRIME;
 class CVideoLayerBridgeDRMPRIME : public KODI::WINDOWING::GBM::CVideoLayerBridge
 {
 public:
+  //! \brief One scanout rectangle pair: a crop of the buffer onto a screen area.
+  struct PlaneRects
+  {
+    CRect source;
+    CRect dest;
+  };
+
   CVideoLayerBridgeDRMPRIME(std::shared_ptr<KODI::WINDOWING::GBM::CDRMAtomic> drm);
   ~CVideoLayerBridgeDRMPRIME() override;
   void Disable() override;
 
   virtual void Configure(CVideoBufferDRMPRIME* buffer);
-  virtual void SetVideoPlane(CVideoBufferDRMPRIME* buffer, const CRect& destRect);
+
+  /*!
+   * \brief Scan the buffer out on the video plane(s).
+   *
+   * One entry presents the buffer on the single video plane. Two entries need
+   * a second video plane and present one stereoscopic eye on each; the second
+   * is ignored if no second plane was claimed.
+   */
+  virtual void SetVideoPlane(CVideoBufferDRMPRIME* buffer, std::span<const PlaneRects> rects);
   virtual void UpdateVideoPlane();
 
 protected:
@@ -49,6 +66,9 @@ private:
   bool PrepareBuffer(CVideoBufferDRMPRIME* buffer);
   //! \brief Convert the buffer's descriptor to a framebuffer; 0 on failure.
   uint32_t CreateFramebuffer(CVideoBufferDRMPRIME* buffer);
+  void SetPlaneRects(KODI::WINDOWING::GBM::CDRMPlane* plane,
+                     CVideoBufferDRMPRIME* buffer,
+                     const PlaneRects& rects);
 
   static constexpr size_t MAX_FB_CACHE = 32;
 

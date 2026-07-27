@@ -24,6 +24,10 @@
 #include "windowing/gbm/WinSystemGbm.h"
 #include "windowing/gbm/drm/DRMAtomic.h"
 
+#include <algorithm>
+#include <array>
+#include <span>
+
 using namespace KODI::WINDOWING::GBM;
 
 CRendererDRMPRIME::~CRendererDRMPRIME()
@@ -134,6 +138,10 @@ bool CRendererDRMPRIME::Configure(const VideoPicture& picture, float fps, unsign
                             "GUI compositing not supported by windowing system");
   }
 
+  // A stereoscopic source needs one plane per eye; without a second plane the
+  // whole packed frame is scanned out on the single plane instead.
+  m_stereoPlaneWanted = CachePlaneParams(picture) && CONF_FLAGS_STEREO_MODE_MASK(m_iFlags) != 0;
+
   // Calculate the input frame aspect ratio.
   CalculateFrameAspectRatio(picture.iDisplayWidth, picture.iDisplayHeight);
   SetViewMode(m_videoSettings.m_ViewMode);
@@ -145,9 +153,161 @@ bool CRendererDRMPRIME::Configure(const VideoPicture& picture, float fps, unsign
   return true;
 }
 
+bool CRendererDRMPRIME::CachePlaneParams(const VideoPicture& picture)
+{
+  auto* buffer = dynamic_cast<CVideoBufferDRMPRIME*>(picture.videoBuffer);
+  if (!buffer || !buffer->AcquireDescriptor())
+    return false;
+
+  const AVDRMFrameDescriptor* desc = buffer->GetDescriptor();
+  if (desc)
+  {
+    m_planeParams.format = desc->layers[0].format;
+    m_planeParams.modifier = desc->objects[0].format_modifier;
+    m_planeParams.width = buffer->GetWidth();
+    m_planeParams.height = buffer->GetHeight();
+  }
+  buffer->ReleaseDescriptor();
+
+  return desc != nullptr;
+}
+
+void CRendererDRMPRIME::EnsurePlanes()
+{
+  auto* winSystem = dynamic_cast<CWinSystemGbm*>(CServiceBroker::GetWinSystem());
+  if (!winSystem || m_planeParams.format == 0)
+    return;
+
+  auto drm = winSystem->GetDrm();
+
+  // A display mode change re-runs FindGuiPlane(), whose "reuse the existing gui
+  // plane" path drops the video plane - it assumes the single-plane model where
+  // one plane flips between the gui and video roles. Direct-to-Plane needs both,
+  // so claim the pair again or nothing is ever scanned out on the video plane.
+  if (!drm->GetVideoPlane())
+    drm->FindVideoAndGuiPlane(m_planeParams.format, m_planeParams.modifier, m_planeParams.width,
+                              m_planeParams.height);
+
+  // Same for the second video plane. Give up for good on failure rather than
+  // searching the planes on every frame.
+  if (m_stereoPlaneWanted && !drm->GetVideoPlane2())
+    m_stereoPlaneWanted = drm->FindSecondVideoPlane(m_planeParams.format, m_planeParams.modifier,
+                                                    m_planeParams.width, m_planeParams.height);
+}
+
+bool CRendererDRMPRIME::SetStereoPlaneGeometry()
+{
+  auto& gfxContext = CServiceBroker::GetWinSystem()->GetGfxContext();
+  const RenderStereoMode stereoMode = gfxContext.GetStereoMode();
+  if (stereoMode != RenderStereoMode::SPLIT_VERTICAL &&
+      stereoMode != RenderStereoMode::SPLIT_HORIZONTAL)
+    return false;
+
+  auto* winSystem = dynamic_cast<CWinSystemGbm*>(CServiceBroker::GetWinSystem());
+  if (!winSystem || !winSystem->GetDrm()->GetVideoPlane2())
+    return SetPackedPlaneGeometry(stereoMode);
+
+  // One plane per eye. CBaseRenderer::ManageRenderArea() crops the source to the
+  // eye of the current view and fits it to the halved screen GetResInfo()
+  // reports for a split mode, and StereoCorrection() then places that half where
+  // the sink expects it - below the active space gap for frame packing. So both
+  // the source layout and the output layout are handled by the shared code, and
+  // a side-by-side source on a top-and-bottom display just works.
+  const RenderStereoView view = gfxContext.GetStereoView();
+
+  gfxContext.SetStereoView(RenderStereoView::LEFT);
+  CBaseRenderer::ManageRenderArea();
+  m_planeSourceRect = m_sourceRect;
+  m_planeDestRect = gfxContext.StereoCorrection(m_destRect);
+
+  gfxContext.SetStereoView(RenderStereoView::RIGHT);
+  CBaseRenderer::ManageRenderArea();
+  m_planeSourceRect2 = m_sourceRect;
+  m_planeDestRect2 = gfxContext.StereoCorrection(m_destRect);
+
+  // Restore the view, and with it m_sourceRect / m_destRect for GetVideoRect().
+  gfxContext.SetStereoView(view);
+  CBaseRenderer::ManageRenderArea();
+
+  // Those rects are in GUI coordinates - the resolution's iWidth x iHeight - but
+  // a plane scans out in physical coordinates, iScreenWidth x iScreenHeight. The
+  // two differ when the GUI is rendered smaller than the mode (limitguisize),
+  // where the GUI plane is scaled up to the mode; without scaling the eyes would
+  // cover only the GUI-sized corner of the screen.
+  const RESOLUTION_INFO base =
+      CDisplaySettings::GetInstance().GetResolutionInfo(gfxContext.GetVideoResolution());
+  if (base.iWidth > 0 && base.iHeight > 0 &&
+      (base.iScreenWidth != base.iWidth || base.iScreenHeight != base.iHeight))
+  {
+    const float scaleX = static_cast<float>(base.iScreenWidth) / static_cast<float>(base.iWidth);
+    const float scaleY = static_cast<float>(base.iScreenHeight) / static_cast<float>(base.iHeight);
+    const auto toScanout = [scaleX, scaleY](CRect& rect)
+    {
+      rect.x1 *= scaleX;
+      rect.x2 *= scaleX;
+      rect.y1 *= scaleY;
+      rect.y2 *= scaleY;
+    };
+
+    toScanout(m_planeDestRect);
+    toScanout(m_planeDestRect2);
+  }
+
+  m_planeCount = 2;
+  return true;
+}
+
+bool CRendererDRMPRIME::SetPackedPlaneGeometry(RenderStereoMode stereoMode)
+{
+  // Fallback with only one plane: it presents one buffer per commit and so
+  // cannot build a split, which needs two independent source->dest mappings.
+  // Scan out the whole packed frame across the whole screen instead - a 3D
+  // display consumes it directly. Frame packing comes out misaligned this way,
+  // as the active space gap cannot be reproduced by one uniform mapping.
+  m_planeSourceRect =
+      CRect(0.0f, 0.0f, static_cast<float>(m_sourceWidth), static_cast<float>(m_sourceHeight));
+
+  // One uniform mapping means the per-eye aspect can only be corrected on the
+  // axis both eyes share: vertically for side-by-side, horizontally for
+  // top-and-bottom. The other axis must span the full screen, or the eye
+  // boundary moves off the half the display expects and both eyes misalign.
+  const RESOLUTION_INFO info = CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo();
+  const float screenWidth = static_cast<float>(info.iScreenWidth);
+  const float screenHeight = static_cast<float>(info.iScreenHeight);
+  const float zoom = CDisplaySettings::GetInstance().GetZoomAmount();
+  const float aspect = GetPerEyeAspectRatio() * CDisplaySettings::GetInstance().GetPixelRatio();
+
+  float width = screenWidth;
+  float height = screenHeight;
+  if (aspect > 0.0f)
+  {
+    if (stereoMode == RenderStereoMode::SPLIT_VERTICAL)
+      height = std::min(screenHeight, screenWidth / aspect * zoom);
+    else
+      width = std::min(screenWidth, screenHeight * aspect * zoom);
+  }
+
+  const float x = (screenWidth - width) * 0.5f;
+  const float y = (screenHeight - height) * 0.5f;
+  m_planeDestRect = CRect(x, y, x + width, y + height);
+
+  m_planeCount = 1;
+  return true;
+}
+
 void CRendererDRMPRIME::ManageRenderArea()
 {
   CBaseRenderer::ManageRenderArea();
+
+  EnsurePlanes();
+
+  if (SetStereoPlaneGeometry())
+    return;
+
+  // Whole frame, except for "watch as 2D" (MONO) of a stereoscopic source, where
+  // CBaseRenderer::ManageRenderArea() has cropped it to the eye to show.
+  m_planeCount = 1;
+  m_planeSourceRect = m_sourceRect;
 
   RESOLUTION_INFO info = CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo();
   if (info.iScreenWidth != info.iWidth)
@@ -263,7 +423,9 @@ void CRendererDRMPRIME::RenderUpdate(
   if (m_iLastRenderBuffer == -1)
     m_videoLayerBridge->Configure(buffer);
 
-  m_videoLayerBridge->SetVideoPlane(buffer, m_planeDestRect);
+  const std::array<CVideoLayerBridgeDRMPRIME::PlaneRects, 2> rects{
+      {{m_planeSourceRect, m_planeDestRect}, {m_planeSourceRect2, m_planeDestRect2}}};
+  m_videoLayerBridge->SetVideoPlane(buffer, std::span(rects).first(m_planeCount));
 
   m_iLastRenderBuffer = index;
 }

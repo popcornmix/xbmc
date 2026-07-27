@@ -9,6 +9,7 @@
 #pragma once
 
 #include "cores/VideoPlayer/VideoRenderers/BaseRenderer.h"
+#include "rendering/RenderSystemTypes.h"
 
 class CVideoBuffer;
 class CVideoLayerBridgeDRMPRIME;
@@ -49,9 +50,36 @@ protected:
   void ManageRenderArea() override;
 
 private:
+  //! \brief Geometry for a split stereo mode. False for any other mode, leaving
+  //!        the geometry to ManageRenderArea.
+  bool SetStereoPlaneGeometry();
+  //! \brief Single-plane fallback: the whole packed frame on the whole screen.
+  bool SetPackedPlaneGeometry(RenderStereoMode stereoMode);
+  //! \brief Record what the video plane(s) have to be able to scan out.
+  bool CachePlaneParams(const VideoPicture& picture);
+  //! \brief Reclaim any video plane a display mode change has taken away.
+  void EnsurePlanes();
+
   bool m_bConfigured = false;
   int m_iLastRenderBuffer = -1;
+
+  //! Buffer properties the video plane(s) have to support, cached so a plane
+  //! can be reclaimed after a reassignment.
+  struct
+  {
+    uint32_t format{0};
+    uint64_t modifier{0};
+    uint64_t width{0};
+    uint64_t height{0};
+  } m_planeParams;
+  bool m_stereoPlaneWanted{false};
+
+  //! Number of video planes in use: 2 while scanning out an eye per plane.
+  size_t m_planeCount{1};
+  CRect m_planeSourceRect;
   CRect m_planeDestRect;
+  CRect m_planeSourceRect2;
+  CRect m_planeDestRect2;
 
   std::shared_ptr<CVideoLayerBridgeDRMPRIME> m_videoLayerBridge;
 
