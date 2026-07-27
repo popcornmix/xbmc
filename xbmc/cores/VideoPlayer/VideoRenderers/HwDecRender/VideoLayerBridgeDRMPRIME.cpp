@@ -10,10 +10,12 @@
 
 #include "ServiceBroker.h"
 #include "cores/VideoPlayer/Buffers/VideoBufferDRMPRIME.h"
+#include "utils/MathUtils.h"
 #include "utils/log.h"
 #include "windowing/WinSystem.h"
 #include "windowing/gbm/drm/DRMAtomic.h"
 
+#include <algorithm>
 #include <utility>
 
 using namespace KODI::WINDOWING::GBM;
@@ -240,10 +242,19 @@ void CVideoLayerBridgeDRMPRIME::SetVideoPlane(CVideoBufferDRMPRIME* buffer, cons
   m_DRM->AddProperty(plane, "SRC_Y", 0);
   m_DRM->AddProperty(plane, "SRC_W", buffer->GetWidth() << 16);
   m_DRM->AddProperty(plane, "SRC_H", buffer->GetHeight() << 16);
-  m_DRM->AddProperty(plane, "CRTC_X", static_cast<int32_t>(destRect.x1) & ~1);
-  m_DRM->AddProperty(plane, "CRTC_Y", static_cast<int32_t>(destRect.y1) & ~1);
-  m_DRM->AddProperty(plane, "CRTC_W", (static_cast<uint32_t>(destRect.Width()) + 1) & ~1);
-  m_DRM->AddProperty(plane, "CRTC_H", (static_cast<uint32_t>(destRect.Height()) + 1) & ~1);
+  // The CRTC rect addresses the composited output, which is not subsampled, so
+  // it needs no even alignment - and must not be forced to it, or any odd
+  // coordinate becomes unreachable. Program the rounded edges, which also keeps
+  // the position and the size consistent with each other.
+  const int32_t dstX1 = MathUtils::round_int(static_cast<double>(destRect.x1));
+  const int32_t dstY1 = MathUtils::round_int(static_cast<double>(destRect.y1));
+  const int32_t dstX2 = MathUtils::round_int(static_cast<double>(destRect.x2));
+  const int32_t dstY2 = MathUtils::round_int(static_cast<double>(destRect.y2));
+
+  m_DRM->AddProperty(plane, "CRTC_X", dstX1);
+  m_DRM->AddProperty(plane, "CRTC_Y", dstY1);
+  m_DRM->AddProperty(plane, "CRTC_W", static_cast<uint32_t>(std::max(0, dstX2 - dstX1)));
+  m_DRM->AddProperty(plane, "CRTC_H", static_cast<uint32_t>(std::max(0, dstY2 - dstY1)));
 }
 
 void CVideoLayerBridgeDRMPRIME::UpdateVideoPlane()
