@@ -167,6 +167,10 @@ bool CDRMUtils::FindGuiPlane(uint32_t format, uint64_t modifier)
     return false;
   }
 
+  // Any plane reassignment invalidates the stereoscopic second video plane; it
+  // is re-acquired by the renderer if still needed.
+  m_video_plane2 = nullptr;
+
   const PlaneType plane_type = HasQuirk(QUIRK_NEEDSPRIMARY) ? PLANE_TYPE_PRIMARY : PLANE_TYPE_ANY;
   const RESOLUTION_INFO res = GetCurrentMode();
 
@@ -239,6 +243,8 @@ bool CDRMUtils::FindVideoPlane(uint32_t format, uint64_t modifier)
                DRMHELPERS::FourCCToString(format));
     return false;
   }
+
+  m_video_plane2 = nullptr;
 
   const PlaneType plane_type = HasQuirk(QUIRK_NEEDSPRIMARY) ? PLANE_TYPE_PRIMARY : PLANE_TYPE_ANY;
   const RESOLUTION_INFO res = GetCurrentMode();
@@ -321,6 +327,8 @@ bool CDRMUtils::FindVideoAndGuiPlane(uint32_t format,
       return true;
   }
 
+  m_video_plane2 = nullptr;
+
   for (auto& crtc : m_encoder->GetPossibleCrtcs(m_crtcs, m_crtc))
   {
     for (auto& gui_plane : m_planes)
@@ -365,6 +373,46 @@ bool CDRMUtils::FindVideoAndGuiPlane(uint32_t format,
              DRMHELPERS::ModifierToString(modifier), res.iWidth, res.iHeight,
              DRMHELPERS::FourCCToString(m_gui_plane->GetFormat()),
              DRMHELPERS::ModifierToString(m_gui_plane->GetModifier()));
+  return false;
+}
+
+bool CDRMUtils::FindSecondVideoPlane(uint32_t format,
+                                     uint64_t modifier,
+                                     uint64_t width,
+                                     uint64_t height)
+{
+  // Only meaningful alongside a dedicated video plane, i.e. Direct-to-Plane.
+  if (!m_crtc || !m_gui_plane || !m_video_plane)
+    return false;
+
+  if (m_video_plane2 &&
+      m_video_plane2->Check(width, height, format, modifier, m_crtc, PLANE_TYPE_ANY))
+    return true;
+
+  for (auto& plane : m_planes)
+  {
+    if (plane->GetId() == m_gui_plane->GetId() || plane->GetId() == m_video_plane->GetId())
+      continue;
+
+    // The two video planes never overlap, so only their order against the gui
+    // plane matters.
+    if (!plane->Check(width, height, format, modifier, m_crtc, PLANE_TYPE_ANY) ||
+        !m_gui_plane->MoveOnTopOf(plane.get()))
+      continue;
+
+    plane->SetFormat(format);
+    plane->SetModifier(modifier);
+    m_video_plane2 = plane.get();
+
+    CLog::LogF(LOGINFO,
+               "Using second video plane [{}x{}] id:{}, format:{}, modifier:{}, crtc id:{}", width,
+               height, m_video_plane2->GetId(), DRMHELPERS::FourCCToString(format),
+               DRMHELPERS::ModifierToString(modifier), m_crtc->GetId());
+    return true;
+  }
+
+  CLog::LogF(LOGDEBUG, "No second video plane available for [{}x{}] format:{}, modifier:{}", width,
+             height, DRMHELPERS::FourCCToString(format), DRMHELPERS::ModifierToString(modifier));
   return false;
 }
 

@@ -65,6 +65,7 @@ public:
   int GetRenderNodeFileDescriptor() const { return m_renderFd; }
   const char* GetRenderDevicePath() const { return m_renderDevicePath; }
   CDRMPlane* GetVideoPlane() const { return m_video_plane; }
+  CDRMPlane* GetVideoPlane2() const { return m_video_plane2; }
   CDRMPlane* GetGuiPlane() const { return m_gui_plane; }
   CDRMCrtc* GetCrtc() const { return m_crtc; }
   CDRMConnector* GetConnector() const { return m_connector; }
@@ -75,6 +76,14 @@ public:
   // FindGuiPlane never releases a D2P video plane reservation; a caller that
   // means "video is over" states it here before revalidating the gui plane.
   void ReleaseVideoPlane() { m_video_plane = nullptr; }
+
+  /*!
+   * \brief Claim a second video plane below the gui plane, so stereoscopic
+   *        playback can scan out one eye per plane. Optional: on failure the
+   *        caller keeps using the single video plane.
+   */
+  bool FindSecondVideoPlane(uint32_t format, uint64_t modifier, uint64_t width, uint64_t height);
+
   bool HasQuirk(int quirk) const { return m_drm_quirks & quirk; }
 
   std::vector<std::string> GetConnectedConnectorNames();
@@ -101,6 +110,8 @@ protected:
   CDRMCrtc* m_old_crtc{nullptr};
   CDRMCrtc* m_orig_crtc{nullptr};
   CDRMPlane* m_video_plane{nullptr};
+  //! Second video plane, only held while scanning out stereoscopic content.
+  CDRMPlane* m_video_plane2{nullptr};
   CDRMPlane* m_gui_plane{nullptr};
   drmModeModeInfo* m_mode = nullptr;
 
