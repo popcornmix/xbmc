@@ -51,6 +51,8 @@ void CDRMAtomic::DrmAtomicCommit(int fb_id, int flags, bool rendered, bool video
         continue;
       if (m_video_plane != nullptr && m_video_plane->GetId() == plane->GetId())
         continue;
+      if (m_video_plane2 != nullptr && m_video_plane2->GetId() == plane->GetId())
+        continue;
 
       uint64_t planeid = plane->GetPropertyValue("CRTC_ID").value_or(0);
       if (planeid == m_crtc->GetId() || planeid == m_old_crtc->GetId())
