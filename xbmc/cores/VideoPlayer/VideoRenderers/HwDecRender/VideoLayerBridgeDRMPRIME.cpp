@@ -16,6 +16,8 @@
 #include "windowing/gbm/drm/DRMAtomic.h"
 
 #include <algorithm>
+#include <cmath>
+#include <cstdint>
 #include <utility>
 
 using namespace KODI::WINDOWING::GBM;
@@ -53,6 +55,12 @@ void CVideoLayerBridgeDRMPRIME::Disable()
 
   m_DRM->AddProperty(plane, "FB_ID", 0);
   m_DRM->AddProperty(plane, "CRTC_ID", 0);
+
+  if (auto* plane2 = m_DRM->GetVideoPlane2())
+  {
+    m_DRM->AddProperty(plane2, "FB_ID", 0);
+    m_DRM->AddProperty(plane2, "CRTC_ID", 0);
+  }
 }
 
 void CVideoLayerBridgeDRMPRIME::Acquire(CVideoBufferDRMPRIME* buffer, uint32_t fbId)
@@ -209,15 +217,21 @@ void CVideoLayerBridgeDRMPRIME::Configure(CVideoBufferDRMPRIME* buffer)
 
   const VideoPicture& picture = buffer->GetPicture();
 
-  std::optional<uint64_t> colorEncoding =
-      plane->GetPropertyEnumValue("COLOR_ENCODING", GetColorEncoding(picture));
-  if (colorEncoding)
-    m_DRM->AddProperty(plane, "COLOR_ENCODING", colorEncoding.value());
+  for (auto* p : {plane, m_DRM->GetVideoPlane2()})
+  {
+    if (!p)
+      continue;
 
-  std::optional<uint64_t> colorRange =
-      plane->GetPropertyEnumValue("COLOR_RANGE", GetColorRange(picture));
-  if (colorRange)
-    m_DRM->AddProperty(plane, "COLOR_RANGE", colorRange.value());
+    std::optional<uint64_t> colorEncoding =
+        p->GetPropertyEnumValue("COLOR_ENCODING", GetColorEncoding(picture));
+    if (colorEncoding)
+      m_DRM->AddProperty(p, "COLOR_ENCODING", colorEncoding.value());
+
+    std::optional<uint64_t> colorRange =
+        p->GetPropertyEnumValue("COLOR_RANGE", GetColorRange(picture));
+    if (colorRange)
+      m_DRM->AddProperty(p, "COLOR_RANGE", colorRange.value());
+  }
 
   // set max bpc to allow the drm driver to choose a deep colour mode
   int bpc = buffer->GetPicture().colorBits > 8 ? 12 : 8;
@@ -227,34 +241,84 @@ void CVideoLayerBridgeDRMPRIME::Configure(CVideoBufferDRMPRIME* buffer)
             bpc, result);
 }
 
-void CVideoLayerBridgeDRMPRIME::SetVideoPlane(CVideoBufferDRMPRIME* buffer, const CRect& destRect)
+void CVideoLayerBridgeDRMPRIME::SetPlaneRects(CDRMPlane* plane,
+                                              CVideoBufferDRMPRIME* buffer,
+                                              const PlaneRects& rects)
 {
-  auto plane = m_DRM->GetVideoPlane();
-  if (!plane)
-    return;
+  // Buffer dimensions equal the picture dimensions, so the source rect maps
+  // straight to the plane crop. SRC_* are 16.16 fixed point, which exists so a
+  // crop can start and end between pixels - that is how a plane pans and zooms
+  // smoothly. Keep the fractional part rather than truncating to whole pixels,
+  // and leave any alignment the hardware needs to the driver: userspace cannot
+  // enumerate that constraint, and the property advertises fractional support.
+  // Clamp the edges to the buffer and derive the size from them so the crop
+  // stays consistent, falling back to the whole buffer if it is empty.
+  constexpr int64_t fpOne = 1 << 16;
+  const int64_t bufferWidth = static_cast<int64_t>(buffer->GetWidth()) * fpOne;
+  const int64_t bufferHeight = static_cast<int64_t>(buffer->GetHeight()) * fpOne;
 
-  if (!PrepareBuffer(buffer))
-    return;
+  const auto toFixed = [](float value)
+  { return static_cast<int64_t>(std::lround(static_cast<double>(value) * fpOne)); };
+
+  int64_t srcX = std::clamp<int64_t>(toFixed(rects.source.x1), 0, bufferWidth);
+  int64_t srcY = std::clamp<int64_t>(toFixed(rects.source.y1), 0, bufferHeight);
+  int64_t srcW = std::clamp<int64_t>(toFixed(rects.source.x2), srcX, bufferWidth) - srcX;
+  int64_t srcH = std::clamp<int64_t>(toFixed(rects.source.y2), srcY, bufferHeight) - srcY;
+  if (srcW == 0 || srcH == 0)
+  {
+    srcX = srcY = 0;
+    srcW = bufferWidth;
+    srcH = bufferHeight;
+  }
 
   m_DRM->AddProperty(plane, "FB_ID", m_fb_id);
   m_DRM->AddProperty(plane, "CRTC_ID", m_DRM->GetCrtc()->GetCrtcId());
-  m_DRM->AddProperty(plane, "SRC_X", 0);
-  m_DRM->AddProperty(plane, "SRC_Y", 0);
-  m_DRM->AddProperty(plane, "SRC_W", buffer->GetWidth() << 16);
-  m_DRM->AddProperty(plane, "SRC_H", buffer->GetHeight() << 16);
+  m_DRM->AddProperty(plane, "SRC_X", static_cast<uint64_t>(srcX));
+  m_DRM->AddProperty(plane, "SRC_Y", static_cast<uint64_t>(srcY));
+  m_DRM->AddProperty(plane, "SRC_W", static_cast<uint64_t>(srcW));
+  m_DRM->AddProperty(plane, "SRC_H", static_cast<uint64_t>(srcH));
   // The CRTC rect addresses the composited output, which is not subsampled, so
-  // it needs no even alignment - and must not be forced to it, or any odd
-  // coordinate becomes unreachable. Program the rounded edges, which also keeps
-  // the position and the size consistent with each other.
-  const int32_t dstX1 = MathUtils::round_int(static_cast<double>(destRect.x1));
-  const int32_t dstY1 = MathUtils::round_int(static_cast<double>(destRect.y1));
-  const int32_t dstX2 = MathUtils::round_int(static_cast<double>(destRect.x2));
-  const int32_t dstY2 = MathUtils::round_int(static_cast<double>(destRect.y2));
+  // it needs no even alignment - and must not be forced to it. Frame packing
+  // starts the second eye at vdisplay + vblank, which is odd for 1080p24
+  // (1080 + 45 = 1125); rounding that down to 1124 shifts one eye up a line and
+  // takes its last line from the active space gap. Use the rounded edges so the
+  // position and the size stay consistent with each other.
+  const int32_t dstX1 = MathUtils::round_int(static_cast<double>(rects.dest.x1));
+  const int32_t dstY1 = MathUtils::round_int(static_cast<double>(rects.dest.y1));
+  const int32_t dstX2 = MathUtils::round_int(static_cast<double>(rects.dest.x2));
+  const int32_t dstY2 = MathUtils::round_int(static_cast<double>(rects.dest.y2));
 
   m_DRM->AddProperty(plane, "CRTC_X", dstX1);
   m_DRM->AddProperty(plane, "CRTC_Y", dstY1);
   m_DRM->AddProperty(plane, "CRTC_W", static_cast<uint32_t>(std::max(0, dstX2 - dstX1)));
   m_DRM->AddProperty(plane, "CRTC_H", static_cast<uint32_t>(std::max(0, dstY2 - dstY1)));
+}
+
+void CVideoLayerBridgeDRMPRIME::SetVideoPlane(CVideoBufferDRMPRIME* buffer,
+                                              std::span<const PlaneRects> rects)
+{
+  CDRMPlane* planes[] = {m_DRM->GetVideoPlane(), m_DRM->GetVideoPlane2()};
+  if (!planes[0] || rects.empty())
+    return;
+
+  if (!PrepareBuffer(buffer))
+    return;
+
+  size_t used = 0;
+  for (auto* plane : planes)
+  {
+    if (!plane || used == rects.size())
+      break;
+    SetPlaneRects(plane, buffer, rects[used++]);
+  }
+
+  // Detach a claimed second plane that this frame does not use, so a switch out
+  // of a split stereo mode does not leave the second eye on screen.
+  if (planes[1] && used < 2)
+  {
+    m_DRM->AddProperty(planes[1], "FB_ID", 0);
+    m_DRM->AddProperty(planes[1], "CRTC_ID", 0);
+  }
 }
 
 void CVideoLayerBridgeDRMPRIME::UpdateVideoPlane()
