@@ -13,8 +13,11 @@
 #include "cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.h"
 #include "cores/VideoPlayer/DVDStreamInfo.h"
 #include "cores/VideoPlayer/Interface/TimingConstants.h"
+#include "threads/CriticalSection.h"
 
+#include <map>
 #include <memory>
+#include <utility>
 
 extern "C"
 {
@@ -46,6 +49,7 @@ protected:
   void Drain();
   bool SetPictureParams(VideoPicture* pVideoPicture);
   void UpdateProcessInfo(struct AVCodecContext* avctx, const enum AVPixelFormat fmt);
+  AVFilterContext* SelectViewInput();
   CDVDVideoCodec::VCReturn ProcessFilterIn();
   CDVDVideoCodec::VCReturn ProcessFilterOut();
   static enum AVPixelFormat GetFormat(struct AVCodecContext* avctx, const enum AVPixelFormat* fmt);
@@ -68,9 +72,24 @@ protected:
   AVFrame* m_pFilterFrame = nullptr;
   AVFilterGraph* m_pFilterGraph = nullptr;
   AVFilterContext* m_pFilterIn = nullptr;
+  AVFilterContext* m_pFilterIn2 = nullptr; //!< second view of a multiview stream
   AVFilterContext* m_pFilterOut = nullptr;
+
+  //! Eyes are coded as separate views and are packed side by side by the filter graph.
+  bool m_multiview = false;
+  int m_baseViewId = -1; //!< view id of the view that goes in the left half
+  std::string m_stereoMode; //!< mode the packed frame is in, empty when not stereoscopic
+
   std::shared_ptr<CVideoBufferPoolDRMPRIMEFFmpeg> m_hwVideoBufferPool;
-  std::shared_ptr<CVideoBufferPoolDMA> m_swVideoBufferPool;
+
+  //! A pool only ever serves the size it was configured with, and GetBuffer() is
+  //! reached with more than one: the decoder's own frames arrive through
+  //! get_buffer2(), the filter graph's output through alloc_filter_frame(), and
+  //! for a packed multiview frame the latter is twice as wide. Keep one pool per
+  //! size rather than reconfiguring, which would reallocate on every frame.
+  std::map<std::pair<AVPixelFormat, int>, std::shared_ptr<CVideoBufferPoolDMA>>
+      m_swVideoBufferPools;
+  CCriticalSection m_swVideoBufferPoolsSection;
   bool m_started = false;
   bool m_startedInput = false;
   int m_iLastKeyframe = 0;
