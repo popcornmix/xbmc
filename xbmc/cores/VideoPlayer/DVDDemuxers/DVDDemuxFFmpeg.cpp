@@ -63,6 +63,7 @@ extern "C"
 #include <libavutil/dovi_meta.h>
 #include <libavutil/opt.h>
 #include <libavutil/pixdesc.h>
+#include <libavutil/stereo3d.h>
 }
 
 using namespace KODI::UTILS;
@@ -1956,13 +1957,15 @@ CDemuxStream* CDVDDemuxFFmpeg::AddStream(int streamIdx)
         }
 
         // detect stereoscopic mode
-        std::string stereoMode = GetStereoModeFromMetadata(pStream->metadata);
-          // check for metadata in file if detection in stream failed
+        std::string stereoMode = GetStereoModeFromSideData(pStream);
+        // fall back to the container metadata tags (matroska, asf/wmv)
+        if (stereoMode.empty())
+          stereoMode = GetStereoModeFromMetadata(pStream->metadata);
+        // check for metadata in file if detection in stream failed
         if (stereoMode.empty())
           stereoMode = GetStereoModeFromMetadata(m_pFormatContext->metadata);
         if (!stereoMode.empty())
           st->stereo_mode = stereoMode;
-
 
         if (m_pInput->IsStreamType(DVDSTREAM_TYPE_DVD))
         {
@@ -2502,6 +2505,38 @@ std::string CDVDDemuxFFmpeg::GetStereoModeFromMetadata(AVDictionary* pMetadata)
   }
 
   return stereoMode;
+}
+
+std::string CDVDDemuxFFmpeg::GetStereoModeFromSideData(const AVStream* pStream)
+{
+  const AVPacketSideData* sideData =
+      av_packet_side_data_get(pStream->codecpar->coded_side_data,
+                              pStream->codecpar->nb_coded_side_data, AV_PKT_DATA_STEREO3D);
+  if (!sideData || sideData->size < sizeof(AVStereo3D))
+    return "";
+
+  const auto* stereo = reinterpret_cast<const AVStereo3D*>(sideData->data);
+
+  // AV_STEREO3D_FLAG_INVERT: the right/bottom view is the left eye.
+  const bool inverted = (stereo->flags & AV_STEREO3D_FLAG_INVERT) != 0;
+
+  switch (stereo->type)
+  {
+    case AV_STEREO3D_SIDEBYSIDE:
+      return inverted ? "right_left" : "left_right";
+    case AV_STEREO3D_TOPBOTTOM:
+      return inverted ? "bottom_top" : "top_bottom";
+    case AV_STEREO3D_CHECKERBOARD:
+      return inverted ? "checkerboard_rl" : "checkerboard_lr";
+    case AV_STEREO3D_LINES:
+      return inverted ? "row_interleaved_rl" : "row_interleaved_lr";
+    case AV_STEREO3D_COLUMNS:
+      return inverted ? "col_interleaved_rl" : "col_interleaved_lr";
+    case AV_STEREO3D_FRAMESEQUENCE:
+      return inverted ? "block_rl" : "block_lr";
+    default:
+      return "";
+  }
 }
 
 std::string CDVDDemuxFFmpeg::ConvertCodecToInternalStereoMode(const std::string &mode, const StereoModeConversionMap* conversionMap)

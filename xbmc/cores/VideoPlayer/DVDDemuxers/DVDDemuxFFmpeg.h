@@ -140,6 +140,7 @@ protected:
   unsigned int HLSSelectProgram();
 
   std::string GetStereoModeFromMetadata(AVDictionary* pMetadata);
+  std::string GetStereoModeFromSideData(const AVStream* pStream);
   std::string ConvertCodecToInternalStereoMode(const std::string& mode, const StereoModeConversionMap* conversionMap);
 
   void GetL16Parameters(int& channels, int& samplerate);
