@@ -55,6 +55,7 @@ protected:
 
   int  FilterOpen(const std::string& filters, bool scale);
   void FilterClose();
+  AVFilterContext* SelectViewInput(AVFrame* frame);
   CDVDVideoCodec::VCReturn FilterProcess(AVFrame* frame);
   void SetFilters();
   void UpdateName();
@@ -72,10 +73,16 @@ protected:
   std::string m_filters_next;
   AVFilterGraph* m_pFilterGraph = nullptr;
   AVFilterContext* m_pFilterIn = nullptr;
+  AVFilterContext* m_pFilterIn2 = nullptr; //!< second view of a multiview stream
   AVFilterContext* m_pFilterOut = nullptr;;
   AVFrame* m_pFilterFrame = nullptr;;
   bool m_filterEof = false;
   bool m_eof = false;
+
+  //! Eyes are coded as separate views and are packed side by side by the filter graph.
+  bool m_multiview = false;
+  int m_baseViewId = -1; //!< view id of the view that goes in the left half
+  std::string m_stereoMode; //!< mode the packed frame is in, empty when not stereoscopic
 
   std::unique_ptr<IDVDVideoPP> m_postProc;
 

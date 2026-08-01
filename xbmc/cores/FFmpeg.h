@@ -22,6 +22,11 @@ extern "C"
 
 #include <tuple>
 
+// Multiview (MV-HEVC "spatial video") needs the hevc decoder's view_ids option,
+// AV_STEREO3D_UNSPEC and AV_FRAME_DATA_VIEW_ID, all of which landed in FFmpeg
+// 7.1, while a system ffmpeg is still accepted from 7.0.
+#define FFMPEG_HAVE_MULTIVIEW (LIBAVUTIL_VERSION_INT >= AV_VERSION_INT(59, 38, 100))
+
 namespace FFMPEG_HELP_TOOLS
 {
 

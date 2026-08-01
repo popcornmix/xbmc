@@ -79,6 +79,7 @@ public:
   std::shared_ptr<AVMasteringDisplayMetadata> masteringMetadata;
   std::shared_ptr<AVContentLightMetadata> contentLightMetadata;
   std::string stereo_mode; // stereoscopic 3d mode
+  bool multiview; // eyes are coded as separate views and must be packed by the decoder
   AVDOVIDecoderConfigurationRecord dovi{};
 
   // AUDIO

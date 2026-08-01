@@ -68,6 +68,7 @@ void CDVDStreamInfo::Clear()
   masteringMetadata = nullptr;
   contentLightMetadata = nullptr;
   stereo_mode.clear();
+  multiview = false;
   dovi = {};
 
   channels   = 0;
@@ -114,7 +115,8 @@ bool CDVDStreamInfo::Equal(const CDVDStreamInfo& right, int compare)
   || colorRange != right.colorRange
   || colorPrimaries != right.colorPrimaries
   || colorTransferCharacteristic != right.colorTransferCharacteristic
-  || stereo_mode != right.stereo_mode)
+  || stereo_mode != right.stereo_mode
+  || multiview != right.multiview)
     return false;
   // clang-format on
 
@@ -236,6 +238,7 @@ void CDVDStreamInfo::Assign(const CDVDStreamInfo& right, bool withextradata)
   masteringMetadata = right.masteringMetadata;
   contentLightMetadata = right.contentLightMetadata;
   stereo_mode = right.stereo_mode;
+  multiview = right.multiview;
   dovi = right.dovi;
 
   // AUDIO
@@ -304,6 +307,7 @@ void CDVDStreamInfo::Assign(const CDemuxStream& right, bool withextradata)
     masteringMetadata = stream->masteringMetaData;
     contentLightMetadata = stream->contentLightMetaData;
     stereo_mode = stream->stereo_mode;
+    multiview = stream->multiview;
     dovi = stream->dovi;
   }
   else if (right.type == StreamType::SUBTITLE)
