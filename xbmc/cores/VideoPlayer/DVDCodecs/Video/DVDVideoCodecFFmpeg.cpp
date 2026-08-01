@@ -40,6 +40,7 @@ extern "C" {
 #include <libavutil/mastering_display_metadata.h>
 #include <libavutil/opt.h>
 #include <libavutil/pixdesc.h>
+#include <libavutil/stereo3d.h>
 #include <libavutil/video_enc_params.h>
 }
 
@@ -208,7 +209,10 @@ enum AVPixelFormat CDVDVideoCodecFFmpeg::GetFormat(struct AVCodecContext * avctx
   // 2nd condition:
   // fix an ffmpeg issue here, it calls us with an invalid profile
   // then a 2nd call with a valid one
-  if (ctx->m_decoderState != STATE_HW_SINGLE ||
+  // 3rd condition:
+  // no hw accel decodes the dependent layer of a multiview stream, and the
+  // filter graph that packs the views is skipped entirely when one is attached
+  if (ctx->m_decoderState != STATE_HW_SINGLE || ctx->m_multiview ||
       (avctx->codec_id == AV_CODEC_ID_VC1 && avctx->profile == AV_PROFILE_UNKNOWN))
   {
     AVPixelFormat defaultFmt = avcodec_default_get_format(avctx, fmt);
@@ -379,6 +383,44 @@ bool CDVDVideoCodecFFmpeg::Open(CDVDStreamInfo &hints, CDVDCodecOptions &options
   for(std::vector<CDVDCodecOption>::iterator it = options.m_keys.begin(); it != options.m_keys.end(); ++it)
   {
     av_opt_set(m_pCodecContext, it->m_name.c_str(), it->m_value.c_str(), 0);
+  }
+
+  m_multiview = false;
+  m_baseViewId = -1;
+  m_stereoMode.clear();
+  if (hints.multiview)
+  {
+    // Ask for every coded view rather than just the base layer. The views come
+    // out as separate frames sharing one pts; the filter graph packs them side
+    // by side into the layout the demuxer already advertised.
+    if (av_opt_set(m_pCodecContext, "view_ids", "-1", AV_OPT_SEARCH_CHILDREN) < 0)
+    {
+      CLog::Log(LOGWARNING,
+                "CDVDVideoCodecFFmpeg::{} - decoder has no multiview support, playing the base "
+                "view only",
+                __FUNCTION__);
+      // The demuxer advertised the packed layout this decoder was expected to
+      // produce. It is not going to, so say so rather than let the renderer
+      // crop half of a single view.
+      m_stereoMode = "mono";
+    }
+    else
+    {
+      m_multiview = true;
+      m_stereoMode = hints.stereo_mode;
+
+      // A multiview stream never reaches a hardware accelerator, so it would
+      // otherwise decode on the single thread the hardware path leaves it with.
+      // Thread it, but by slice only: frame threading overlaps consecutive
+      // frames, which multiview coding does not allow, because the dependent
+      // view of an access unit predicts from the base view of that same access
+      // unit. Measured on an H.264 MVC stream frame threading is about a
+      // quarter slower than slice threading alone. A stream this decoder plays
+      // as 2D keeps the threading it has today.
+      m_pCodecContext->thread_count =
+          std::max(1, std::min(CServiceBroker::GetCPUInfo()->GetCPUCount(), 16));
+      m_pCodecContext->thread_type = FF_THREAD_SLICE;
+    }
   }
 
   if (avcodec_open2(m_pCodecContext, pCodec, nullptr) < 0)
@@ -846,8 +888,13 @@ CDVDVideoCodec::VCReturn CDVDVideoCodecFFmpeg::GetPicture(VideoPicture* pVideoPi
         need_reopen = true;
     }
 
+    // the multiview graph packs the two views together, so it has to stay up
+    // for the whole stream even when no other filtering is wanted
+    if (m_multiview && m_filterEof)
+      need_reopen = true;
+
     // try to setup new filters
-    if (need_reopen || (need_scale && m_pFilterGraph == nullptr))
+    if (need_reopen || ((need_scale || m_multiview) && m_pFilterGraph == nullptr))
     {
       m_filters = m_filters_next;
 
@@ -919,6 +966,7 @@ void CDVDVideoCodecFFmpeg::Reset()
     m_pHardware->Reset();
 
   m_filters = "";
+  m_baseViewId = -1;
   FilterClose();
   m_dropCtrl.Reset(false);
 }
@@ -995,6 +1043,10 @@ bool CDVDVideoCodecFFmpeg::GetPictureCommon(VideoPicture* pVideoPicture)
   {
     pVideoPicture->stereoMode = (const char*)entry->value;
   }
+  // a stream whose views the decoder packs itself carries no such tag - the
+  // mode is the one the packing produced
+  else if (!m_stereoMode.empty())
+    pVideoPicture->stereoMode = m_stereoMode;
   else
     pVideoPicture->stereoMode.clear();
 
@@ -1194,7 +1246,7 @@ int CDVDVideoCodecFFmpeg::FilterOpen(const std::string& filters, bool scale)
   if (m_pFilterGraph)
     FilterClose();
 
-  if (filters.empty() && !scale)
+  if (filters.empty() && !scale && !m_multiview)
     return 0;
 
   if (m_pHardware)
@@ -1252,7 +1304,20 @@ int CDVDVideoCodecFFmpeg::FilterOpen(const std::string& filters, bool scale)
     return result;
   }
 
-  if (!filters.empty())
+  // The second view arrives on its own source with the same parameters. hstack
+  // pairs the two by pts, which is what the decoder gives both views of an
+  // access unit, so the eyes cannot drift apart.
+  if (m_multiview)
+  {
+    if ((result = avfilter_graph_create_filter(&m_pFilterIn2, srcFilter, "src2", args.c_str(), NULL,
+                                               m_pFilterGraph)) < 0)
+    {
+      CLog::Log(LOGERROR, "CDVDVideoCodecFFmpeg::FilterOpen - avfilter_graph_create_filter: src2");
+      return result;
+    }
+  }
+
+  if (!filters.empty() || m_multiview)
   {
     AVFilterInOut* outputs = avfilter_inout_alloc();
     AVFilterInOut* inputs  = avfilter_inout_alloc();
@@ -1267,7 +1332,22 @@ int CDVDVideoCodecFFmpeg::FilterOpen(const std::string& filters, bool scale)
     inputs->pad_idx = 0;
     inputs->next = nullptr;
 
-    result = avfilter_graph_parse_ptr(m_pFilterGraph, m_filters.c_str(), &inputs, &outputs, NULL);
+    std::string graphDesc = filters;
+    if (m_multiview)
+    {
+      AVFilterInOut* outputs2 = avfilter_inout_alloc();
+      outputs2->name = av_strdup("in2");
+      outputs2->filter_ctx = m_pFilterIn2;
+      outputs2->pad_idx = 0;
+      outputs2->next = nullptr;
+      outputs->next = outputs2;
+
+      graphDesc = "[in][in2]hstack=inputs=2";
+      if (!filters.empty())
+        graphDesc += "," + filters;
+    }
+
+    result = avfilter_graph_parse_ptr(m_pFilterGraph, graphDesc.c_str(), &inputs, &outputs, NULL);
     avfilter_inout_free(&outputs);
     avfilter_inout_free(&inputs);
 
@@ -1326,8 +1406,63 @@ void CDVDVideoCodecFFmpeg::FilterClose()
 
     // Disposed by above code
     m_pFilterIn = nullptr;
+    m_pFilterIn2 = nullptr;
     m_pFilterOut = nullptr;
   }
+}
+
+AVFilterContext* CDVDVideoCodecFFmpeg::SelectViewInput(AVFrame* frame)
+{
+#if !FFMPEG_HAVE_MULTIVIEW
+  return m_pFilterIn;
+#else
+  const AVFrameSideData* sd = av_frame_get_side_data(frame, AV_FRAME_DATA_VIEW_ID);
+  if (!sd || sd->size < sizeof(int))
+  {
+    // Not a multiview access unit after all. hstack waits for a frame on both
+    // of its inputs, so feed it this one twice rather than stall the graph.
+    AVFrame* copy = av_frame_clone(frame);
+    if (copy)
+    {
+      if (av_buffersrc_add_frame(m_pFilterIn2, copy) < 0)
+        CLog::Log(LOGERROR, "CDVDVideoCodecFFmpeg::{} - unable to fill the second view",
+                  __FUNCTION__);
+      av_frame_free(&copy);
+    }
+    return m_pFilterIn;
+  }
+
+  const int viewId = *reinterpret_cast<const int*>(sd->data);
+
+  if (m_baseViewId < 0)
+  {
+    m_baseViewId = viewId;
+
+    // The first view out of the decoder goes in the left half. If the bitstream
+    // says that view is the right eye, tell the renderer the halves are swapped
+    // rather than reorder the graph inputs.
+    const AVFrameSideData* stereo = av_frame_get_side_data(frame, AV_FRAME_DATA_STEREO3D);
+    if (stereo && stereo->size >= sizeof(AVStereo3D))
+    {
+      switch (reinterpret_cast<const AVStereo3D*>(stereo->data)->view)
+      {
+        case AV_STEREO3D_VIEW_LEFT:
+          m_stereoMode = "left_right";
+          break;
+        case AV_STEREO3D_VIEW_RIGHT:
+          m_stereoMode = "right_left";
+          break;
+        default:
+          break;
+      }
+    }
+
+    CLog::Log(LOGDEBUG, "CDVDVideoCodecFFmpeg::{} - multiview base view {}, stereo mode {}",
+              __FUNCTION__, viewId, m_stereoMode);
+  }
+
+  return viewId == m_baseViewId ? m_pFilterIn : m_pFilterIn2;
+#endif
 }
 
 CDVDVideoCodec::VCReturn CDVDVideoCodecFFmpeg::FilterProcess(AVFrame* frame)
@@ -1336,7 +1471,27 @@ CDVDVideoCodec::VCReturn CDVDVideoCodecFFmpeg::FilterProcess(AVFrame* frame)
 
   if (frame || (m_codecControlFlags & DVD_CODEC_CTRL_DRAIN))
   {
-    result = av_buffersrc_add_frame(m_pFilterIn, frame);
+    AVFilterContext* src = m_pFilterIn;
+    if (m_pFilterIn2)
+    {
+      if (frame)
+      {
+        src = SelectViewInput(frame);
+      }
+      else
+      {
+        // Draining: both sources have to see the end of stream or the sink
+        // never reports EOF.
+        result = av_buffersrc_add_frame(m_pFilterIn2, nullptr);
+        if (result < 0)
+        {
+          CLog::Log(LOGERROR, "CDVDVideoCodecFFmpeg::FilterProcess - av_buffersrc_add_frame src2");
+          return VC_ERROR;
+        }
+      }
+    }
+
+    result = av_buffersrc_add_frame(src, frame);
     if (result < 0)
     {
       CLog::Log(LOGERROR, "CDVDVideoCodecFFmpeg::FilterProcess - av_buffersrc_add_frame");

@@ -1957,7 +1957,8 @@ CDemuxStream* CDVDDemuxFFmpeg::AddStream(int streamIdx)
         }
 
         // detect stereoscopic mode
-        std::string stereoMode = GetStereoModeFromSideData(pStream);
+        bool multiview = false;
+        std::string stereoMode = GetStereoModeFromSideData(pStream, multiview);
         // fall back to the container metadata tags (matroska, asf/wmv)
         if (stereoMode.empty())
           stereoMode = GetStereoModeFromMetadata(pStream->metadata);
@@ -1965,7 +1966,10 @@ CDemuxStream* CDVDDemuxFFmpeg::AddStream(int streamIdx)
         if (stereoMode.empty())
           stereoMode = GetStereoModeFromMetadata(m_pFormatContext->metadata);
         if (!stereoMode.empty())
+        {
           st->stereo_mode = stereoMode;
+          st->multiview = multiview;
+        }
 
         if (m_pInput->IsStreamType(DVDSTREAM_TYPE_DVD))
         {
@@ -2507,8 +2511,10 @@ std::string CDVDDemuxFFmpeg::GetStereoModeFromMetadata(AVDictionary* pMetadata)
   return stereoMode;
 }
 
-std::string CDVDDemuxFFmpeg::GetStereoModeFromSideData(const AVStream* pStream)
+std::string CDVDDemuxFFmpeg::GetStereoModeFromSideData(const AVStream* pStream, bool& multiview)
 {
+  multiview = false;
+
   const AVPacketSideData* sideData =
       av_packet_side_data_get(pStream->codecpar->coded_side_data,
                               pStream->codecpar->nb_coded_side_data, AV_PKT_DATA_STEREO3D);
@@ -2534,6 +2540,18 @@ std::string CDVDDemuxFFmpeg::GetStereoModeFromSideData(const AVStream* pStream)
       return inverted ? "col_interleaved_rl" : "col_interleaved_lr";
     case AV_STEREO3D_FRAMESEQUENCE:
       return inverted ? "block_rl" : "block_lr";
+#if FFMPEG_HAVE_MULTIVIEW
+    case AV_STEREO3D_UNSPEC:
+      // MV-HEVC "spatial video" and the like: the eyes are coded as separate
+      // views rather than packed into one frame. The decoder packs them side by
+      // side, so report the mode it is going to produce and flag that it still
+      // has that work to do. The decoder refines the eye order if the bitstream
+      // says which view is which.
+      if (stereo->view != AV_STEREO3D_VIEW_PACKED)
+        return "";
+      multiview = true;
+      return inverted ? "right_left" : "left_right";
+#endif
     default:
       return "";
   }

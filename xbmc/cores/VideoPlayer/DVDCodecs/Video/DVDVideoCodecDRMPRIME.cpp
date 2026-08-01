@@ -9,6 +9,7 @@
 #include "DVDVideoCodecDRMPRIME.h"
 
 #include "ServiceBroker.h"
+#include "cores/FFmpeg.h"
 #include "cores/VideoPlayer/Buffers/VideoBufferDMA.h"
 #include "cores/VideoPlayer/Buffers/VideoBufferDRMPRIME.h"
 #include "cores/VideoPlayer/Buffers/VideoBufferPoolDMA.h"
@@ -39,6 +40,7 @@ extern "C"
 #include <libavutil/mathematics.h>
 #include <libavutil/opt.h>
 #include <libavutil/pixdesc.h>
+#include <libavutil/stereo3d.h>
 }
 
 namespace
@@ -205,7 +207,9 @@ static const AVCodec* FindDecoder(CDVDStreamInfo& hints)
   const AVCodec* codec = nullptr;
   void* i = 0;
 
-  if (!(hints.codecOptions & CODEC_FORCE_SOFTWARE))
+  // No hardware decoder handles the dependent layer of a multiview stream, so
+  // decoding both eyes means the software decoder.
+  if (!(hints.codecOptions & CODEC_FORCE_SOFTWARE) && !hints.multiview)
     while ((codec = av_codec_iterate(&i)))
     {
       if (!av_codec_is_decoder(codec))
@@ -224,11 +228,19 @@ static const AVCodec* FindDecoder(CDVDStreamInfo& hints)
 enum AVPixelFormat CDVDVideoCodecDRMPRIME::GetFormat(struct AVCodecContext* avctx,
                                                      const enum AVPixelFormat* fmt)
 {
+  CDVDVideoCodecDRMPRIME* ctx = static_cast<CDVDVideoCodecDRMPRIME*>(avctx->opaque);
+
   for (int n = 0; fmt[n] != AV_PIX_FMT_NONE; n++)
   {
+    // A hwaccel is offered here as its own pixel format rather than as its own
+    // decoder, so this is the only place it can be turned down. None of them
+    // decode the dependent layer of a multiview stream, and the filter graph
+    // that packs the views needs frames the CPU can read.
+    if (ctx->m_multiview && fmt[n] == AV_PIX_FMT_DRM_PRIME)
+      continue;
+
     //if (IsSupportedHwFormat(fmt[n]) || IsSupportedSwFormat(fmt[n]))
     {
-      CDVDVideoCodecDRMPRIME* ctx = static_cast<CDVDVideoCodecDRMPRIME*>(avctx->opaque);
       ctx->UpdateProcessInfo(avctx, fmt[n]);
       return fmt[n];
     }
@@ -275,18 +287,31 @@ int CDVDVideoCodecDRMPRIME::GetBuffer(struct AVCodecContext* avctx, AVFrame* fra
     }
 
     CDVDVideoCodecDRMPRIME* ctx = static_cast<CDVDVideoCodecDRMPRIME*>(avctx->opaque);
-    // no lock: ffmpeg serializes get_buffer2 even with frame threading, and the codec's
-    // own accesses are safe because avcodec flush/free join the frame threads first
-    if (!ctx->m_swVideoBufferPool || !ctx->m_swVideoBufferPool->IsCompatible(pix_fmt, size))
+    CVideoBufferDMA* buffer = nullptr;
     {
-      ctx->m_swVideoBufferPool = std::make_shared<CVideoBufferPoolDMA>();
-      ctx->m_swVideoBufferPool->Configure(pix_fmt, size);
+      // ffmpeg serializes get_buffer2 even with frame threading, and the codec's own
+      // accesses are safe because avcodec flush/free join the frame threads first, but
+      // alloc_filter_frame() comes in on the codec's thread, so the pools need guarding.
+      const auto key = std::make_pair(pix_fmt, size);
+      std::unique_lock lock(ctx->m_swVideoBufferPoolsSection);
+
+      auto& pool = ctx->m_swVideoBufferPools[key];
+      if (!pool)
+      {
+        pool = std::make_shared<CVideoBufferPoolDMA>();
+        pool->Configure(pix_fmt, size);
+      }
+
+      if (!pool->IsConfigured())
+      {
+        // don't leave an unusable pool behind to poison every later request for this size
+        ctx->m_swVideoBufferPools.erase(key);
+        return -1;
+      }
+
+      buffer = pool->Get();
     }
 
-    if (!ctx->m_swVideoBufferPool->IsConfigured())
-      return -1;
-
-    CVideoBufferDMA* buffer = ctx->m_swVideoBufferPool->Get();
     if (!buffer)
       return -1;
 
@@ -322,7 +347,36 @@ bool CDVDVideoCodecDRMPRIME::Open(CDVDStreamInfo& hints, CDVDCodecOptions& optio
 
   m_hints = hints;
 
-  const AVCodecHWConfig* pConfig = FindHWConfig(pCodec);
+  m_multiview = false;
+  m_baseViewId = -1;
+  m_stereoMode.clear();
+  if (hints.multiview)
+  {
+    // Ask for every coded view rather than just the base layer. The views come
+    // out as separate frames sharing one pts; the filter graph packs them side
+    // by side into the layout the demuxer already advertised.
+    if (av_opt_set(m_pCodecContext, "view_ids", "-1", AV_OPT_SEARCH_CHILDREN) < 0)
+    {
+      CLog::Log(LOGWARNING,
+                "CDVDVideoCodecDRMPRIME::{} - decoder has no multiview support, playing the base "
+                "view only",
+                __FUNCTION__);
+      // The demuxer advertised the packed layout this decoder was expected to
+      // produce. It is not going to, so say so rather than let the renderer
+      // crop half of a single view.
+      m_stereoMode = "mono";
+    }
+    else
+    {
+      m_multiview = true;
+      m_stereoMode = hints.stereo_mode;
+    }
+  }
+
+  // No hwaccel decodes the dependent layer of a multiview stream, and the
+  // filter graph that packs the views cannot work on hardware frames, so do not
+  // offer the decoder a hardware device to attach one to.
+  const AVCodecHWConfig* pConfig = m_multiview ? nullptr : FindHWConfig(pCodec);
   if (pConfig && (pConfig->methods & AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX))
   {
     const char* type = av_hwdevice_get_type_name(pConfig->device_type);
@@ -380,6 +434,14 @@ bool CDVDVideoCodecDRMPRIME::Open(CDVDStreamInfo& hints, CDVDCodecOptions& optio
   m_pCodecContext->time_base.num = 1;
   m_pCodecContext->time_base.den = DVD_TIME_BASE;
   m_pCodecContext->thread_count = CServiceBroker::GetCPUInfo()->GetCPUCount();
+
+  // Frame threading overlaps consecutive frames, which multiview coding does not
+  // allow: the dependent view of an access unit predicts from the base view of
+  // that same access unit, so the two cannot be decoded in parallel and the
+  // threads only add synchronisation. Measured on an H.264 MVC stream it is
+  // about a quarter slower than decoding the views with slice threading alone.
+  if (m_multiview)
+    m_pCodecContext->thread_type = FF_THREAD_SLICE;
 
   if (hints.extradata)
   {
@@ -507,6 +569,7 @@ void CDVDVideoCodecDRMPRIME::Reset()
 
   Drain();
   m_filters.clear();
+  m_baseViewId = -1;
   FilterClose();
 
   do
@@ -642,6 +705,12 @@ bool CDVDVideoCodecDRMPRIME::SetPictureParams(VideoPicture* pVideoPicture)
     pVideoPicture->hasLightMetadata = true;
   }
 
+  // Assigned every frame, and empty unless the decoder packs the views itself: the
+  // picture is reused from one frame to the next, and CVideoPlayerVideo falls back to
+  // the stream's hint on what it finds here each frame, as it does for
+  // CDVDVideoCodecFFmpeg, so nothing may be left over from the frame before.
+  pVideoPicture->stereoMode = m_stereoMode;
+
   pVideoPicture->iRepeatPicture = 0;
   pVideoPicture->iFlags = 0;
   pVideoPicture->iFlags |= m_pFrame->flags & AV_FRAME_FLAG_INTERLACED ? DVP_FLAG_INTERLACED : 0;
@@ -761,8 +830,15 @@ bool CDVDVideoCodecDRMPRIME::FilterOpen(const std::string& filters, bool test)
   AVPixelFormat pix_fmt = static_cast<AVPixelFormat>(m_pFrame->format);
   int result;
 
-  if (filters.find("deinterlace") != std::string::npos && pix_fmt == AV_PIX_FMT_YUV420P)
-     pix_fmt = AV_PIX_FMT_DRM_PRIME;
+  // FilterTest() probes individual filters and wants a plain one-in one-out
+  // graph, so the multiview stacking is only wired up for the real thing.
+  const bool multiview = m_multiview && !test;
+
+  // hstack works on the frame contents, so the hardware deinterlacer's
+  // DRM_PRIME frames are of no use to it.
+  if (!multiview && filters.find("deinterlace") != std::string::npos &&
+      pix_fmt == AV_PIX_FMT_YUV420P)
+    pix_fmt = AV_PIX_FMT_DRM_PRIME;
 
   if (filters.find("bwdif") != std::string::npos && pix_fmt == AV_PIX_FMT_DRM_PRIME)
      pix_fmt = AV_PIX_FMT_YUV420P;
@@ -770,8 +846,19 @@ bool CDVDVideoCodecDRMPRIME::FilterOpen(const std::string& filters, bool test)
   if (m_pFilterGraph)
     FilterClose();
 
-  if (filters.empty())
+  if (filters.empty() && !multiview)
     return true;
+
+  // hstack copies frame contents, so an opaque hardware format is fatal. Any
+  // other layout is fine: graph configuration inserts a conversion on each
+  // input if hstack cannot take it directly.
+  const AVPixFmtDescriptor* desc = av_pix_fmt_desc_get(pix_fmt);
+  if (multiview && (!desc || (desc->flags & AV_PIX_FMT_FLAG_HWACCEL)))
+  {
+    CLog::Log(LOGERROR, "CDVDVideoCodecDRMPRIME::FilterOpen - cannot pack multiview views in {}",
+              desc ? desc->name : "an unknown format");
+    return false;
+  }
 
   if (!(m_pFilterGraph = avfilter_graph_alloc()))
   {
@@ -850,6 +937,34 @@ bool CDVDVideoCodecDRMPRIME::FilterOpen(const std::string& filters, bool test)
     FilterClose();
     return false;
   }
+
+  // The second view arrives on its own source with the same parameters. hstack
+  // pairs the two by pts, which is what the decoder gives both views of an
+  // access unit, so the eyes cannot drift apart.
+  if (multiview)
+  {
+    m_pFilterIn2 = avfilter_graph_alloc_filter(m_pFilterGraph, srcFilter, "in2");
+    if (!m_pFilterIn2)
+    {
+      CLog::Log(LOGERROR, "CDVDVideoCodecDRMPRIME::FilterOpen - unable to alloc in2 buffer");
+      av_freep(&par);
+      FilterClose();
+      return false;
+    }
+
+    result = av_buffersrc_parameters_set(m_pFilterIn2, par);
+    if (result < 0)
+    {
+      char err[AV_ERROR_MAX_STRING_SIZE] = {};
+      av_strerror(result, err, AV_ERROR_MAX_STRING_SIZE);
+      CLog::Log(LOGERROR,
+                "CDVDVideoCodecDRMPRIME::FilterOpen - av_buffersrc_parameters_set in2:  {} ({})",
+                err, result);
+      av_freep(&par);
+      FilterClose();
+      return false;
+    }
+  }
   av_freep(&par);
 
   result = avfilter_init_dict(m_pFilterIn, NULL);
@@ -862,6 +977,20 @@ bool CDVDVideoCodecDRMPRIME::FilterOpen(const std::string& filters, bool test)
               err, result);
     FilterClose();
     return false;
+  }
+
+  if (m_pFilterIn2)
+  {
+    result = avfilter_init_dict(m_pFilterIn2, NULL);
+    if (result < 0)
+    {
+      char err[AV_ERROR_MAX_STRING_SIZE] = {};
+      av_strerror(result, err, AV_ERROR_MAX_STRING_SIZE);
+      CLog::Log(LOGERROR, "CDVDVideoCodecDRMPRIME::FilterOpen - avfilter_init_dict: src2: {} ({})",
+                err, result);
+      FilterClose();
+      return false;
+    }
   }
 
   const AVFilter* outFilter = avfilter_get_by_name("buffersink");
@@ -921,7 +1050,22 @@ bool CDVDVideoCodecDRMPRIME::FilterOpen(const std::string& filters, bool test)
   inputs->pad_idx = 0;
   inputs->next = nullptr;
 
-  result = avfilter_graph_parse_ptr(m_pFilterGraph, filters.c_str(), &inputs, &outputs, NULL);
+  std::string graphDesc = filters;
+  if (multiview)
+  {
+    AVFilterInOut* outputs2 = avfilter_inout_alloc();
+    outputs2->name = av_strdup("in2");
+    outputs2->filter_ctx = m_pFilterIn2;
+    outputs2->pad_idx = 0;
+    outputs2->next = nullptr;
+    outputs->next = outputs2;
+
+    graphDesc = "[in][in2]hstack=inputs=2";
+    if (!filters.empty())
+      graphDesc += "," + filters;
+  }
+
+  result = avfilter_graph_parse_ptr(m_pFilterGraph, graphDesc.c_str(), &inputs, &outputs, NULL);
   avfilter_inout_free(&outputs);
   avfilter_inout_free(&inputs);
 
@@ -972,11 +1116,66 @@ void CDVDVideoCodecDRMPRIME::FilterClose()
 
     // Disposed by above code
     m_pFilterIn = nullptr;
+    m_pFilterIn2 = nullptr;
     m_pFilterOut = nullptr;
     m_pFilterGraph = nullptr;
     av_buffer_unref(&m_hw_frames_ref);
     av_buffer_unref(&m_hw_device_ref);
   }
+}
+
+AVFilterContext* CDVDVideoCodecDRMPRIME::SelectViewInput()
+{
+#if !FFMPEG_HAVE_MULTIVIEW
+  return m_pFilterIn;
+#else
+  const AVFrameSideData* sd = av_frame_get_side_data(m_pFrame, AV_FRAME_DATA_VIEW_ID);
+  if (!sd || sd->size < sizeof(int))
+  {
+    // Not a multiview access unit after all. hstack waits for a frame on both
+    // of its inputs, so feed it this one twice rather than stall the graph.
+    AVFrame* copy = av_frame_clone(m_pFrame);
+    if (copy)
+    {
+      if (av_buffersrc_add_frame(m_pFilterIn2, copy) < 0)
+        CLog::Log(LOGERROR, "CDVDVideoCodecDRMPRIME::{} - unable to fill the second view",
+                  __FUNCTION__);
+      av_frame_free(&copy);
+    }
+    return m_pFilterIn;
+  }
+
+  const int viewId = *reinterpret_cast<const int*>(sd->data);
+
+  if (m_baseViewId < 0)
+  {
+    m_baseViewId = viewId;
+
+    // The first view out of the decoder goes in the left half. If the bitstream
+    // says that view is the right eye, tell the renderer the halves are swapped
+    // rather than reorder the graph inputs.
+    const AVFrameSideData* stereo = av_frame_get_side_data(m_pFrame, AV_FRAME_DATA_STEREO3D);
+    if (stereo && stereo->size >= sizeof(AVStereo3D))
+    {
+      switch (reinterpret_cast<const AVStereo3D*>(stereo->data)->view)
+      {
+        case AV_STEREO3D_VIEW_LEFT:
+          m_stereoMode = "left_right";
+          break;
+        case AV_STEREO3D_VIEW_RIGHT:
+          m_stereoMode = "right_left";
+          break;
+        default:
+          break;
+      }
+    }
+
+    CLog::Log(LOGDEBUG, "CDVDVideoCodecDRMPRIME::{} - multiview base view {}, stereo mode {}",
+              __FUNCTION__, viewId, m_stereoMode);
+  }
+
+  return viewId == m_baseViewId ? m_pFilterIn : m_pFilterIn2;
+#endif
 }
 
 CDVDVideoCodec::VCReturn CDVDVideoCodecDRMPRIME::ProcessFilterIn()
@@ -1011,7 +1210,11 @@ CDVDVideoCodec::VCReturn CDVDVideoCodecDRMPRIME::ProcessFilterIn()
     av_frame_move_ref(m_pFrame, frame);
   }
 
-  int ret = av_buffersrc_add_frame(m_pFilterIn, m_pFrame);
+  AVFilterContext* src = m_pFilterIn;
+  if (m_pFilterIn2)
+    src = SelectViewInput();
+
+  int ret = av_buffersrc_add_frame(src, m_pFrame);
   if (ret < 0)
   {
     char err[AV_ERROR_MAX_STRING_SIZE] = {};
@@ -1220,10 +1423,12 @@ CDVDVideoCodec::VCReturn CDVDVideoCodecDRMPRIME::GetPicture(VideoPicture* pVideo
   else if (!IsSupportedHwFormat(pix_fmt) && !(m_pCodecContext->codec->capabilities & AV_CODEC_CAP_DR1))
     filterChain = "copy";
 
-  if (!filterChain.empty())
+  // The multiview graph packs the two views together, so it has to stay up for
+  // the whole stream even when no other filtering is wanted.
+  if (!filterChain.empty() || m_multiview)
   {
     bool reopenFilter = false;
-    if (m_filters != filterChain)
+    if (m_filters != filterChain || (m_multiview && !m_pFilterGraph))
       reopenFilter = true;
 
     if (m_pFilterGraph &&
@@ -1237,7 +1442,22 @@ CDVDVideoCodec::VCReturn CDVDVideoCodecDRMPRIME::GetPicture(VideoPicture* pVideo
       m_processInfo.SetVideoDeintMethod(m_filters);
 
       if (!FilterOpen(filterChain, false))
+      {
         FilterClose();
+
+        // Without the graph the views cannot be packed, so stop claiming a
+        // layout that is not there rather than have the renderer crop half of
+        // a single view. The base view plays on as 2D.
+        if (m_multiview)
+        {
+          CLog::Log(LOGERROR,
+                    "CDVDVideoCodecDRMPRIME::{} - no multiview filter graph, falling "
+                    "back to the base view",
+                    __FUNCTION__);
+          m_multiview = false;
+          m_stereoMode = "mono";
+        }
+      }
     }
 
     if (m_pFilterGraph)
