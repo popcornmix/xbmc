@@ -26,6 +26,9 @@
 #include "windowing/gbm/WinSystemGbm.h"
 #endif
 
+#include <algorithm>
+#include <cmath>
+
 extern "C"
 {
 #include <libavcodec/avcodec.h>
@@ -499,6 +502,8 @@ void CDVDVideoCodecDRMPRIME::Reset()
   m_startedInput = false;
   m_iLastKeyframe = m_pCodecContext->has_b_frames;
   m_dropCtrl.Reset(false);
+  m_decoderPts = DVD_NOPTS_VALUE;
+  m_droppedFrames = 0;
 
   Drain();
   m_filters.clear();
@@ -670,6 +675,9 @@ bool CDVDVideoCodecDRMPRIME::SetPictureParams(VideoPicture* pVideoPicture)
                            ? DVD_NOPTS_VALUE
                            : static_cast<double>(pts) * DVD_TIME_BASE / AV_TIME_BASE;
   pVideoPicture->dts = DVD_NOPTS_VALUE;
+
+  if (pVideoPicture->pts != DVD_NOPTS_VALUE)
+    m_decoderPts = pVideoPicture->pts;
 
   if (pVideoPicture->videoBuffer)
   {
@@ -1154,7 +1162,27 @@ CDVDVideoCodec::VCReturn CDVDVideoCodecDRMPRIME::GetPicture(VideoPicture* pVideo
     m_iLastKeyframe = m_pCodecContext->has_b_frames + 2;
 
   int64_t framePTS = m_pFrame->best_effort_timestamp;
-  m_dropCtrl.Process(framePTS, m_pCodecContext->skip_frame > AVDISCARD_DEFAULT);
+
+  // The second view of a multiview access unit repeats the first one's pts and is not a
+  // picture of its own, so it takes no part in measuring or counting them.
+  if (m_dropCtrl.IsNewPicture(framePTS))
+  {
+    // While we are asked to drop, a gap in the pts of what comes out of the decoder is how
+    // many pictures it threw away.
+    if (m_pCodecContext->skip_frame > AVDISCARD_DEFAULT &&
+        m_dropCtrl.m_state == CDropControl::VALID && m_dropCtrl.m_lastPTS != AV_NOPTS_VALUE &&
+        framePTS != AV_NOPTS_VALUE &&
+        framePTS > (m_dropCtrl.m_lastPTS + m_dropCtrl.m_diffPTS * 1.5))
+    {
+      // the gap can span any number of pictures, count them all rather than count the gap
+      int missed = static_cast<int>(std::lround(
+                       static_cast<double>(framePTS - m_dropCtrl.m_lastPTS) /
+                       static_cast<double>(m_dropCtrl.m_diffPTS))) - 1;
+      m_droppedFrames += std::max(missed, 1);
+    }
+
+    m_dropCtrl.Process(framePTS, m_pCodecContext->skip_frame > AVDISCARD_DEFAULT);
+  }
 
   if ((m_pFrame->flags & AV_FRAME_FLAG_KEY) != 0 || m_pFrame->pict_type == AV_PICTURE_TYPE_NONE)
   {
@@ -1246,6 +1274,19 @@ CDVDVideoCodec::VCReturn CDVDVideoCodecDRMPRIME::GetPicture(VideoPicture* pVideo
     return VC_ERROR;
 
   return VC_PICTURE;
+}
+
+bool CDVDVideoCodecDRMPRIME::GetCodecStats(double& pts, int& droppedFrames, int& skippedPics)
+{
+  pts = m_decoderPts;
+
+  droppedFrames = m_droppedFrames ? m_droppedFrames : -1;
+  m_droppedFrames = 0;
+
+  // no post processing that can be skipped independently of the decode
+  skippedPics = -1;
+
+  return true;
 }
 
 void CDVDVideoCodecDRMPRIME::SetCodecControl(int flags)
