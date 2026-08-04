@@ -16,6 +16,7 @@
 #include "IVideoPlayer.h"
 #include "PTSTracker.h"
 #include "cores/VideoPlayer/VideoRenderers/RenderManager.h"
+#include "threads/SystemClock.h"
 #include "threads/Thread.h"
 #include "utils/BitstreamStats.h"
 
@@ -106,11 +107,30 @@ protected:
   void CalcFrameRate();
   int CalcDropRequirement(double pts);
 
+  //! Total of every picture that failed to reach the renderer, what the osd shows as drop:
+  int GetDroppedFrames() const
+  {
+    return m_iDroppedFramesDecoder + m_iSkippedPicturesDecoder + m_iDroppedFramesOutput;
+  }
+
+  //! Periodic snapshot of the frame loss counters to the log, cheap enough to call per packet
+  void LogPlaybackStats();
+
   double m_iSubtitleDelay;
 
   int m_iLateFrames;
-  int m_iDroppedFrames;
   int m_iDroppedRequest;
+
+  int m_iDroppedFramesDecoder; //!< pictures the decoder discarded, as reported by the codec
+  int m_iSkippedPicturesDecoder; //!< pictures lost to skipped post processing / deinterlacing
+  int m_iDroppedFramesOutput; //!< pictures dropped by OutputPicture, renderer full or too late
+  int m_iRenderLateFrames; //!< lateness in frames last read from the render manager
+
+  XbmcThreads::EndTime<> m_statsLogTimer;
+  bool m_statsLogged; //!< the first line is logged even with nothing lost, to show it is live
+  int m_iLoggedDroppedFrames; //!< counter values at the previous log line, to log the deltas
+  int m_iLoggedSkippedFrames;
+  int m_iLoggedRepeatedFrames;
 
   double m_fFrameRate;       //framerate of the video currently playing
   double m_fStableFrameRate; //place to store calculated framerates
