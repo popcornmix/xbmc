@@ -27,6 +27,8 @@
 #include "utils/XTimeUtils.h"
 #include "utils/log.h"
 
+#include <algorithm>
+#include <cmath>
 #include <memory>
 #include <mutex>
 
@@ -740,19 +742,26 @@ CDVDVideoCodec::VCReturn CDVDVideoCodecFFmpeg::GetPicture(VideoPicture* pVideoPi
   // here we got a frame
   int64_t framePTS = m_pDecodedFrame->best_effort_timestamp;
 
-  if (m_pCodecContext->skip_frame > AVDISCARD_DEFAULT)
+  // The second view of a multiview access unit repeats the first one's pts and is not a
+  // picture of its own, so it takes no part in measuring or counting them.
+  if (m_dropCtrl.IsNewPicture(framePTS))
   {
-    if (m_dropCtrl.m_state == CDropControl::VALID &&
+    if (m_pCodecContext->skip_frame > AVDISCARD_DEFAULT &&
+        m_dropCtrl.m_state == CDropControl::VALID &&
         m_dropCtrl.m_lastPTS != AV_NOPTS_VALUE &&
         framePTS != AV_NOPTS_VALUE &&
         framePTS > (m_dropCtrl.m_lastPTS + m_dropCtrl.m_diffPTS * 1.5))
     {
-      m_droppedFrames++;
-      if (m_interlaced)
-        m_droppedFrames++;
+      // the gap can span any number of pictures, count them all rather than count the gap
+      int missed = static_cast<int>(std::lround(
+                       static_cast<double>(framePTS - m_dropCtrl.m_lastPTS) /
+                       static_cast<double>(m_dropCtrl.m_diffPTS))) - 1;
+      missed = std::max(missed, 1);
+      m_droppedFrames += m_interlaced ? missed * 2 : missed;
     }
+
+    m_dropCtrl.Process(framePTS, m_pCodecContext->skip_frame > AVDISCARD_DEFAULT);
   }
-  m_dropCtrl.Process(framePTS, m_pCodecContext->skip_frame > AVDISCARD_DEFAULT);
 
   if (m_pDecodedFrame->flags & AV_FRAME_FLAG_KEY)
   {
