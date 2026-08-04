@@ -28,6 +28,7 @@
 #include "windowing/GraphicContext.h"
 #include "windowing/WinSystem.h"
 
+#include <algorithm>
 #include <memory>
 #include <mutex>
 
@@ -314,6 +315,7 @@ void CRenderManager::FrameMove()
 
     if (m_queued.empty())
     {
+      CheckRepeatedFrame();
       m_presentstep = PRESENT_IDLE;
     }
     else
@@ -387,6 +389,8 @@ void CRenderManager::PreInit()
 
   m_QueueSize   = 2;
   m_QueueSkip   = 0;
+  m_QueueRepeat = 0;
+  m_repeatCounted = -1;
   m_presentstep = PRESENT_IDLE;
   m_bRenderGUI = true;
 
@@ -451,6 +455,7 @@ bool CRenderManager::Flush(bool wait, bool saveBuffers)
         m_presentsource = 0;
         m_presentsourcePast = -1;
         m_presentstep = PRESENT_IDLE;
+        m_repeatCounted = -1;
         for (int i = 1; i < m_QueueSize; i++)
           m_free.push_back(i);
       }
@@ -1113,15 +1118,17 @@ void CRenderManager::PrepareNextRender()
     }
 
     // skip late frames
+    // every picture taken out here loses its own presentation slot, so all of them count as
+    // skipped. The last one is left in m_presentsourcePast, which only the renderers that
+    // honour index2 blend into the present at half alpha - it still never gets a slot of its
+    // own and on a direct scan out renderer it is not shown at all.
     while (m_queued.front() != idx)
     {
       if (m_presentsourcePast >= 0)
-      {
         m_discard.push_back(m_presentsourcePast);
-        m_QueueSkip++;
-      }
       m_presentsourcePast = m_queued.front();
       m_queued.pop_front();
+      m_QueueSkip++;
     }
 
     const int lateframes = static_cast<int>((renderPts - m_Queue[idx].pts) *
@@ -1136,6 +1143,7 @@ void CRenderManager::PrepareNextRender()
     m_presentsource = idx;
     m_queued.pop_front();
     m_presentpts = m_Queue[idx].pts - m_displayLatency;
+    m_repeatCounted = 0;
     m_presentevent.notifyAll();
 
     m_playerPort->UpdateRenderBuffers(m_queued.size(), m_discard.size(), m_free.size());
@@ -1148,7 +1156,41 @@ void CRenderManager::PrepareNextRender()
     m_presentsource = m_queued.front();
     m_queued.pop_front();
     m_presentpts = m_Queue[m_presentsource].pts - m_displayLatency - frametime / 2;
+    m_repeatCounted = 0;
     m_presentevent.notifyAll();
+  }
+}
+
+void CRenderManager::CheckRepeatedFrame()
+{
+  // Nothing is queued, so the picture on screen stays there for another display period. That
+  // is expected while the video rate is below the display rate - it is only a lost frame once
+  // the clock has passed the point at which the next picture was due, which means the pipeline
+  // failed to deliver it in time. Neither the decoder nor the renderer discarded anything here,
+  // so this is invisible to the drop and skip counters.
+  if (m_repeatCounted < 0 || m_fps <= 0.0f || !m_showVideo || m_dvdClock.IsPaused())
+    return;
+
+  // trick play runs the clock at a different rate to the pictures, lateness is meaningless
+  const double clockSpeed = m_dvdClock.GetClockSpeed();
+  if (clockSpeed < 0.5 || clockSpeed > 1.5)
+    return;
+
+  const double frametime = DVD_TIME_BASE / static_cast<double>(m_fps);
+  // m_presentpts is the display latency corrected pts, which is what the present decision in
+  // PrepareNextRender compares the raw clock against, so the two are directly comparable
+  int overdue = static_cast<int>((m_dvdClock.GetClock() - m_presentpts) / frametime);
+
+  // past a second of nothing this is a stall, or the drain at the end of the stream, rather
+  // than pictures arriving late. Stop there so one of those can not swamp the count of the
+  // frames that were genuinely missed one at a time. IsPresenting draws the line in the same
+  // place.
+  overdue = std::min(overdue, static_cast<int>(m_fps));
+
+  if (overdue > m_repeatCounted)
+  {
+    m_QueueRepeat += overdue - m_repeatCounted;
+    m_repeatCounted = overdue;
   }
 }
 
@@ -1161,6 +1203,10 @@ void CRenderManager::DiscardBuffer()
     m_discard.push_back(m_queued.front());
     m_queued.pop_front();
   }
+
+  // the pictures thrown away here are not counted as skipped, they are dropped on purpose by
+  // the player (flush, seek, gui not rendering) rather than lost to a lack of performance
+  m_repeatCounted = -1;
 
   if(m_presentstep == PRESENT_READY)
     m_presentstep = PRESENT_IDLE;
