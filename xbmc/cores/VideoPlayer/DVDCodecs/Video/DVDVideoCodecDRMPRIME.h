@@ -12,6 +12,7 @@
 #include "cores/VideoPlayer/Buffers/VideoBuffer.h"
 #include "cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.h"
 #include "cores/VideoPlayer/DVDStreamInfo.h"
+#include "cores/VideoPlayer/Interface/TimingConstants.h"
 
 #include <memory>
 
@@ -38,6 +39,7 @@ public:
   CDVDVideoCodec::VCReturn GetPicture(VideoPicture* pVideoPicture) override;
   const char* GetName() override { return m_name.c_str(); }
   unsigned GetAllowedReferences() override { return 5; }
+  bool GetCodecStats(double& pts, int& droppedFrames, int& skippedPics) override;
   void SetCodecControl(int flags) override;
 
 protected:
@@ -74,6 +76,8 @@ protected:
   int m_iLastKeyframe = 0;
 
   CDropControl m_dropCtrl;
+  double m_decoderPts = DVD_NOPTS_VALUE; //!< pts of the last picture out of the codec
+  int m_droppedFrames = 0; //!< pictures dropped since the player last read the stats
 
   AVBufferRef *m_hw_device_ref = nullptr;
   AVBufferRef *m_hw_frames_ref = nullptr;

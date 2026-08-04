@@ -99,7 +99,18 @@ public:
   bool Supports(ERENDERFEATURE feature) const;
   bool Supports(ESCALINGMETHOD method) const;
 
+  /*! \brief Number of queued pictures that were thrown away without ever getting a
+   *  presentation slot of their own, because more than one was already due when the
+   *  render thread got round to picking the next one.
+   */
   int GetSkippedFrames()  { return m_QueueSkip; }
+
+  /*! \brief Number of display periods in which the picture already on screen had to be
+   *  shown again because the next one was not ready in time. Repeating a picture is
+   *  normal when the video rate is below the display rate, only the repeats that happen
+   *  after the next picture was already due are counted here.
+   */
+  int GetRepeatedFrames() const { return m_QueueRepeat; }
 
   bool Configure(const VideoPicture& picture, float fps, unsigned int orientation, int buffers = 0);
   bool AddVideoPicture(const VideoPicture& picture, volatile std::atomic_bool& bStop, EINTERLACEMETHOD deintMethod, bool wait);
@@ -148,6 +159,8 @@ protected:
   void PresentBlend(bool clear, DWORD flags, DWORD alpha);
 
   void PrepareNextRender();
+  //! Account for the picture on screen outstaying its slot, call with m_presentlock held
+  void CheckRepeatedFrame();
   bool IsPresenting();
   bool IsGuiLayer();
 
@@ -211,6 +224,10 @@ protected:
 
   int m_QueueSize = 2;
   int m_QueueSkip = 0;
+  int m_QueueRepeat = 0;
+  //! Frame periods the present source has already been counted as repeated for, -1 when
+  //! nothing has been presented yet and repeats can not be judged
+  int m_repeatCounted = -1;
 
   struct SPresent
   {

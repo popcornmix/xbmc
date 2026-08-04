@@ -27,6 +27,8 @@
 #include "utils/XTimeUtils.h"
 #include "utils/log.h"
 
+#include <algorithm>
+#include <cmath>
 #include <memory>
 #include <mutex>
 
@@ -747,9 +749,12 @@ CDVDVideoCodec::VCReturn CDVDVideoCodecFFmpeg::GetPicture(VideoPicture* pVideoPi
         framePTS != AV_NOPTS_VALUE &&
         framePTS > (m_dropCtrl.m_lastPTS + m_dropCtrl.m_diffPTS * 1.5))
     {
-      m_droppedFrames++;
-      if (m_interlaced)
-        m_droppedFrames++;
+      // the gap can span any number of pictures, count them all rather than count the gap
+      int missed = static_cast<int>(std::lround(
+                       static_cast<double>(framePTS - m_dropCtrl.m_lastPTS) /
+                       static_cast<double>(m_dropCtrl.m_diffPTS))) - 1;
+      missed = std::max(missed, 1);
+      m_droppedFrames += m_interlaced ? missed * 2 : missed;
     }
   }
   m_dropCtrl.Process(framePTS, m_pCodecContext->skip_frame > AVDISCARD_DEFAULT);
