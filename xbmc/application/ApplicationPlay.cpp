@@ -141,8 +141,16 @@ void CApplicationPlay::GetOptionsAndUpdateItem()
     {
       m_options.starttime = 0.0;
 
-      // See if resume point is set in the item
-      if (m_item.IsResumePointSet())
+      // See if a usable resume point is set in the item.
+      // Deliberately not CFileItem::IsResumePointSet(): CBookmark::IsSet() only
+      // tests totalTimeInSeconds, so a resume point carrying a position of zero
+      // alongside a known duration counts as "set". Add-ons produce exactly that
+      // when they stamp InfoTagVideo.setResumePoint(0, duration) on the item they
+      // return from setResolvedUrl, and CVideoInfoTag::Merge() then copies it over
+      // the item's real resume point during plugin path resolution. Trusting it
+      // here would mask the resume position held in the database and restart
+      // playback from the beginning, so require an actual position instead.
+      if (m_item.GetCurrentResumeTime() > 0.0)
       {
         m_options.starttime = m_item.GetCurrentResumeTime();
         if (m_item.HasVideoInfoTag())
