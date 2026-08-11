@@ -321,10 +321,16 @@ void CWinSystemGbm::FlipPage(bool rendered, bool videoLayer, bool async)
 
   m_DRM->FlipPage(bo, rendered, videoLayer, async);
 
-  if (m_videoLayerBridge && !videoLayer)
+  // use_count 1 = only our reference left, the renderer released its copy:
+  // video truly stopped, not a mode switch or renderer swap mid-playback
+  if (m_videoLayerBridge && !videoLayer && m_videoLayerBridge.use_count() == 1)
   {
     // delete video layer bridge when video layer no longer is active
     m_videoLayerBridge.reset();
+
+    //! @todo unify D2P and single-plane teardown behind one winsystem plane API
+    auto* gui = m_DRM->GetGuiPlane();
+    m_DRM->FindGuiPlane(gui->GetFormat(), gui->GetModifier());
   }
 }
 
