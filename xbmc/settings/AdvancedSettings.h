@@ -413,6 +413,11 @@ class CAdvancedSettings : public ISettingCallback, public ISettingsHandler
     std::string m_stereoscopicregex_sbs;
     std::string m_stereoscopicregex_tab;
 
+    //! Prefer a frame-packing display mode over a half-resolution 3D mode of the same
+    //! timing. Turn off to exercise the half modes, which are otherwise unreachable on
+    //! a display offering frame packing at every timing that has one.
+    bool m_stereoscopicPreferFramePacking;
+
     bool m_openGlDebugging;
 
     std::string m_userAgent;
