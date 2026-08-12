@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "rendering/RenderSystemTypes.h"
+
 #include <stdint.h>
 #include <string>
 
@@ -119,6 +121,22 @@ class CResolutionUtils
 {
 public:
   static RESOLUTION ChooseBestResolution(float fps, int width, int height, bool is3D);
+
+  /*!
+   * \brief The stereoscopic output arrangement the display can present
+   *
+   * A split arrangement has to be one the sink can receive, because it is what the
+   * sink is signalled: the renderer crops the correct eye either way, so the layout
+   * the source happens to use says nothing about which of the two to output. Returns
+   * the arrangement whose native 3D mode is the better fit for @p fps content of
+   * @p width x @p height, preferring @p wanted when nothing beats it - including when
+   * the display has no native 3D mode at all, which is a display the viewer switches
+   * into 3D by hand.
+   */
+  static RenderStereoMode ChooseStereoArrangement(RenderStereoMode wanted,
+                                                  float fps,
+                                                  int width,
+                                                  int height);
   static bool HasWhitelist();
   static void PrintWhitelist();
 
