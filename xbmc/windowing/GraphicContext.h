@@ -158,6 +158,11 @@ public:
   RenderStereoView GetStereoView() { return m_stereoView; }
   void SetStereoMode(RenderStereoMode mode) { m_nextStereoMode = mode; }
   RenderStereoMode GetStereoMode() { return m_stereoMode; }
+  /*! \brief The stereo mode SetStereoMode() has requested, which Flip() makes
+             current. Use this over GetStereoMode() to decide what the output
+             arrangement is going to be, as the two differ until the next flip.
+   */
+  RenderStereoMode GetNextStereoMode() const { return m_nextStereoMode; }
   void RestoreCameraPosition();
   void SetStereoFactor(float factor);
   void RestoreStereoFactor();

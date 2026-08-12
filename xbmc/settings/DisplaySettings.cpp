@@ -35,6 +35,7 @@
 #include <float.h>
 #include <mutex>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -59,6 +60,23 @@ float square_error(float x, float y)
   float yonx = (x > 0) ? y / x : 0;
   float xony = (y > 0) ? x / y : 0;
   return std::max(yonx, xony);
+}
+
+//! @brief True when @p setting is the setting @p id names, or the element definition of
+//!        the list setting it names.
+//!
+//! An options filler for a list setting is handed that definition rather than the list
+//! itself - the constraint is deserialized onto it, and it is what
+//! CSettingString::UpdateDynamicOptions() passes - and the settings manager derives its
+//! id by suffixing the list's (see CSettingsManager::CreateSetting).
+bool IsSettingOrItsListDefinition(const std::shared_ptr<const CSetting>& setting,
+                                  std::string_view id)
+{
+  if (!setting)
+    return false;
+
+  const std::string& settingId = setting->GetId();
+  return settingId == id || settingId == std::string(id).append(".definition");
 }
 
 std::string ModeFlagsToString(unsigned int flags, bool identifier)
@@ -743,10 +761,23 @@ void CDisplaySettings::SettingOptionsModesFiller(const std::shared_ptr<const CSe
                                                  std::vector<StringSettingOption>& list,
                                                  std::string& current)
 {
+  // The whitelist holds the timings playback may switch to, one entry per timing. A
+  // 3D variant is the same timing transported differently, which stereoscopic
+  // playback derives from that timing being whitelisted, so offering it here would be
+  // a choice with no meaning - and one whose packed geometry (1920x2205) reads as a
+  // resolution the display does not have. videoscreen.resolution still lists the
+  // layouts, which is where a 3D mode is selected by hand.
+  const bool omitStereoModes =
+      IsSettingOrItsListDefinition(setting, CSettings::SETTING_VIDEOSCREEN_WHITELIST);
+
   for (auto index = static_cast<unsigned int>(RES_CUSTOM);
        index < CDisplaySettings::GetInstance().ResolutionInfoSize(); ++index)
   {
     const RESOLUTION_INFO& mode = CDisplaySettings::GetInstance().GetResolutionInfo(index);
+
+    if (omitStereoModes &&
+        (mode.dwFlags & (D3DPRESENTFLAG_MODE3DSBS | D3DPRESENTFLAG_MODE3DTB)) != 0)
+      continue;
 
     if (mode.dwFlags ^ D3DPRESENTFLAG_INTERLACED)
     {
