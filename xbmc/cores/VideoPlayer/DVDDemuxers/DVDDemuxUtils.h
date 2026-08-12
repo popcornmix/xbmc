@@ -38,6 +38,12 @@ public:
   static DemuxPacket* AllocateDemuxPacket(int iDataSize = 0);
   static DemuxPacket* AllocateDemuxPacket(unsigned int iDataSize,
                                           unsigned int encryptedSubsampleCount);
+
+  /*!
+   * \brief Append to a packet's payload, leaving every other field as it is.
+   * \return false, with the packet unchanged, if the memory could not be had
+   */
+  static bool AppendData(DemuxPacket* pPacket, const uint8_t* data, int size);
   static void StoreSideData(DemuxPacket* pkt, AVPacket* src);
   static std::vector<ChapterFFmpeg> LoadChapters(std::span<AVChapter*> chapters);
 };

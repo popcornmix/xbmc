@@ -10,6 +10,7 @@
 
 #include "BlurayStateSerializer.h"
 #include "DVDInputStream.h"
+#include "filesystem/bluray/PlaylistStructure.h"
 #include "threads/CriticalSection.h"
 #if defined(HAS_UDFREAD)
 #include "filesystem/UDFContext.h"
@@ -17,6 +18,7 @@
 
 #include <chrono>
 #include <list>
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
@@ -38,6 +40,7 @@ extern "C"
 #define BD_EVENT_ENC_ERROR    -3
 
 #define HDMV_PID_VIDEO            0x1011
+#define HDMV_PID_VIDEO_SS         0x1012
 #define HDMV_PID_AUDIO_FIRST      0x1100
 #define HDMV_PID_AUDIO_LAST       0x111f
 #define HDMV_PID_PG_FIRST         0x1200
@@ -47,6 +50,7 @@ extern "C"
 #define HDMV_PID_IG_FIRST         0x1400
 #define HDMV_PID_IG_LAST          0x141f
 
+class CDVDInputStreamBlurayFile;
 class CDVDOverlayImage;
 class IVideoPlayer;
 
@@ -141,6 +145,54 @@ public:
    */
   bool IsDefaultStream(int pid) const;
 
+  /*!
+   * \brief Whether the playing title carries a stereoscopic (MVC) sub-path.
+   *
+   * The 3D extension sub-path is declared in the playlist extension data, which libbluray
+   * parses but does not expose, so this comes from Kodi's own MPLS parser.
+   *
+   * \return true if the title has an MVC dependent view
+   */
+  bool IsStereoscopic() const;
+
+  /*!
+   * \brief Whether the disc carries 3D content at all, whatever is playing now.
+   *
+   * A playlist is only known once libbluray has run the disc far enough to choose one,
+   * which in navigation mode is after the demuxer exists to read for it. The disc says
+   * this up front, so it is what decides whether a second eye may need demuxing.
+   *
+   * \return true if the disc's application info declares 3D content
+   */
+  bool IsStereoscopicDisc() const;
+
+  /*!
+   * \brief Get the clip holding the MVC dependent view for the current play item.
+   * \param clip filled with the dependent view clip number
+   * \param codec filled with the clip codec id, which gives the file extension
+   * \return true if a dependent view clip was found
+   */
+  bool GetStereoscopicClip(unsigned int& clip, std::string& codec) const;
+
+  /*!
+   * \brief Whether the base view is the right eye rather than the left.
+   * \return true if the base view is the right eye
+   */
+  bool IsBaseViewRightEye() const;
+
+  /*!
+   * \brief Open a clip that libbluray is not itself playing.
+   *
+   * Goes through bd_open_file_dec() so AACS and BD+ are handled, and works for a disc
+   * image, a BDMV folder and a physical disc alike.
+   *
+   * \param clip clip number
+   * \param codec clip codec id, which gives the file extension
+   * \return the opened stream, or nullptr on failure
+   */
+  std::shared_ptr<CDVDInputStreamBlurayFile> OpenClipStream(unsigned int clip,
+                                                            const std::string& codec);
+
   void OverlayCallback(const BD_OVERLAY * const);
 #ifdef HAVE_LIBBLURAY_BDJ
   void OverlayCallbackARGB(const struct bd_argb_overlay_s * const);
@@ -232,6 +284,10 @@ protected:
      * \return True if the clip carries the stream, false otherwise
      */
     bool GetClipStreamLanguage(int pid, std::string& language) const;
+
+    //! \brief Re-read the playlist with Kodi's MPLS parser to pick up the 3D extension data.
+    void UpdatePlaylistInformation();
+
     std::unique_ptr<CDVDInputStreamFile> m_pstream;
     std::string m_rootPath;
 
@@ -239,6 +295,24 @@ protected:
     // Keeps a disc image's UDF volume mounted for as long as the disc is open
     std::optional<XFILE::CUDFMount> m_udfMount;
 #endif
+
+    /*! Disc root as a VFS path, e.g. udf://<image>/ for a disc image. Used to read the
+        playlist directly, since libbluray does not expose the 3D extension data. */
+    std::string m_vfsRoot;
+
+    /*! Playlist as parsed by Kodi, which unlike BLURAY_TITLE_INFO includes the
+        stereoscopic extension sub-paths. Only valid when m_playlistInfoValid. */
+    XFILE::BlurayPlaylistInformation m_playlistInfo;
+    std::map<unsigned int, XFILE::ClipInformation> m_clipCache;
+    bool m_playlistInfoValid{false};
+
+    /*! Whether the disc declares 3D content, from its application info. Known as soon as
+        the disc is opened, unlike the playlist. */
+    bool m_stereoscopicDisc{false};
+
+    /*! Index of the current play item, tracked so the matching stereoscopic sub-play item
+        can be found. */
+    uint32_t m_playItem{0};
 
     /*! Bluray state serializer handler */
     CBlurayStateSerializer m_blurayStateSerializer;

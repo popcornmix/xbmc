@@ -479,6 +479,22 @@ bool CDVDDemuxFFmpeg::Open(const std::shared_ptr<CDVDInputStream>& pInput, bool 
   if (iformat && (strcmp(iformat->name, "mjpeg") == 0) && m_ioContext->seekable == 0)
     av_opt_set_int(m_pFormatContext, "analyzeduration", 500000, 0);
 
+  // Some callers hand us an elementary stream the parsers cannot frame. The MVC dependent
+  // view of a 3D Blu-ray codes its slices as NAL 20, which the H.264 parser does not treat
+  // as a picture start, so it would never find a frame boundary. Fall back to the container
+  // framing, which on a Blu-ray is one access unit per PES packet.
+  const bool noParse = pInput->GetProperty("noparse").asBoolean(false);
+  if (noParse)
+  {
+    m_pFormatContext->flags |= AVFMT_FLAG_NOPARSE | AVFMT_FLAG_NOFILLIN;
+
+    // Such a stream cannot be decoded on its own, so probing will never manage to describe
+    // it fully. Cap how long it spends trying.
+    av_opt_set_int(m_pFormatContext, "analyzeduration", 500000, 0);
+
+    CLog::Log(LOGDEBUG, "{} - parsing disabled, relying on container framing", __FUNCTION__);
+  }
+
   bool skipCreateStreams = false;
   bool isBluray = pInput->IsStreamType(DVDSTREAM_TYPE_BLURAY);
 
@@ -558,13 +574,16 @@ bool CDVDDemuxFFmpeg::Open(const std::shared_ptr<CDVDInputStream>& pInput, bool 
   // Live/realtime excluded: the full probe would stall playback start by seconds.
   bool forceFullAnalysis = skipTsOptimization && !pInput->IsRealtime();
 
-  if (isMpegTsWithStreams && !url.IsProtocol("tcp") && !fileinfo && !isBluray && !forceFullAnalysis)
+  // an unparsed stream is excluded too, so that its timestamps keep the plain start time
+  // convention its caller has to reason about
+  if (isMpegTsWithStreams && !url.IsProtocol("tcp") && !fileinfo && !isBluray && !noParse &&
+      !forceFullAnalysis)
   {
     av_opt_set_int(m_pFormatContext, "analyzeduration", 500000, 0);
     m_checkTransportStream = true;
     skipCreateStreams = true;
   }
-  else if (!isMpegTs || forceFullAnalysis)
+  else if (noParse || !isMpegTs || forceFullAnalysis)
   {
     m_streaminfo = true;
   }

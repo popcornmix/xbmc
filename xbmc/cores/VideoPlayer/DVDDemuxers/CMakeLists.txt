@@ -13,6 +13,10 @@ set(SOURCES DemuxMultiSource.cpp
             DVDDemuxVobsub.cpp
             DVDFactoryDemuxer.cpp)
 
+if(TARGET ${APP_NAME_LC}::Bluray)
+  list(APPEND SOURCES DVDDemuxBluray3D.cpp)
+endif()
+
 set(HEADERS DemuxMultiSource.h
             DVDDemux.h
             DVDDemuxCC.h
@@ -30,5 +34,9 @@ set(HEADERS DemuxMultiSource.h
             DVDDemuxUtils.h
             DVDDemuxVobsub.h
             DVDFactoryDemuxer.h)
+
+if(TARGET ${APP_NAME_LC}::Bluray)
+  list(APPEND HEADERS DVDDemuxBluray3D.h)
+endif()
 
 core_add_library(dvddemuxers)
