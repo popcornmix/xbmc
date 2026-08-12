@@ -531,6 +531,7 @@ void CAdvancedSettings::Initialize()
   m_stereoscopicregex_3d = "[-. _]3d[-. _]";
   m_stereoscopicregex_sbs = "[-. _]h?sbs[-. _]";
   m_stereoscopicregex_tab = "[-. _]h?tab[-. _]";
+  m_stereoscopicPreferFramePacking = true;
 
   m_logLevelHint = m_logLevel = LOG_LEVEL_NORMAL;
 
@@ -682,6 +683,8 @@ void CAdvancedSettings::ParseSettingsFile(const std::string &file)
     XMLUtils::GetString(pElement, "stereoscopicregex3d", m_stereoscopicregex_3d);
     XMLUtils::GetString(pElement, "stereoscopicregexsbs", m_stereoscopicregex_sbs);
     XMLUtils::GetString(pElement, "stereoscopicregextab", m_stereoscopicregex_tab);
+    XMLUtils::GetBoolean(pElement, "stereoscopicpreferframepacking",
+                         m_stereoscopicPreferFramePacking);
     XMLUtils::GetFloat(pElement, "subsdelayrange", m_videoSubsDelayRange, 10, 600);
     XMLUtils::GetFloat(pElement, "subsdelaystep", m_videoSubsDelayStep, 0, 1.0f);
     XMLUtils::GetFloat(pElement, "audiodelayrange", m_videoAudioDelayRange, 10, 600);

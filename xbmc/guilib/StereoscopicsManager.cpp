@@ -19,6 +19,8 @@
 #include "application/ApplicationComponents.h"
 #include "application/ApplicationPlayer.h"
 #include "cores/DataCacheCore.h"
+#include "cores/IPlayer.h"
+#include "cores/VideoPlayer/Interface/StreamInfo.h"
 #include "dialogs/GUIDialogKaiToast.h"
 #include "dialogs/GUIDialogSelect.h"
 #include "guilib/GUIWindowManager.h"
@@ -37,6 +39,7 @@
 #include "utils/StringUtils.h"
 #include "utils/Variant.h"
 #include "utils/log.h"
+#include "windowing/Resolution.h"
 #include "windowing/WinSystem.h"
 
 #include <stdlib.h>
@@ -65,6 +68,53 @@ static const struct StereoModeMap VideoModeToGuiModeMap[] = {
     {"block_lr", RenderStereoMode::OFF}, // unsupported
     {"block_rl", RenderStereoMode::OFF}, // unsupported
     {}};
+
+namespace
+{
+
+//! @brief The split arrangement to output, given the one @p mode asks for.
+//!
+//! Which of the two the source uses is not what decides this - the renderer crops the
+//! correct eye either way - and neither is the viewer's taste: a split arrangement is
+//! signalled to the sink, so it has to be one the sink can receive. A side-by-side
+//! source on a display whose only 3D mode at this timing is frame packed has to go out
+//! top-and-bottom, or the resolution search finds no 3D mode and the display stays 2D.
+//! The stream parameters the display modes are matched against come from the player,
+//! so with nothing playing the arrangement is left as asked for. So it is with refresh
+//! rate adjusting turned off: Kodi may not change the display mode then, the mode is
+//! whatever was picked by hand in videoscreen.resolution, and overriding the
+//! arrangement would only split the frame the way a mode nobody is going to switch to
+//! wants it.
+RenderStereoMode ArrangementForDisplay(RenderStereoMode mode)
+{
+  if (mode != RenderStereoMode::SPLIT_VERTICAL && mode != RenderStereoMode::SPLIT_HORIZONTAL)
+    return mode;
+
+  if (CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(
+          CSettings::SETTING_VIDEOPLAYER_ADJUSTREFRESHRATE) == ADJUST_REFRESHRATE_OFF)
+    return mode;
+
+  const auto& components = CServiceBroker::GetAppComponents();
+  const auto appPlayer = components.GetComponent<CApplicationPlayer>();
+  if (!appPlayer || !appPlayer->IsPlaying())
+    return mode;
+
+  VideoStreamInfo info;
+  appPlayer->GetVideoStreamInfo(CURRENT_STREAM, info);
+  if (!info.valid || info.fpsRate == 0 || info.fpsScale == 0)
+    return mode;
+
+  const float fps = static_cast<float>(info.fpsRate) / static_cast<float>(info.fpsScale);
+  const RenderStereoMode arrangement =
+      CResolutionUtils::ChooseStereoArrangement(mode, fps, info.width, info.height);
+
+  // A display mode the renderer cannot fill is worse than none: SetStereoMode() applies
+  // nothing at all for an unsupported arrangement, which would leave a viewer with no
+  // 3D rather than the arrangement they asked for.
+  return CServiceBroker::GetRenderSystem()->SupportsStereo(arrangement) ? arrangement : mode;
+}
+
+} // namespace
 
 static const struct StereoModeMap StringToGuiModeMap[] = {
     {"off", RenderStereoMode::OFF},
@@ -130,6 +180,8 @@ void CStereoscopicsManager::SetStereoMode(const RenderStereoMode mode)
   // resolve automatic mode before applying
   if (mode == RenderStereoMode::AUTO)
     applyMode = GetStereoModeOfPlayingVideo();
+
+  applyMode = ArrangementForDisplay(applyMode);
 
   if (applyMode != currentMode && applyMode >= RenderStereoMode::OFF)
   {
@@ -509,9 +561,25 @@ void CStereoscopicsManager::ApplyStereoMode(const RenderStereoMode mode, bool no
     CLog::Log(LOGDEBUG, "StereoscopicsManager: stereo mode changed to {}",
               ConvertGuiStereoModeToString(mode));
     {
-      const auto& components = CServiceBroker::GetAppComponents();
+      auto& components = CServiceBroker::GetAppComponents();
       const auto appPlayer = components.GetComponent<CApplicationPlayer>();
-      if (appPlayer && !appPlayer->IsPlaying())
+      if (appPlayer && appPlayer->IsPlaying())
+      {
+        // A hardware 3D display mode is only correct while the GUI is in the
+        // matching split mode, so the mode has to be re-chosen for the new output
+        // arrangement mid-playback too. Left in place for "Play as 2D" the sink
+        // keeps signalling 3D, and a half 3D mode's doubled fPixelRatio is no
+        // longer compensated for by GetResInfo() once the GUI leaves the split
+        // mode, which squeezes the single eye into half the screen width. Let the
+        // player re-run the search: it owns the stream parameters it needs.
+        appPlayer->TriggerUpdateResolution();
+      }
+      // With nothing playing there is no search to trigger, so run it here - but only
+      // where playback would be allowed to: with refresh rate adjusting off the display
+      // mode is the one picked by hand in videoscreen.resolution, and choosing another
+      // would discard that.
+      else if (appPlayer && m_settings->GetInt(CSettings::SETTING_VIDEOPLAYER_ADJUSTREFRESHRATE) !=
+                                ADJUST_REFRESHRATE_OFF)
       {
         const RESOLUTION_INFO curInfo =
             CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo();
