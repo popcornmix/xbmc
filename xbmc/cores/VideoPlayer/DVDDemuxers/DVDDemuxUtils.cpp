@@ -19,6 +19,7 @@ extern "C"
 }
 
 #include <algorithm>
+#include <cstring>
 
 void CDVDDemuxUtils::FreeDemuxPacket(DemuxPacket* pPacket)
 {
@@ -80,6 +81,33 @@ DemuxPacket* CDVDDemuxUtils::AllocateDemuxPacket(int iDataSize)
   }
 
   return pPacket;
+}
+
+bool CDVDDemuxUtils::AppendData(DemuxPacket* pPacket, const uint8_t* data, int size)
+{
+  if (!pPacket || size < 0 || (size > 0 && !data))
+    return false;
+
+  if (size == 0)
+    return true;
+
+  const int newSize = pPacket->iSize + size;
+  auto* buffer = static_cast<uint8_t*>(
+      KODI::MEMORY::AlignedMalloc(newSize + AV_INPUT_BUFFER_PADDING_SIZE, 16));
+  if (!buffer)
+    return false;
+
+  if (pPacket->iSize > 0)
+    memcpy(buffer, pPacket->pData, pPacket->iSize);
+  memcpy(buffer + pPacket->iSize, data, size);
+  memset(buffer + newSize, 0, AV_INPUT_BUFFER_PADDING_SIZE);
+
+  if (pPacket->pData)
+    KODI::MEMORY::AlignedFree(pPacket->pData);
+  pPacket->pData = buffer;
+  pPacket->iSize = newSize;
+
+  return true;
 }
 
 DemuxPacket* CDVDDemuxUtils::AllocateDemuxPacket(unsigned int iDataSize, unsigned int encryptedSubsampleCount)

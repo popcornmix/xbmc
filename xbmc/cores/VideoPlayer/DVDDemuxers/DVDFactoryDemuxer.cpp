@@ -16,6 +16,15 @@
 #include "utils/URIUtils.h"
 #include "utils/log.h"
 
+#ifdef HAVE_LIBBLURAY
+#include "DVDDemuxBluray3D.h"
+#include "DVDInputStreams/DVDInputStreamBluray.h"
+#include "ServiceBroker.h"
+#include "guilib/StereoscopicsManager.h"
+#include "settings/Settings.h"
+#include "settings/SettingsComponent.h"
+#endif
+
 CDVDDemux* CDVDFactoryDemuxer::CreateDemuxer(const std::shared_ptr<CDVDInputStream>& pInputStream,
                                              bool fileinfo)
 {
@@ -57,6 +66,31 @@ CDVDDemux* CDVDFactoryDemuxer::CreateDemuxer(const std::shared_ptr<CDVDInputStre
     else
       return NULL;
   }
+
+#ifdef HAVE_LIBBLURAY
+  // A 3D Blu-ray keeps its second eye in a clip of its own, which needs demuxing alongside
+  // the one libbluray plays. Not worth it when only gathering stream details, or when the
+  // user has asked for 2D.
+  if (!fileinfo && pInputStream->IsStreamType(DVDSTREAM_TYPE_BLURAY))
+  {
+    const auto bluray{std::dynamic_pointer_cast<CDVDInputStreamBluray>(pInputStream)};
+    const int playbackMode{CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(
+        CSettings::SETTING_VIDEOPLAYER_STEREOSCOPICPLAYBACKMODE)};
+
+    if (bluray && bluray->IsStereoscopicDisc() && playbackMode != STEREOSCOPIC_PLAYBACK_MODE_MONO)
+    {
+      CLog::Log(LOGDEBUG, "DVDFactoryDemuxer: Stereoscopic Blu-ray. Creating 3D demuxer.");
+
+      std::unique_ptr<CDVDDemuxBluray3D> demuxer(new CDVDDemuxBluray3D());
+      if (demuxer->Open(pInputStream))
+        return demuxer.release();
+
+      // Fall through and play the base view on its own rather than failing outright.
+      CLog::Log(LOGWARNING,
+                "DVDFactoryDemuxer: could not open the dependent view, playing in 2D.");
+    }
+  }
+#endif
 
   std::unique_ptr<CDVDDemuxFFmpeg> demuxer(new CDVDDemuxFFmpeg());
   if (demuxer->Open(pInputStream, fileinfo))
