@@ -114,6 +114,12 @@ public:
 
   bool Aborted();
 
+  /*!
+   * \brief Whether the decoder for this codec can decode and output every view
+   *        of a multiview stream, i.e. carries the view_ids option.
+   */
+  static bool SupportsMultiviewDecode(AVCodecID codecId);
+
   AVFormatContext* m_pFormatContext;
   std::shared_ptr<CDVDInputStream> m_pInput;
 
@@ -141,6 +147,7 @@ protected:
 
   std::string GetStereoModeFromMetadata(AVDictionary* pMetadata);
   std::string GetStereoModeFromSideData(const AVStream* pStream, bool& multiview);
+  bool HasMvcExtension(const AVStream* pStream);
   std::string ConvertCodecToInternalStereoMode(const std::string& mode, const StereoModeConversionMap* conversionMap);
 
   void GetL16Parameters(int& channels, int& samplerate);

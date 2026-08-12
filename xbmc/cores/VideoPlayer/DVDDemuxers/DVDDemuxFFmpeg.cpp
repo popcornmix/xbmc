@@ -1965,6 +1965,28 @@ CDemuxStream* CDVDDemuxFFmpeg::AddStream(int streamIdx)
         // check for metadata in file if detection in stream failed
         if (stereoMode.empty())
           stereoMode = GetStereoModeFromMetadata(m_pFormatContext->metadata);
+        // H.264 MVC keeps its second view in the codec extradata, and nothing a
+        // container exposes as stereo metadata describes it. What a matroska rip
+        // does carry is StereoMode "both eyes laced in one block", which ffmpeg
+        // reports as frame alternate: that says how the views are coded, not that
+        // they are packed into a frame a renderer could crop an eye from, and Kodi
+        // has no way to present it. So let the mvcC box override it rather than be
+        // hidden by it - a block layout is the one case where the container's
+        // description and the decoder's output are about different things.
+        // The base view is the left eye unless the block order says otherwise;
+        // either way the decoder corrects the mode if the bitstream says which
+        // view is which.
+        // Only claim the second view when the decoder can actually produce it.
+        // Flagging it regardless would cost the stream its hardware decoder -
+        // multiview forces software decoding before the option can be refused -
+        // and get nothing back, so an ffmpeg without H.264 MVC support keeps
+        // hardware decoding the base view exactly as it does today.
+        if ((stereoMode.empty() || stereoMode == "block_lr" || stereoMode == "block_rl") &&
+            HasMvcExtension(pStream) && SupportsMultiviewDecode(pStream->codecpar->codec_id))
+        {
+          stereoMode = stereoMode == "block_rl" ? "right_left" : "left_right";
+          multiview = true;
+        }
         if (!stereoMode.empty())
         {
           st->stereo_mode = stereoMode;
@@ -2555,6 +2577,48 @@ std::string CDVDDemuxFFmpeg::GetStereoModeFromSideData(const AVStream* pStream, 
     default:
       return "";
   }
+}
+
+bool CDVDDemuxFFmpeg::SupportsMultiviewDecode(AVCodecID codecId)
+{
+  const AVCodec* codec = avcodec_find_decoder(codecId);
+  if (!codec || !codec->priv_class)
+    return false;
+
+  // The multiview machinery hangs off the decoder's view_ids option, so whether
+  // it is in the option table is whether the dependent view can be decoded.
+  // H.264 gained it well after HEVC, so this cannot be a version check.
+  const AVClass* avClass = codec->priv_class;
+  return av_opt_find(&avClass, "view_ids", nullptr, 0, AV_OPT_SEARCH_FAKE_OBJ) != nullptr;
+}
+
+bool CDVDDemuxFFmpeg::HasMvcExtension(const AVStream* pStream)
+{
+  if (pStream->codecpar->codec_id != AV_CODEC_ID_H264)
+    return false;
+
+  const uint8_t* data = pStream->codecpar->extradata;
+  const int size = pStream->codecpar->extradata_size;
+  if (!data || size < 12 || data[0] != 1)
+    return false;
+
+  // H.264 MVC carries the second view's configuration in an ISO 14496-15 mvcC
+  // box appended to the base avcC. Look for the box by type and check the size
+  // that precedes it rather than walking the avcC, whose trailing high profile
+  // fields are optional and would make the end of it ambiguous.
+  for (int i = 4; i + 4 <= size; ++i)
+  {
+    if (memcmp(data + i, "mvcC", 4) != 0)
+      continue;
+
+    const uint32_t boxSize =
+        (static_cast<uint32_t>(data[i - 4]) << 24) | (static_cast<uint32_t>(data[i - 3]) << 16) |
+        (static_cast<uint32_t>(data[i - 2]) << 8) | static_cast<uint32_t>(data[i - 1]);
+    if (boxSize >= 8 && static_cast<uint64_t>(i - 4) + boxSize <= static_cast<uint64_t>(size))
+      return true;
+  }
+
+  return false;
 }
 
 std::string CDVDDemuxFFmpeg::ConvertCodecToInternalStereoMode(const std::string &mode, const StereoModeConversionMap* conversionMap)
