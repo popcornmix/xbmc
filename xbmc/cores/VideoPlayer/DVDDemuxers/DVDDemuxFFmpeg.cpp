@@ -491,6 +491,24 @@ bool CDVDDemuxFFmpeg::Open(const std::shared_ptr<CDVDInputStream>& pInput, bool 
   if (iformat && (strcmp(iformat->name, "mjpeg") == 0) && m_ioContext->seekable == 0)
     av_opt_set_int(m_pFormatContext, "analyzeduration", 500000, 0);
 
+  // Some callers hand us an elementary stream the parsers cannot frame. The MVC dependent
+  // view of a 3D Blu-ray codes its slices as NAL 20, which the H.264 parser does not treat
+  // as a picture start, so it would never find a frame boundary. Fall back to the container
+  // framing, which on a Blu-ray is one access unit per PES packet.
+  const bool noParse = pInput->GetProperty("noparse").asBoolean(false);
+  if (noParse)
+  {
+    m_pFormatContext->flags |= AVFMT_FLAG_NOPARSE | AVFMT_FLAG_NOFILLIN;
+
+    // Without a parser the container framing is all there is, and the mpegts demuxer hands a
+    // PES payload over in pieces of at most max_packet_size (200 KiB by default), only the
+    // first of them timestamped. An access unit of the dependent view can be several times
+    // that, so let a packet be as large as an access unit.
+    av_opt_set_int(m_pFormatContext, "max_packet_size", 8 << 20, AV_OPT_SEARCH_CHILDREN);
+
+    CLog::Log(LOGDEBUG, "{} - parsing disabled, relying on container framing", __FUNCTION__);
+  }
+
   bool skipCreateStreams = false;
   bool isBluray = pInput->IsStreamType(DVDSTREAM_TYPE_BLURAY);
 
@@ -570,11 +588,22 @@ bool CDVDDemuxFFmpeg::Open(const std::shared_ptr<CDVDInputStream>& pInput, bool 
   // Live/realtime excluded: the full probe would stall playback start by seconds.
   bool forceFullAnalysis = skipTsOptimization && !pInput->IsRealtime();
 
-  if (isMpegTsWithStreams && !url.IsProtocol("tcp") && !fileinfo && !isBluray && !forceFullAnalysis)
+  // an unparsed stream is excluded too, so that its timestamps keep the plain start time
+  // convention its caller has to reason about
+  if (isMpegTsWithStreams && !url.IsProtocol("tcp") && !fileinfo && !isBluray && !noParse &&
+      !forceFullAnalysis)
   {
     av_opt_set_int(m_pFormatContext, "analyzeduration", 500000, 0);
     m_checkTransportStream = true;
     skipCreateStreams = true;
+  }
+  else if (noParse)
+  {
+    // Such a stream cannot be decoded on its own, so analysing it would only spend the whole
+    // analysis window failing to and then report that its parameters are unknown - which the
+    // caller, who asked for it unparsed, already knows. Take the streams straight from the
+    // program map.
+    m_streaminfo = false;
   }
   else if (!isMpegTs || forceFullAnalysis)
   {
@@ -622,7 +651,7 @@ bool CDVDDemuxFFmpeg::Open(const std::shared_ptr<CDVDInputStream>& pInput, bool 
       ResetVideoStreams();
     }
   }
-  else
+  else if (!noParse)
   {
     m_program = 0;
     m_checkTransportStream = true;
