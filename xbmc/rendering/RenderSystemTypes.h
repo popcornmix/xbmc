@@ -33,3 +33,11 @@ enum class RenderStereoMode
   AUTO = 100,
   UNDEFINED = 999,
 };
+
+//! Frame aspect ratios beyond which a stereoscopic frame has to be a "full" packing - two
+//! full-size eyes beside or above each other - rather than a "half" packing that squeezes
+//! each eye into a normal-looking frame: wider than any Cinemascope encode (up to about
+//! 2.55) for side by side, so full 4:3 packing (2.67) is still caught; taller than 4:3 for
+//! top and bottom. Nothing else in the picture tells the two apart.
+constexpr float STEREO_FULL_SBS_MIN_ASPECT{2.6f};
+constexpr float STEREO_FULL_TAB_MAX_ASPECT{1.3f};
