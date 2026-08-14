@@ -325,6 +325,17 @@ float RESOLUTION_INFO::DisplayRatio() const
   return iWidth * fPixelRatio / iHeight;
 }
 
+std::string RESOLUTION_INFO::StereoLayoutTag() const
+{
+  if (dwFlags & D3DPRESENTFLAG_MODE3DSBS)
+    return " 3D sbs";
+
+  if (dwFlags & D3DPRESENTFLAG_MODE3DTB)
+    return iBlanking > 0 ? " 3D fp" : " 3D tab";
+
+  return "";
+}
+
 RESOLUTION CResolutionUtils::ChooseBestResolution(float fps, int width, int height, bool is3D)
 {
   RESOLUTION res = CServiceBroker::GetWinSystem()->GetGfxContext().GetVideoResolution();
@@ -366,8 +377,9 @@ RESOLUTION CResolutionUtils::ChooseBestResolution(float fps, int width, int heig
     }
   }
 
-  CLog::Log(LOGINFO, "Display resolution ADJUST : {} ({}) (weight: {:.3f})",
-            CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo(res).strMode, res, weight);
+  const RESOLUTION_INFO chosen = CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo(res);
+  CLog::Log(LOGINFO, "Display resolution ADJUST : {}{} ({}) (weight: {:.3f})", chosen.strMode,
+            chosen.StereoLayoutTag(), res, weight);
   return res;
 }
 
@@ -405,10 +417,11 @@ RenderStereoMode CResolutionUtils::ChooseStereoArrangement(RenderStereoMode want
   // and which half of the frame each eye lives in is then theirs to decide.
   if (BetterMatch(otherMatch, wantedMatch))
   {
+    const RESOLUTION_INFO& mode =
+        CDisplaySettings::GetInstance().GetResolutionInfo(otherMatch.resolution);
     CLog::Log(LOGDEBUG,
-              "Stereoscopic 3D: changing the output arrangement to suit display mode {} at {}",
-              CDisplaySettings::GetInstance().GetResolutionInfo(otherMatch.resolution).strMode,
-              StereoTierName(otherMatch.tier));
+              "Stereoscopic 3D: changing the output arrangement to suit display mode {}{} at {}",
+              mode.strMode, mode.StereoLayoutTag(), StereoTierName(otherMatch.tier));
     return other;
   }
 
@@ -526,9 +539,10 @@ void CResolutionUtils::FindResolutionFromWhitelist(float fps, int width, int hei
     if (match.resolution != RES_INVALID)
     {
       resolution = match.resolution;
-      CLog::Log(LOGDEBUG, "[WHITELIST] Matched a native 3D mode {} ({}) at {}",
-                CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo(resolution).strMode,
-                resolution, StereoTierName(match.tier));
+      const RESOLUTION_INFO matched =
+          CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo(resolution);
+      CLog::Log(LOGDEBUG, "[WHITELIST] Matched a native 3D mode {}{} ({}) at {}", matched.strMode,
+                matched.StereoLayoutTag(), resolution, StereoTierName(match.tier));
       return;
     }
 

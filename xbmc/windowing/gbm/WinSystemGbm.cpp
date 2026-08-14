@@ -224,9 +224,10 @@ void CWinSystemGbm::UpdateResolutions()
     CDisplaySettings::GetInstance().AddResolutionInfo(current);
     CDisplaySettings::GetInstance().GetResolutionInfo(RES_DESKTOP) = current;
 
-    CLog::Log(LOGINFO, "Found resolution {}x{} with {}x{}{} @ {:f} Hz", current.iWidth,
+    CLog::Log(LOGINFO, "Found resolution {}x{} with {}x{}{} @ {:f} Hz{}", current.iWidth,
               current.iHeight, current.iScreenWidth, current.iScreenHeight,
-              current.dwFlags & D3DPRESENTFLAG_INTERLACED ? "i" : "", current.fRefreshRate);
+              current.dwFlags & D3DPRESENTFLAG_INTERLACED ? "i" : "", current.fRefreshRate,
+              current.StereoLayoutTag());
   }
   else
   {
@@ -244,9 +245,13 @@ void CWinSystemGbm::UpdateResolutions()
         CDisplaySettings::GetInstance().GetResolutionInfo(RES_DESKTOP) = res;
       }
 
-      CLog::Log(LOGINFO, "Found resolution {}x{} with {}x{}{} @ {:f} Hz", res.iWidth, res.iHeight,
+      // The layout matters as much as the geometry here: without it a half 3D mode prints
+      // exactly like the 2D mode of the same timing, and the log dedupe swallows it as a
+      // duplicate message.
+      CLog::Log(LOGINFO, "Found resolution {}x{} with {}x{}{} @ {:f} Hz{}", res.iWidth, res.iHeight,
                 res.iScreenWidth, res.iScreenHeight,
-                res.dwFlags & D3DPRESENTFLAG_INTERLACED ? "i" : "", res.fRefreshRate);
+                res.dwFlags & D3DPRESENTFLAG_INTERLACED ? "i" : "", res.fRefreshRate,
+                res.StereoLayoutTag());
     }
   }
 
