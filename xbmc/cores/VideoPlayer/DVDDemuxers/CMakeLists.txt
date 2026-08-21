@@ -1,6 +1,5 @@
 set(SOURCES DemuxMultiSource.cpp
             DVDDemux.cpp
-            DVDDemuxBXA.cpp
             DVDDemuxCC.cpp
             DVDDemuxCC/CCBitstreamParserFactory.cpp
             DVDDemuxCC/H264AnnexBBitstreamParser.cpp
@@ -16,7 +15,6 @@ set(SOURCES DemuxMultiSource.cpp
 
 set(HEADERS DemuxMultiSource.h
             DVDDemux.h
-            DVDDemuxBXA.h
             DVDDemuxCC.h
             DVDDemuxCC/Bitstream.h
             DVDDemuxCC/CaptionBlock.h

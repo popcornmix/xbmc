@@ -32,7 +32,6 @@ constexpr int LOGFFMPEG = (1 << (LOGMASKBIT + 2));
 constexpr int LOGDBUS = (1 << (LOGMASKBIT + 4));
 constexpr int LOGJSONRPC = (1 << (LOGMASKBIT + 5));
 constexpr int LOGAUDIO = (1 << (LOGMASKBIT + 6));
-constexpr int LOGAIRTUNES = (1 << (LOGMASKBIT + 7));
 constexpr int LOGUPNP = (1 << (LOGMASKBIT + 8));
 constexpr int LOGCEC = (1 << (LOGMASKBIT + 9));
 constexpr int LOGVIDEO = (1 << (LOGMASKBIT + 10));

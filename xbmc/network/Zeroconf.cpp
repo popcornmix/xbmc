@@ -116,8 +116,6 @@ bool CZeroconf::Start()
   {
     const std::shared_ptr<CSettings> settings = CServiceBroker::GetSettingsComponent()->GetSettings();
     settings->SetBool(CSettings::SETTING_SERVICES_ZEROCONF, false);
-    if (settings->GetBool(CSettings::SETTING_SERVICES_AIRPLAY))
-      settings->SetBool(CSettings::SETTING_SERVICES_AIRPLAY, false);
     return false;
   }
   if(m_started)

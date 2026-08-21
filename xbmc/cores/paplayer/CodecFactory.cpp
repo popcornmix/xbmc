@@ -75,7 +75,6 @@ ICodec* CodecFactory::CreateCodecDemux(const CFileItem& file, unsigned int filec
       content == "audio/ape"        ||
       content == "application/ogg"  ||
       content == "audio/ogg"        ||
-      content == "audio/x-xbmc-pcm" ||
       content == "audio/flac"       ||
       content == "audio/x-flac"     ||
       content == "application/x-flac"
