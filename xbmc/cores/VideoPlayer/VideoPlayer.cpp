@@ -5007,6 +5007,20 @@ bool CVideoPlayer::OnAction(const CAction &action)
     } \
   } while (false)
 
+  // A stream that is a position within something larger owns skipping: Kodi
+  // has no playlist to move through, and without this the request reaches
+  // nothing and the user's remote appears dead.
+  if (m_pInputStream && m_pInputStream->SupportsTransportActions() &&
+      (action.GetID() == ACTION_NEXT_ITEM || action.GetID() == ACTION_PREV_ITEM))
+  {
+    THREAD_ACTION(action);
+    if (m_pInputStream->OnTransportAction(action.GetID() == ACTION_NEXT_ITEM))
+    {
+      m_processInfo->SeekFinished(0);
+      return true;
+    }
+  }
+
   std::shared_ptr<CDVDInputStream::IMenus> pMenus = std::dynamic_pointer_cast<CDVDInputStream::IMenus>(m_pInputStream);
   if (pMenus)
   {

@@ -1370,6 +1370,23 @@ public:
   virtual bool IsRealTimeStream() { return true; }
   //----------------------------------------------------------------------------
 
+  //============================================================================
+  /// @ingroup cpp_kodi_addon_inputstream
+  /// @brief Skip to the next or previous item within the stream.
+  ///
+  /// Called when the user asks to skip and Kodi has nothing of its own to skip
+  /// to, so the request belongs to whatever is producing the stream.
+  ///
+  /// Only called if @ref INPUTSTREAM_SUPPORTS_TRANSPORT is set in the
+  /// capabilities (see @ref GetCapabilities()).
+  ///
+  /// @param[in] action which way to skip
+  /// @return true if the request was taken, false to let Kodi carry on
+  ///         handling it
+  ///
+  virtual bool TransportAction(INPUTSTREAM_TRANSPORT action) { return false; }
+  //----------------------------------------------------------------------------
+
   //############################################################################
   /// @defgroup cpp_kodi_addon_inputstream_Read 1. Stream read
   /// @brief **Functions required to read streams direct and demux inside Kodi.**
@@ -1918,6 +1935,9 @@ private:
     instance->inputstream->toAddon->length_stream = ADDON_LengthStream;
     instance->inputstream->toAddon->is_real_time_stream = ADDON_IsRealTimeStream;
 
+    // Added on 3.6.0
+    instance->inputstream->toAddon->transport_action = ADDON_TransportAction;
+
     // Added on 2.0.10
     instance->inputstream->toAddon->get_chapter = ADDON_GetChapter;
     instance->inputstream->toAddon->get_chapter_count = ADDON_GetChapterCount;
@@ -2142,6 +2162,13 @@ private:
   inline static bool ADDON_IsRealTimeStream(const AddonInstance_InputStream* instance)
   {
     return static_cast<CInstanceInputStream*>(instance->toAddon->addonInstance)->IsRealTimeStream();
+  }
+
+  inline static bool ADDON_TransportAction(const AddonInstance_InputStream* instance,
+                                           INPUTSTREAM_TRANSPORT action)
+  {
+    return static_cast<CInstanceInputStream*>(instance->toAddon->addonInstance)
+        ->TransportAction(action);
   }
 
   AddonInstance_InputStream* m_instanceData;

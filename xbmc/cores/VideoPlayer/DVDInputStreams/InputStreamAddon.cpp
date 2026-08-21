@@ -674,6 +674,20 @@ bool CInputStreamAddon::IsLowLatencyLive()
   return (m_caps.m_mask & INPUTSTREAM_LOW_LATENCY_LIVE) != 0;
 }
 
+bool CInputStreamAddon::SupportsTransportActions()
+{
+  return (m_caps.m_mask & INPUTSTREAM_SUPPORTS_TRANSPORT) != 0;
+}
+
+bool CInputStreamAddon::OnTransportAction(bool next)
+{
+  if (!SupportsTransportActions() || !m_ifc.inputstream->toAddon->transport_action)
+    return false;
+
+  return m_ifc.inputstream->toAddon->transport_action(
+      m_ifc.inputstream, next ? INPUTSTREAM_TRANSPORT_NEXT : INPUTSTREAM_TRANSPORT_PREVIOUS);
+}
+
 
 // IChapter
 CDVDInputStream::IChapter* CInputStreamAddon::GetIChapter()
