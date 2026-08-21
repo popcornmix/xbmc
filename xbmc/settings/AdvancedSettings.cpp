@@ -508,8 +508,6 @@ void CAdvancedSettings::Initialize()
   m_guiVisualizeDirtyRegions = false;
   m_guiAlgorithmDirtyRegions = 3;
   m_guiSmartRedraw = false;
-  m_airTunesPort = 36666;
-  m_airPlayPort = 36667;
 
   m_databaseMusic.Reset();
   m_databaseVideo.Reset();
@@ -1007,9 +1005,6 @@ void CAdvancedSettings::ParseSettingsFile(const std::string &file)
   XMLUtils::GetString(pRootElement, "cddbaddress", m_cddbAddress);
   XMLUtils::GetBoolean(pRootElement, "addsourceontop", m_addSourceOnTop);
 
-  //airtunes + airplay
-  XMLUtils::GetInt(pRootElement,     "airtunesport", m_airTunesPort);
-  XMLUtils::GetInt(pRootElement,     "airplayport", m_airPlayPort);
 
   XMLUtils::GetBoolean(pRootElement, "handlemounting", m_handleMounting);
   XMLUtils::GetBoolean(pRootElement, "automountopticalmedia", m_autoMountOpticalMedia);

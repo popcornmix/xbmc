@@ -3219,10 +3219,7 @@ msgctxt "#676"
 msgid "Verbose logging for the [B]Audio[/B] component"
 msgstr ""
 
-#: xbmc/settings/AdvancedSettings.cpp
-msgctxt "#677"
-msgid "Verbose logging for the [B]AirTunes[/B] library"
-msgstr ""
+#empty string with id 677
 
 #: xbmc/settings/AdvancedSettings.cpp
 msgctxt "#678"
@@ -4533,39 +4530,22 @@ msgstr ""
 
 #empty strings from id 1261 to 1267
 
-#: system/settings/settings.xml
-msgctxt "#1268"
-msgid "Enable AirPlay \"Videos\" and \"Pictures\" support"
-msgstr ""
+#empty string with id 1268
 
-msgctxt "#1269"
-msgid "Allow volume control"
-msgstr ""
+#empty string with id 1269
 
-msgctxt "#1270"
-msgid "Enable AirPlay support"
-msgstr ""
+#empty string with id 1270
 
 #: system/settings/settings.xml
 msgctxt "#1271"
 msgid "Device name"
 msgstr ""
 
-#: system/settings/settings.xml
-msgctxt "#1272"
-msgid "Use password protection"
-msgstr ""
+#empty string with id 1272
 
-#: system/settings/settings.xml
-#: xbmc/network/NetworkServices.cpp
-msgctxt "#1273"
-msgid "AirPlay"
-msgstr ""
+#empty string with id 1273
 
-#: xbmc/network/NetworkServices.cpp
-msgctxt "#1274"
-msgid "AirTunes"
-msgstr ""
+#empty string with id 1274
 
 #. Filter movies/tvshows/music/episodes/artists/musicvideos/albums/songs
 #: xbmc/dialogs/GUIDialogMediaFilter.cpp
@@ -18359,15 +18339,9 @@ msgctxt "#34301"
 msgid "Is Apple's Bonjour service installed? Check the log for more information about this message."
 msgstr ""
 
-#: xbmc/network/NetworkServices.cpp
-msgctxt "#34302"
-msgid "Failed to start AirPlay as it requires Zeroconf to be enabled."
-msgstr ""
+#empty string with id 34302
 
-#: xbmc/network/NetworkServices.cpp
-msgctxt "#34303"
-msgid "Unable to stop Zeroconf. AirPlay and AirTunes depend on Zeroconf running."
-msgstr ""
+#empty string with id 34303
 
 #empty strings from id 34304 to 34399
 
@@ -21303,23 +21277,11 @@ msgctxt "#36342"
 msgid "Allows applications on the network to discover enabled services via Zeroconf."
 msgstr ""
 
-#. Description of setting with label #1270 "Enable AirPlay support"
-#: system/settings/settings.xml
-msgctxt "#36343"
-msgid "If enabled, the content from other AirPlay devices or applications can be received."
-msgstr ""
+#empty string with id 36343
 
-#. Description of setting with label #1272 "Use password protection"
-#: system/settings/settings.xml
-msgctxt "#36344"
-msgid "Enable AirPlay password protection."
-msgstr ""
+#empty string with id 36344
 
-#. Description of setting with label #733 "Password"
-#: system/settings/settings.xml
-msgctxt "#36345"
-msgid "Sets the AirPlay password."
-msgstr ""
+#empty string with id 36345
 
 #. Description of settings category with label #1200 "SMB Client"
 #: system/settings/settings.xml
@@ -22134,11 +22096,7 @@ msgctxt "#36540"
 msgid "The preferred mode in which stereoscopic 3D media such as videos should be played."
 msgstr ""
 
-#. Description of setting with label #1269 "Allow volume control"
-#: system/settings/settings.xml
-msgctxt "#36541"
-msgid "Allows volume control from AirPlay clients."
-msgstr ""
+#empty string with id 36541
 
 #empty strings from id 36542 to 36543
 
@@ -22172,11 +22130,7 @@ msgctxt "#36548"
 msgid "Limits resolution of GUI to save memory. Does not affect video playback. Requires restart."
 msgstr ""
 
-#. Description of setting with label #1268 "iOS 8 compatibility mode"
-#: system/settings/settings.xml
-msgctxt "#36549"
-msgid "Enables support for receiving \"Videos\" and \"Pictures\" via AirPlay. This needs to be disabled when using iOS 9 or later clients to restore music streaming via AirPlay. \"Videos\" and \"Pictures\" are only supported for iOS clients using iOS 8.x and older."
-msgstr ""
+#empty string with id 36549
 
 #. Name of a setting
 #: system/settings/settings.xml
@@ -22455,11 +22409,7 @@ msgctxt "#36601"
 msgid "This category contains the settings for how music file lists are handled."
 msgstr ""
 
-#. Description of settings category with label #1273 "AirPlay"
-#: system/settings/settings.xml
-msgctxt "#36602"
-msgid "This category contains the settings for how the AirPlay service is handled."
-msgstr ""
+#empty string with id 36602
 
 #. Description of settings category with label #14220 Display
 #: system/settings/settings.xml

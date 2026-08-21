@@ -213,9 +213,6 @@ class CAdvancedSettings : public ISettingCallback, public ISettingsHandler
     std::string m_cddbAddress;
     bool m_addSourceOnTop; //!< True to put 'add source' buttons on top
 
-    //airtunes + airplay
-    int m_airTunesPort;
-    int m_airPlayPort;
 
     /*! \brief Only used in linux for the udisks and udisks2 providers
     * defines if kodi should automount media drives

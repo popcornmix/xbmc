@@ -100,9 +100,6 @@
     </category>
   </section>
   <section id="services" label="14036" help="36319">
-    <category id="airplay" label="1273" help="36602">
-      <visible>false</visible>
-    </category>
   </section>
   <section id="system">
     <category id="display">

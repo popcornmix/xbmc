@@ -100,7 +100,6 @@ set(ENABLE_TESTING OFF CACHE BOOL "Tests do not run in browser" FORCE)
 set(ADDONS_CONFIGURE_AT_STARTUP OFF CACHE BOOL "Binary addons not dynamically loaded in WASM" FORCE)
 set(ENABLE_OPTICAL OFF CACHE BOOL "No optical drives in browser" FORCE)
 set(ENABLE_DVDCSS OFF CACHE BOOL "libdvdcss disabled for WASM" FORCE)
-set(ENABLE_AIRTUNES OFF CACHE BOOL "AirTunes not available in browser" FORCE)
 set(ENABLE_EVENTCLIENTS OFF CACHE BOOL "Event clients not used for WASM" FORCE)
 set(ENABLE_INTERNAL_FFMPEG ON CACHE BOOL "No system FFmpeg for Emscripten" FORCE)
 

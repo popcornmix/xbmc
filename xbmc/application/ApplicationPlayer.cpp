@@ -724,20 +724,6 @@ void CApplicationPlayer::SetSubtitleVerticalPosition(int value, bool save)
   }
 }
 
-void CApplicationPlayer::SetTime(int64_t time)
-{
-  std::shared_ptr<IPlayer> player = GetInternal();
-  if (player)
-    return player->SetTime(time);
-}
-
-void CApplicationPlayer::SetTotalTime(int64_t time)
-{
-  std::shared_ptr<IPlayer> player = GetInternal();
-  if (player)
-    player->SetTotalTime(time);
-}
-
 void CApplicationPlayer::SetVideoStream(int iStream)
 {
   std::shared_ptr<IPlayer> player = GetInternal();

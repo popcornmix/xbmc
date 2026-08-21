@@ -143,10 +143,6 @@ foreach(library IN LISTS LIBRARY_FILES)
   add_bundle_file(${library} ${libdir}/${APP_NAME_LC} ${CMAKE_BINARY_DIR})
 endforeach()
 
-if(TARGET ${APP_NAME_LC}::Shairplay)
-  add_bundle_file(${APP_NAME_LC}::Shairplay ${libdir} "")
-endif()
-
 # Main targets from Makefile.in
 if(CPU MATCHES i686)
   set(CPU x86)

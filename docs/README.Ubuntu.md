@@ -138,7 +138,7 @@ sudo apt install autoconf automake autopoint autotools-dev cmake \
   libgtest-dev libiso9660-dev libjpeg-dev liblcms2-dev libltdl-dev \
   liblzo2-dev libmicrohttpd-dev libmysqlclient-dev libnfs-dev \
   libogg-dev libpcre2-dev libplist-dev libpng-dev \
-  libpulse-dev libshairplay-dev libsmbclient-dev libspdlog-dev \
+  libpulse-dev libsmbclient-dev libspdlog-dev \
   libsqlite3-dev libssl-dev libtag1-dev libtiff5-dev libtinyxml-dev \
   libtinyxml2-dev libtool libudev-dev libunistring-dev libva-dev \
   libvdpau-dev libvorbis-dev libxmu-dev libxrandr-dev libxslt1-dev \

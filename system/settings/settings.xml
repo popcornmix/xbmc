@@ -2546,54 +2546,6 @@
         </setting>
       </group>
     </category>
-    <category id="airplay" label="1273" help="36602">
-      <requirement>HAS_AIRPLAY</requirement>
-      <group id="1" label="16000">
-        <setting id="services.airplay" type="boolean" label="1270" help="36343">
-          <level>1</level>
-          <default>false</default>
-          <control type="toggle" />
-        </setting>
-        <setting id="services.airplayvolumecontrol" type="boolean" parent="services.airplay" label="1269" help="36541">
-          <level>2</level>
-          <default>true</default>
-          <dependencies>
-            <dependency type="enable" setting="services.airplay">true</dependency>
-          </dependencies>
-          <control type="toggle" />
-        </setting>
-        <setting id="services.airplayvideosupport" type="boolean" parent="services.airplay" label="1268" help="36549">
-          <level>3</level>
-          <default>false</default>
-          <dependencies>
-            <dependency type="enable" setting="services.airplay">true</dependency>
-          </dependencies>
-          <control type="toggle" />
-        </setting>
-        <setting id="services.useairplaypassword" type="boolean" parent="services.airplayvideosupport" label="1272" help="36344">
-          <level>1</level>
-          <default>false</default>
-          <dependencies>
-            <dependency type="enable" setting="services.airplay">true</dependency>
-            <dependency type="enable" setting="services.airplayvideosupport">true</dependency>
-          </dependencies>
-          <control type="toggle" />
-        </setting>
-        <setting id="services.airplaypassword" type="string" parent="services.useairplaypassword" label="733" help="36345">
-          <level>1</level>
-          <default></default>
-          <constraints>
-            <allowempty>true</allowempty>
-          </constraints>
-          <dependencies>
-            <dependency type="enable" setting="services.useairplaypassword">true</dependency>
-          </dependencies>
-          <control type="edit" format="string">
-            <hidden>true</hidden>
-          </control>
-        </setting>
-      </group>
-    </category>
     <category id="smb" label="1200" help="36346">
       <requirement>HAS_FILESYSTEM_SMB</requirement>
       <group id="1" label="16000">

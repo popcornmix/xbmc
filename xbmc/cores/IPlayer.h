@@ -174,22 +174,8 @@ public:
    */
   virtual bool SeekTimeRelative(int64_t iTime) { return false; }
 
-  /*!
-   \brief Sets the current time. This
-   can be used for injecting the current time.
-   This is not to be confused with a seek. It just
-   can be used if endless streams contain multiple
-   tracks in reality (like with airtunes)
-   */
-  virtual void SetTime(int64_t time) { }
 
-  /*!
-   \brief Set the total time in milliseconds
-   this can be used for injecting the duration in case
-   it's not available in the underlying decoder (airtunes for example)
-   */
-  virtual void SetTotalTime(int64_t time) { }
-  virtual void SetSpeed(float speed) = 0;
+    virtual void SetSpeed(float speed) = 0;
   virtual void SetTempo(float tempo) {}
   virtual bool SupportsTempo() const { return false; }
   virtual void FrameAdvance(int frames) {}

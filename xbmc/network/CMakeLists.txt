@@ -33,16 +33,6 @@ if(ENABLE_OPTICAL)
   list(APPEND HEADERS cddb.h)
 endif()
 
-if(TARGET ${APP_NAME_LC}::Plist)
-  list(APPEND SOURCES AirPlayServer.cpp)
-  list(APPEND HEADERS AirPlayServer.h)
-endif()
-
-if(TARGET ${APP_NAME_LC}::Shairplay)
-  list(APPEND SOURCES AirTunesServer.cpp)
-  list(APPEND HEADERS AirTunesServer.h)
-endif()
-
 if(TARGET ${APP_NAME_LC}::SmbClient)
   list(APPEND HEADERS IWSDiscovery.h)
 endif()

@@ -45,7 +45,8 @@ public:
   enum ESERVERS
   {
     ES_WEBSERVER = 1,
-    ES_AIRPLAYSERVER,
+    ES_AIRPLAYSERVER, //!< Unimplemented. Kept so the values below it, which are
+                      //!< exposed to add-ons, keep the numbers they always had.
     ES_JSONRPCSERVER,
     ES_UPNPRENDERER,
     ES_UPNPSERVER,
@@ -59,13 +60,6 @@ public:
   bool StartWebserver();
   bool IsWebserverRunning();
   bool StopWebserver();
-
-  bool StartAirPlayServer();
-  bool IsAirPlayServerRunning();
-  bool StopAirPlayServer(bool bWait);
-  bool StartAirTunesServer();
-  bool IsAirTunesServerRunning();
-  bool StopAirTunesServer(bool bWait);
 
   bool StartJSONRPCServer();
   bool IsJSONRPCServerRunning();

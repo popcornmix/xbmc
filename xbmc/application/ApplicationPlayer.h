@@ -165,8 +165,6 @@ public:
    */
   void SetSubtitleVerticalPosition(const int value, bool save);
 
-  void SetTime(int64_t time);
-  void SetTotalTime(int64_t time);
   void SetVideoStream(int iStream);
   void SetVolume(float volume);
   void SetSpeed(float speed);

@@ -397,7 +397,7 @@ function(core_require_dep)
 
     # We dont want to add a build tool
     if (NOT ${depspec} IN_LIST optional_buildtools AND NOT ${depspec} IN_LIST required_buildtools)
-      # If dependency is found and is not in the list (eg shairplay) add to list
+      # If dependency is found and is not in the list add to list
       if (NOT ${depspec} IN_LIST required_deps)
         set(required_deps  ${required_deps} ${depspec} PARENT_SCOPE)
       endif()

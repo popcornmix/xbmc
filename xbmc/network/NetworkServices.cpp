@@ -36,14 +36,6 @@
 #ifdef TARGET_LINUX
 #include "Util.h"
 #endif
-#ifdef HAS_AIRPLAY
-#include "network/AirPlayServer.h"
-#endif // HAS_AIRPLAY
-
-#ifdef HAS_AIRTUNES
-#include "network/AirTunesServer.h"
-#endif // HAS_AIRTUNES
-
 #ifdef HAS_ZEROCONF
 #include "network/Zeroconf.h"
 #endif // HAS_ZEROCONF
@@ -122,11 +114,6 @@ CNetworkServices::CNetworkServices()
              CSettings::SETTING_SERVICES_WEBSERVERPASSWORD,
              CSettings::SETTING_SERVICES_WEBSERVERSSL,
              CSettings::SETTING_SERVICES_ZEROCONF,
-             CSettings::SETTING_SERVICES_AIRPLAY,
-             CSettings::SETTING_SERVICES_AIRPLAYVOLUMECONTROL,
-             CSettings::SETTING_SERVICES_AIRPLAYVIDEOSUPPORT,
-             CSettings::SETTING_SERVICES_USEAIRPLAYPASSWORD,
-             CSettings::SETTING_SERVICES_AIRPLAYPASSWORD,
              CSettings::SETTING_SERVICES_UPNP,
              CSettings::SETTING_SERVICES_UPNPSERVER,
              CSettings::SETTING_SERVICES_UPNPRENDERER,
@@ -248,95 +235,11 @@ bool CNetworkServices::OnSettingChanging(const std::shared_ptr<const CSetting>& 
   {
     if (std::static_pointer_cast<const CSettingBool>(setting)->GetValue())
       return StartZeroconf();
-#ifdef HAS_AIRPLAY
     else
-    {
-      // cannot disable
-      if (IsAirPlayServerRunning() || IsAirTunesServerRunning())
-      {
-        HELPERS::ShowOKDialogText(CVariant{1259}, CVariant{34303});
-        return false;
-      }
-
       return StopZeroconf();
-    }
-#endif // HAS_AIRPLAY
   }
   else
 #endif // HAS_ZEROCONF
-
-#ifdef HAS_AIRPLAY
-  if (settingId == CSettings::SETTING_SERVICES_AIRPLAY)
-  {
-    if (std::static_pointer_cast<const CSettingBool>(setting)->GetValue())
-    {
-#ifdef HAS_ZEROCONF
-      // AirPlay needs zeroconf
-      if (!m_settings->GetBool(CSettings::SETTING_SERVICES_ZEROCONF))
-      {
-        HELPERS::ShowOKDialogText(CVariant{1273}, CVariant{34302});
-        return false;
-      }
-#endif //HAS_ZEROCONF
-
-      // note - airtunesserver has to start before airplay server (ios7 client detection bug)
-#ifdef HAS_AIRTUNES
-      if (!StartAirTunesServer())
-      {
-        HELPERS::ShowOKDialogText(CVariant{1274}, CVariant{33100});
-        return false;
-      }
-#endif //HAS_AIRTUNES
-
-      if (!StartAirPlayServer())
-      {
-        HELPERS::ShowOKDialogText(CVariant{1273}, CVariant{33100});
-        return false;
-      }
-    }
-    else
-    {
-      bool ret = true;
-#ifdef HAS_AIRTUNES
-      if (!StopAirTunesServer(true))
-        ret = false;
-#endif //HAS_AIRTUNES
-
-      if (!StopAirPlayServer(true))
-        ret = false;
-
-      if (!ret)
-        return false;
-    }
-  }
-  else if (settingId == CSettings::SETTING_SERVICES_AIRPLAYVIDEOSUPPORT)
-  {
-    if (std::static_pointer_cast<const CSettingBool>(setting)->GetValue())
-    {
-      if (!StartAirPlayServer())
-      {
-        HELPERS::ShowOKDialogText(CVariant{1273}, CVariant{33100});
-        return false;
-      }
-    }
-    else
-    {
-      if (!StopAirPlayServer(true))
-        return false;
-    }
-  }
-  else if (settingId == CSettings::SETTING_SERVICES_AIRPLAYPASSWORD ||
-           settingId == CSettings::SETTING_SERVICES_USEAIRPLAYPASSWORD)
-  {
-    if (!m_settings->GetBool(CSettings::SETTING_SERVICES_AIRPLAY))
-      return false;
-
-    if (!CAirPlayServer::SetCredentials(m_settings->GetBool(CSettings::SETTING_SERVICES_USEAIRPLAYPASSWORD),
-                                        m_settings->GetString(CSettings::SETTING_SERVICES_AIRPLAYPASSWORD)))
-      return false;
-  }
-  else
-#endif //HAS_AIRPLAY
 
 #ifdef HAS_UPNP
   if (settingId == CSettings::SETTING_SERVICES_UPNP)
@@ -577,9 +480,6 @@ void CNetworkServices::Start()
   }
 #endif // HAS_WEB_SERVER
 
-  // note - airtunesserver has to start before airplay server (ios7 client detection bug)
-  StartAirTunesServer();
-  StartAirPlayServer();
   StartRss();
   StartWSDiscovery();
 }
@@ -596,8 +496,6 @@ void CNetworkServices::Stop(bool bWait)
 
   StopEventServer(bWait, false);
   StopJSONRPCServer(bWait);
-  StopAirPlayServer(bWait);
-  StopAirTunesServer(bWait);
   StopWSDiscovery();
 }
 
@@ -620,8 +518,9 @@ bool CNetworkServices::StartServer(enum ESERVERS server, bool start)
       break;
 
     case ES_AIRPLAYSERVER:
-      // the callback will take care of starting/stopping airplay
-      ret = settings->SetBool(CSettings::SETTING_SERVICES_AIRPLAY, start);
+      // Kodi no longer implements AirPlay; the enumerator is kept so the
+      // values of the ones after it, which are public API, do not move.
+      ret = false;
       break;
 
     case ES_JSONRPCSERVER:
@@ -751,115 +650,6 @@ bool CNetworkServices::StopWebserver()
 
   return true;
 #endif // HAS_WEB_SERVER
-  return false;
-}
-
-bool CNetworkServices::StartAirPlayServer()
-{
-  if (!m_settings->GetBool(CSettings::SETTING_SERVICES_AIRPLAYVIDEOSUPPORT))
-    return true;
-
-#ifdef HAS_AIRPLAY
-  if (!CServiceBroker::GetNetwork().IsAvailable() || !m_settings->GetBool(CSettings::SETTING_SERVICES_AIRPLAY))
-    return false;
-
-  if (IsAirPlayServerRunning())
-    return true;
-
-  if (!CAirPlayServer::StartServer(CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_airPlayPort, true))
-    return false;
-
-  if (!CAirPlayServer::SetCredentials(m_settings->GetBool(CSettings::SETTING_SERVICES_USEAIRPLAYPASSWORD),
-                                      m_settings->GetString(CSettings::SETTING_SERVICES_AIRPLAYPASSWORD)))
-    return false;
-
-#ifdef HAS_ZEROCONF
-  std::vector<std::pair<std::string, std::string> > txt;
-  CNetworkInterface* iface = CServiceBroker::GetNetwork().GetFirstConnectedInterface();
-  txt.emplace_back("deviceid", iface != nullptr ? iface->GetMacAddress() : "FF:FF:FF:FF:FF:F2");
-  txt.emplace_back("model", "Xbmc,1");
-  txt.emplace_back("srcvers", AIRPLAY_SERVER_VERSION_STR);
-
-  // for ios8 clients we need to announce mirroring support
-  // else we won't get video urls anymore.
-  // We also announce photo caching support (as it seems faster and
-  // we have implemented it anyways).
-  txt.emplace_back("features", "0x20F7");
-
-  CZeroconf::GetInstance()->PublishService(
-      "servers.airplay", "_airplay._tcp", CSysInfo::GetDeviceName() + " airplay",
-      CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_airPlayPort, txt);
-#endif // HAS_ZEROCONF
-
-  return true;
-#endif // HAS_AIRPLAY
-  return false;
-}
-
-bool CNetworkServices::IsAirPlayServerRunning()
-{
-#ifdef HAS_AIRPLAY
-  return CAirPlayServer::IsRunning();
-#endif // HAS_AIRPLAY
-  return false;
-}
-
-bool CNetworkServices::StopAirPlayServer(bool bWait)
-{
-#ifdef HAS_AIRPLAY
-  if (!IsAirPlayServerRunning())
-    return true;
-
-  CAirPlayServer::StopServer(bWait);
-
-#ifdef HAS_ZEROCONF
-  CZeroconf::GetInstance()->RemoveService("servers.airplay");
-#endif // HAS_ZEROCONF
-
-  return true;
-#endif // HAS_AIRPLAY
-  return false;
-}
-
-bool CNetworkServices::StartAirTunesServer()
-{
-#ifdef HAS_AIRTUNES
-  if (!CServiceBroker::GetNetwork().IsAvailable() || !m_settings->GetBool(CSettings::SETTING_SERVICES_AIRPLAY))
-    return false;
-
-  if (IsAirTunesServerRunning())
-    return true;
-
-  if (!CAirTunesServer::StartServer(CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_airTunesPort, true,
-                                    m_settings->GetBool(CSettings::SETTING_SERVICES_USEAIRPLAYPASSWORD),
-                                    m_settings->GetString(CSettings::SETTING_SERVICES_AIRPLAYPASSWORD)))
-  {
-    CLog::Log(LOGERROR, "Failed to start AirTunes Server");
-    return false;
-  }
-
-  return true;
-#endif // HAS_AIRTUNES
-  return false;
-}
-
-bool CNetworkServices::IsAirTunesServerRunning()
-{
-#ifdef HAS_AIRTUNES
-  return CAirTunesServer::IsRunning();
-#endif // HAS_AIRTUNES
-  return false;
-}
-
-bool CNetworkServices::StopAirTunesServer(bool bWait)
-{
-#ifdef HAS_AIRTUNES
-  if (!IsAirTunesServerRunning())
-    return true;
-
-  CAirTunesServer::StopServer(bWait);
-  return true;
-#endif // HAS_AIRTUNES
   return false;
 }
 

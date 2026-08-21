@@ -580,22 +580,6 @@ void PAPlayer::Process()
       CThread::Sleep(10ms);
     }
 
-    if (m_newForcedPlayerTime != -1)
-    {
-      if (SetTimeInternal(m_newForcedPlayerTime))
-      {
-        m_newForcedPlayerTime = -1;
-      }
-    }
-
-    if (m_newForcedTotalTime != -1)
-    {
-      if (SetTotalTimeInternal(m_newForcedTotalTime))
-      {
-        m_newForcedTotalTime = -1;
-      }
-    }
-
     GetTimeInternal(); //update for GUI
   }
   m_isPlaying = false;
@@ -992,39 +976,6 @@ int64_t PAPlayer::GetTimeInternal()
   return (int64_t)time;
 }
 
-bool PAPlayer::SetTotalTimeInternal(int64_t time)
-{
-  std::unique_lock lock(m_streamsLock);
-  if (!m_currentStream)
-  {
-    return false;
-  }
-
-  m_currentStream->m_decoder.SetTotalTime(time);
-  UpdateGUIData(m_currentStream);
-
-  return true;
-}
-
-bool PAPlayer::SetTimeInternal(int64_t time)
-{
-  std::unique_lock lock(m_streamsLock);
-  if (!m_currentStream)
-    return false;
-
-  m_currentStream->m_framesSent = time / 1000 * m_currentStream->m_audioFormat.m_sampleRate;
-
-  if (m_currentStream->m_stream)
-    m_currentStream->m_framesSent += m_currentStream->m_stream->GetDelay() * m_currentStream->m_audioFormat.m_sampleRate;
-
-  return true;
-}
-
-void PAPlayer::SetTime(int64_t time)
-{
-  m_newForcedPlayerTime = time;
-}
-
 int64_t PAPlayer::GetTotalTime64()
 {
   std::unique_lock lock(m_streamsLock);
@@ -1036,11 +987,6 @@ int64_t PAPlayer::GetTotalTime64()
     total = m_currentStream->m_endOffset;
   total -= m_currentStream->m_startOffset;
   return total;
-}
-
-void PAPlayer::SetTotalTime(int64_t time)
-{
-  m_newForcedTotalTime = time;
 }
 
 int PAPlayer::GetCacheLevel() const

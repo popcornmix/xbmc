@@ -174,12 +174,6 @@ int64_t CAudioDecoder::Seek(int64_t time)
   return m_codec->Seek(time);
 }
 
-void CAudioDecoder::SetTotalTime(int64_t time)
-{
-  if (m_codec)
-    m_codec->m_TotalTime = time;
-}
-
 int64_t CAudioDecoder::TotalTime()
 {
   if (m_codec)

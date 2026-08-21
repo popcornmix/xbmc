@@ -104,7 +104,6 @@ option(ENABLE_CPPCHECK    "Enable cppcheck support?" OFF)
 option(ENABLE_DVDCSS      "Enable libdvdcss support?" ON)
 option(ENABLE_INCLUDEWHATYOUUSE "Enable include-what-you-use support?" OFF)
 option(ENABLE_UPNP        "Enable UPnP support?" ON)
-option(ENABLE_AIRTUNES    "Enable AirTunes support?" ON)
 option(ENABLE_OPTICAL     "Enable optical support?" ON)
 option(ENABLE_PYTHON      "Enable python support?" ON)
 option(ENABLE_TESTING     "Enable testing support?" ON)
@@ -282,7 +281,6 @@ set(optional_deps Alsa>=1.0.27
                   MicroHttpd>=0.9.40
                   NFS>=3.0.0
                   Pipewire>=0.3.50
-                  Plist
                   PulseAudio>=11.0.0
                   Python
                   SmbClient
@@ -330,13 +328,6 @@ endif()
 if(ENABLE_OPTICAL)
   core_require_dep(Cdio>=0.80)
   list(APPEND DEP_DEFINES -DHAS_OPTICAL_DRIVE -DHAS_CDDA_RIPPER)
-endif()
-
-if(ENABLE_AIRTUNES)
-  find_package(Shairplay ${SEARCH_QUIET})
-  if(TARGET ${APP_NAME_LC}::Shairplay)
-    core_require_dep(Shairplay)
-  endif()
 endif()
 
 # We unset this after the bulk of our find calls are complete. Ideally we would want this enabled
