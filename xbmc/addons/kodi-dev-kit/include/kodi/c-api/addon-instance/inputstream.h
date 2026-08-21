@@ -98,6 +98,35 @@ extern "C"
     /// at the newest timestamp it has and discards what was queued ahead of
     /// it, at the cost of a shorter safety margin against a stalling source.
     INPUTSTREAM_LOW_LATENCY_LIVE = (1 << 7),
+
+    /// @brief **0000 0001 0000 0000 :** Handles skip to next and previous.
+    ///
+    /// For a stream that is a position within something larger -- a track
+    /// being sent by another device, a channel within a service -- where
+    /// skipping is the source's to do and not a matter of moving through
+    /// Kodi's playlist.
+    ///
+    /// If set must be @ref kodi::addon::CInstanceInputStream::TransportAction
+    /// implemented.
+    INPUTSTREAM_SUPPORTS_TRANSPORT = (1 << 8),
+  };
+  ///@}
+  //----------------------------------------------------------------------------
+
+  //==============================================================================
+  /// @ingroup cpp_kodi_addon_inputstream_Defs_Interface_InputstreamCapabilities
+  /// @brief **Skip requests passed to an inputstream.**
+  ///
+  /// Used on @ref kodi::addon::CInstanceInputStream::TransportAction().
+  ///
+  ///@{
+  enum INPUTSTREAM_TRANSPORT
+  {
+    /// @brief Skip to the next item.
+    INPUTSTREAM_TRANSPORT_NEXT = 1,
+
+    /// @brief Skip to the previous item.
+    INPUTSTREAM_TRANSPORT_PREVIOUS = 2,
   };
   ///@}
   //----------------------------------------------------------------------------
@@ -743,6 +772,10 @@ extern "C"
     bool(__cdecl* seek_chapter)(const struct AddonInstance_InputStream* instance, int ch);
 
     int(__cdecl* block_size_stream)(const struct AddonInstance_InputStream* instance);
+
+    // Added on 3.6.0
+    bool(__cdecl* transport_action)(const struct AddonInstance_InputStream* instance,
+                                    enum INPUTSTREAM_TRANSPORT action);
   } KodiToAddonFuncTable_InputStream;
 
   typedef struct AddonInstance_InputStream /* internal */

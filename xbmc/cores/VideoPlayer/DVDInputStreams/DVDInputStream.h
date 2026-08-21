@@ -214,6 +214,19 @@ public:
    */
   std::chrono::milliseconds GetLiveEdgeMargin() const { return m_liveEdgeMargin; }
 
+  /*!
+   * \brief Whether skipping to the next or previous item is the stream's to
+   *        do rather than a move through Kodi's playlist.
+   */
+  virtual bool SupportsTransportActions() { return false; }
+
+  /*!
+   * \brief Ask the stream to skip.
+   * \param next true to skip forwards, false to skip back
+   * \return true if the stream took the request
+   */
+  virtual bool OnTransportAction(bool next) { return false; }
+
   void SetRealtime(bool realtime) { m_realtime = realtime; }
 
   // interfaces
