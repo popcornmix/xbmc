@@ -355,9 +355,6 @@ void CSettingConditions::Initialize()
 #ifdef HAS_UPNP
   m_simpleConditions.emplace("has_upnp");
 #endif
-#ifdef HAS_AIRPLAY
-  m_simpleConditions.emplace("has_airplay");
-#endif
 #ifdef HAVE_X11
   m_simpleConditions.emplace("have_x11");
 #endif

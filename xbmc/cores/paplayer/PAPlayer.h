@@ -46,8 +46,6 @@ public:
   void SetDynamicRangeCompression(long drc) override;
   void SetSpeed(float speed = 0) override;
   int GetCacheLevel() const override;
-  void SetTotalTime(int64_t time) override;
-  void SetTime(int64_t time) override;
   void SeekTime(int64_t iTime = 0) override;
   void GetAudioCapabilities(std::vector<IPlayerAudioCaps>& caps) const override;
 
@@ -136,8 +134,6 @@ private:
   StreamList          m_finishing;           /* finishing streams */
   int m_jobCounter = 0;
   CEvent              m_jobEvent;
-  int64_t m_newForcedPlayerTime = -1;
-  int64_t m_newForcedTotalTime = -1;
   std::unique_ptr<CProcessInfo> m_processInfo;
 
   bool QueueNextFileEx(const CFileItem &file, bool fadeIn);
@@ -153,8 +149,6 @@ private:
   void UpdateStreamInfoPlayNextAtFrame(StreamInfo *si, unsigned int crossFadingTime);
   void UpdateGUIData(StreamInfo *si);
   int64_t GetTimeInternal();
-  bool SetTimeInternal(int64_t time);
-  bool SetTotalTimeInternal(int64_t time);
   void CloseFileCB(StreamInfo &si);
   void AdvancePlaylistOnError(CFileItem &fileItem);
 
