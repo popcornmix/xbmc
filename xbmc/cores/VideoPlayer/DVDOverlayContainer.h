@@ -40,6 +40,11 @@ public:
 
   void Clear(); // clear the fifo and delete all overlays
 
+  /*!
+   * \brief Remove every overlay that came from one source, leaving the others in place.
+   */
+  void Clear(DVDOverlaySource source);
+
   /*
    * \brief Flush the overlays.
    */
