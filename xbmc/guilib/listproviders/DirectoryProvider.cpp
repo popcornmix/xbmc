@@ -502,6 +502,9 @@ void CDirectoryProvider::Fetch(std::vector<std::shared_ptr<CGUIListItem>>& items
 
 void CDirectoryProvider::Reset()
 {
+  // Declared before the lock so it is destroyed after it -- see OnJobComplete().
+  std::vector<CGUIStaticItemPtr> previous;
+
   {
     std::unique_lock lock(m_section);
     if (m_jobID)
@@ -510,7 +513,7 @@ void CDirectoryProvider::Reset()
     m_jobPending = false;
     m_lastJobStartedAt = {};
     m_nextJobTimer.Stop();
-    m_items.clear();
+    previous.swap(m_items);
     m_currentTarget.clear();
     m_currentUrl.clear();
     m_itemTypes.clear();
@@ -529,22 +532,35 @@ void CDirectoryProvider::Reset()
 
 void CDirectoryProvider::FreeResources(bool immediately)
 {
-  std::unique_lock lock(m_section);
-  for (const auto& item : m_items)
+  // Freeing an item's layout releases its textures, which must not happen
+  // while m_section is held -- see OnJobComplete().
+  std::vector<CGUIStaticItemPtr> items;
+  {
+    std::unique_lock lock(m_section);
+    items = m_items;
+  }
+
+  for (const auto& item : items)
     item->FreeMemory(immediately);
 }
 
 void CDirectoryProvider::OnJobComplete(unsigned int jobID, bool success, CJob* job)
 {
+  // Declared before the lock so it is destroyed after it: dropping the old
+  // items frees their textures and so takes the graphics context, and the GUI
+  // thread takes those two the other way round -- graphics context held, then
+  // m_section in Fetch(). Doing it under the lock deadlocks the pair.
+  std::vector<CGUIStaticItemPtr> previous;
+
   std::unique_lock lock(m_section);
   if (success)
   {
+    previous.swap(m_items);
     if (job->GetPendingCallbackCount() > 1)
     {
       // Deep copy items since other callbacks will also receive this job's results,
       // and each container needs independent visibility state and layout
       const auto& sourceItems = static_cast<CDirectoryJob*>(job)->GetItems();
-      m_items.clear();
       m_items.reserve(sourceItems.size());
       for (const auto& item : sourceItems)
         m_items.emplace_back(std::make_shared<CGUIStaticItem>(*item));
