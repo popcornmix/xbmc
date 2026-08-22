@@ -1358,12 +1358,19 @@ void CDVDInputStreamBluray::SetupPlayerSettings()
   bd_set_player_setting(m_bd, BLURAY_PLAYER_SETTING_PARENTAL, 99);
   bd_set_player_setting(m_bd, BLURAY_PLAYER_SETTING_3D_CAP, 0xffffffff);
 #if (BLURAY_VERSION >= BLURAY_VERSION_CODE(1, 0, 2))
-  bd_set_player_setting(m_bd, BLURAY_PLAYER_SETTING_PLAYER_PROFILE, BLURAY_PLAYER_PROFILE_6_v3_1);
   bd_set_player_setting(m_bd, BLURAY_PLAYER_SETTING_UHD_CAP, 0xffffffff);
   bd_set_player_setting(m_bd, BLURAY_PLAYER_SETTING_UHD_DISPLAY_CAP, 0xffffffff);
   bd_set_player_setting(m_bd, BLURAY_PLAYER_SETTING_HDR_PREFERENCE, 0xffffffff);
-#else
+#endif
+
+  // Since 1.1.0 libbluray raises the player profile itself once it has read the disc index -
+  // profile 6 for UHD, profile 5 for Blu-ray 3D. Claiming a profile up front defeats that:
+  // the 3D initialisation is skipped whenever the application already asked for profile
+  // version 0x0300 or newer, so a 3D disc is left believing the player cannot do 3D.
+#if (BLURAY_VERSION < BLURAY_VERSION_CODE(1, 0, 2))
   bd_set_player_setting(m_bd, BLURAY_PLAYER_SETTING_PLAYER_PROFILE, BLURAY_PLAYER_PROFILE_5_v2_4);
+#elif (BLURAY_VERSION < BLURAY_VERSION_CODE(1, 1, 0))
+  bd_set_player_setting(m_bd, BLURAY_PLAYER_SETTING_PLAYER_PROFILE, BLURAY_PLAYER_PROFILE_6_v3_1);
 #endif
 
   const std::string audioLang{g_langInfo.GetDVDAudioLanguage().AsIso6392T()};
