@@ -31,6 +31,12 @@ void CDVDOverlayContainer::ProcessAndAddOverlayIfValid(const std::shared_ptr<CDV
   for(int i = m_overlays.size();i>0;)
   {
     i--;
+
+    // Only what came from the same place ends this. A menu sits in here alongside the
+    // subtitles it has nothing to do with, and a cue starting is no reason for it to go.
+    if (m_overlays[i]->GetSource() != pOverlay->GetSource())
+      continue;
+
     if(m_overlays[i]->iPTSStopTime)
     {
       if(!m_overlays[i]->replace)
@@ -85,6 +91,11 @@ void CDVDOverlayContainer::CleanUp(double pts)
       while (!bNewer && ++it2 != m_overlays.end())
       {
         const std::shared_ptr<CDVDOverlay>& pOverlay2 = *it2;
+        // Only what came from the same place replaces this: a menu is redrawn by the
+        // next menu, and closing one sends an empty page to stand in for it, but a
+        // forced subtitle over the top of a menu replaces nothing.
+        if (pOverlay2->GetSource() != pOverlay->GetSource())
+          continue;
         // There can be multiple overlays queued at same start point.
         // Skip them to find a new start point.
         if (pOverlay2->bForced && pOverlay2->iPTSStartTime <= pts)
@@ -118,6 +129,13 @@ void CDVDOverlayContainer::Clear()
 {
   std::unique_lock lock(*this);
   m_overlays.clear();
+}
+
+void CDVDOverlayContainer::Clear(DVDOverlaySource source)
+{
+  std::unique_lock lock(*this);
+  std::erase_if(m_overlays, [source](const std::shared_ptr<CDVDOverlay>& ov)
+                { return ov->GetSource() == source; });
 }
 
 size_t CDVDOverlayContainer::GetSize()

@@ -47,6 +47,7 @@ std::shared_ptr<CDVDOverlayGroup> InitialiseNewOverlayGroup(std::shared_ptr<CDVD
   group->bForced = overlay->bForced;
   group->replace = overlay->replace;
   group->SetOverlayContainerFlushable(overlay->IsOverlayContainerFlushable());
+  group->SetSource(overlay->GetSource());
   group->m_overlays.emplace_back(overlay);
   return group;
 }
@@ -194,8 +195,10 @@ void CVideoPlayerSubtitle::CloseStream(bool bWaitForBuffers)
 
   m_dvdspus.FlushCurrentPacket();
 
+  // Only the subtitles: the container is shared with the disc menu, which nothing would
+  // draw again if it went with them.
   if (!bWaitForBuffers)
-    m_pOverlayContainer->Clear();
+    m_pOverlayContainer->Clear(DVDOverlaySource::SUBTITLE);
 }
 
 void CVideoPlayerSubtitle::Process(double pts, double offset)
