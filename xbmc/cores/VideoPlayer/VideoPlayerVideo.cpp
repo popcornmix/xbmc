@@ -245,6 +245,12 @@ void CVideoPlayerVideo::OpenStream(CDVDStreamInfo& hint, std::unique_ptr<CDVDVid
 
   m_pVideoCodec = std::move(codec);
   m_hints = hint;
+
+  // A decoder only fills this in when the stream has views of its own to declare, and
+  // the picture is reused from one stream to the next, so a stream without them would
+  // inherit what the last one left here and be taken for 3D.
+  m_picture.stereoMode.clear();
+
   m_stalled = m_messageQueue.GetPacketCount(CDVDMsg::DEMUXER_PACKET) == 0;
   m_rewindStalled = false;
   m_packets.clear();

@@ -79,6 +79,14 @@ public:
   RESOLUTION GetResolution();
   void UpdateResolution();
   void TriggerUpdateResolution(float fps, int width, int height, std::string &stereomode);
+
+  /*!
+   * \brief Forget what the outgoing title looked like.
+   *
+   * Configure() only replaces this once the new title has a picture to describe, and
+   * until then a resolution search would be answered for the title that has gone.
+   */
+  void ResetPictureInfo();
   void SetViewMode(int iViewMode);
   void PreInit();
   void UnInit();

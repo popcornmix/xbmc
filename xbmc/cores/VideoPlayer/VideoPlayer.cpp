@@ -3032,6 +3032,15 @@ void CVideoPlayer::HandleMessages()
 
       FlushBuffers(DVD_NOPTS_VALUE, true, true);
       m_renderManager.Flush(false, false);
+
+      // Opening a file without closing the player leaves everything that described the
+      // last one behind, and it is answered for as if it were the new one until the new
+      // one has been read far enough to describe itself. A 2D title following a 3D one
+      // picks up its stereoscopic mode that way, and the display is put into a 3D mode
+      // for it.
+      m_processInfo->ResetVideoCodecInfo();
+      m_renderManager.ResetPictureInfo();
+
       m_pDemuxer.reset();
       m_pSubtitleDemuxer.reset();
       m_subtitleDemuxerMap.clear();

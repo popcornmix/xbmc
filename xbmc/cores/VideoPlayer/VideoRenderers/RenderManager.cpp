@@ -815,6 +815,15 @@ void CRenderManager::UpdateResolution()
   }
 }
 
+void CRenderManager::ResetPictureInfo()
+{
+  std::unique_lock lock(m_statelock);
+
+  m_picture.Reset();
+  m_fps = 0.0f;
+  m_bTriggerUpdateResolution = false;
+}
+
 void CRenderManager::TriggerUpdateResolution(float fps, int width, int height, std::string &stereomode)
 {
   if (width)
