@@ -244,6 +244,11 @@ bool CWinSystemGbm::SetFullScreen(bool fullScreen, RESOLUTION_INFO& res, bool bl
   {
     bo = m_GBM->GetDevice().GetSurface().LockFrontBuffer().Get();
   }
+  else
+  {
+    // Consume the front buffer our caller swapped to produce; nothing else will.
+    m_GBM->GetDevice().GetSurface().LockFrontBuffer();
+  }
 
   auto result = m_DRM->SetVideoMode(res, bo);
 
