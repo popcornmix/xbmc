@@ -27,6 +27,8 @@
 
 #include <mutex>
 
+#include <unistd.h>
+
 #include <EGL/eglext.h>
 
 using namespace KODI::WINDOWING::GBM;
@@ -101,7 +103,7 @@ bool CWinSystemGbmGLContext::SetFullScreen(bool fullScreen, RESOLUTION_INFO& res
   if (!m_eglContext.TrySwapBuffers())
   {
     CEGLUtils::Log(LOGERROR, "eglSwapBuffers failed");
-    throw std::runtime_error("eglSwapBuffers failed");
+    return false;
   }
 
   CWinSystemGbm::SetFullScreen(fullScreen, res, blankOtherDisplays);
@@ -117,6 +119,7 @@ void CWinSystemGbmGLContext::PresentRender(bool rendered, bool videoLayer)
 
   if (rendered || videoLayer)
   {
+    bool swapped = true;
     if (rendered)
     {
 #if defined(EGL_ANDROID_native_fence_sync) && defined(EGL_KHR_fence_sync)
@@ -136,20 +139,24 @@ void CWinSystemGbmGLContext::PresentRender(bool rendered, bool videoLayer)
       if (!m_eglContext.TrySwapBuffers())
       {
         CEGLUtils::Log(LOGERROR, "eglSwapBuffers failed");
-        throw std::runtime_error("eglSwapBuffers failed");
+        swapped = false;
       }
 
 #if defined(EGL_ANDROID_native_fence_sync) && defined(EGL_KHR_fence_sync)
       if (m_eglFence)
       {
         int fd = m_eglFence->FlushFence();
-        m_DRM->SetInFenceFd(fd);
+        if (swapped)
+          m_DRM->SetInFenceFd(fd);
+        else if (fd != -1)
+          close(fd); // no commit will consume it
 
         m_eglFence->WaitSyncCPU();
       }
 #endif
     }
-    CWinSystemGbm::FlipPage(rendered, videoLayer, static_cast<bool>(m_eglFence));
+    if (swapped)
+      CWinSystemGbm::FlipPage(rendered, videoLayer, static_cast<bool>(m_eglFence));
 
     if (m_dispReset && m_dispResetTimer.IsTimePast())
     {
