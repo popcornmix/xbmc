@@ -1692,6 +1692,7 @@ bool CFileItem::IsSamePath(const CFileItem *item) const
           return myTag->m_iFileId == otherTag->m_iFileId;
         return true;
       }
+      return false;
     }
   }
   if (IsMusicDb() && HasMusicInfoTag())
@@ -3804,8 +3805,9 @@ bool CFileItem::LoadDetails()
     bool ret{false};
     auto tag{std::make_unique<CVideoInfoTag>()};
     if (params.GetMovieId() >= 0)
-      ret = db.GetMovieInfo({}, *tag, static_cast<int>(params.GetMovieId()),
-                            static_cast<int>(params.GetVideoVersionId()));
+      ret = db.GetMovieInfo(
+          {}, *tag, static_cast<int>(params.GetMovieId()),
+          static_cast<int>(params.GetVideoVersionId())); //! @todo add support for asset id
     else if (params.GetMVideoId() >= 0)
       ret = db.GetMusicVideoInfo({}, *tag, static_cast<int>(params.GetMVideoId()));
     else if (params.GetEpisodeId() >= 0)

@@ -303,6 +303,8 @@ void CAESinkPipewire::EnumerateDevicesEx(AEDeviceInfoList& list, bool force)
   list.emplace_back(defaultDevice);
 
   auto& registry = pipewire->GetRegistry();
+  std::lock_guard lg(registry);
+
   for (const auto& [id, global] : registry.GetGlobals())
   {
     CAEDeviceInfo device;
@@ -607,7 +609,8 @@ unsigned int CAESinkPipewire::AddPackets(uint8_t** data, unsigned int frames, un
 
   } while (true);
 
-  m_stream->TriggerProcess();
+  if (m_stream->IsDriving())
+    m_stream->TriggerProcess();
 
   return frames;
 }

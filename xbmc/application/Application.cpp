@@ -1548,6 +1548,7 @@ void CApplication::OnApplicationMessage(ThreadMessage* pMsg)
 
   case TMSG_RESUMEAPP:
   {
+    m_ServiceManager->GetNetwork().NetworkMessage(CNetworkBase::SERVICES_UP, 0);
     CGUIComponent* gui = CServiceBroker::GetGUI();
     if (gui)
       gui->GetWindowManager().MarkDirty();
@@ -2828,13 +2829,7 @@ bool CApplication::OnMessage(CGUIMessage& message)
       const auto appPlayer = GetComponent<CApplicationPlayer>();
       if (!m_itemCurrentFile->IsLiveTV() ||
           (!appPlayer->IsPlayingVideo() && !appPlayer->IsPlayingAudio()))
-      {
-        CGUIDialogBusy* dialog =
-            CServiceBroker::GetGUI()->GetWindowManager().GetWindow<CGUIDialogBusy>(
-                WINDOW_DIALOG_BUSY);
-        if (dialog && !dialog->IsDialogRunning())
-          dialog->WaitOnEvent(m_playerEvent);
-      }
+        CGUIDialogBusy::WaitOnEvent(m_playerEvent);
 
       return true;
     }
