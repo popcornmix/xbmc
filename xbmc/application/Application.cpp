@@ -1243,14 +1243,6 @@ bool CApplication::OnAction(const CAction &action)
     bNotifyPlayer = true;
   else if (CServiceBroker::GetGUI()->GetWindowManager().GetActiveWindow() == WINDOW_VISUALISATION && bIsPlayingPVRChannel)
     bNotifyPlayer = true;
-  else if (CServiceBroker::GetGUI()->GetWindowManager().GetActiveWindow() == WINDOW_VISUALISATION &&
-           (action.GetID() == ACTION_NEXT_ITEM || action.GetID() == ACTION_PREV_ITEM))
-  {
-    // Audio playing from a source that skips for itself. Players with nothing
-    // to do with the action return false, so this costs ordinary music
-    // playback a call and nothing else.
-    bNotifyPlayer = true;
-  }
   else if (CServiceBroker::GetGUI()->GetWindowManager().GetActiveWindow() == WINDOW_DIALOG_VIDEO_OSD ||
           (CServiceBroker::GetGUI()->GetWindowManager().GetActiveWindow() == WINDOW_DIALOG_MUSIC_OSD && bIsPlayingPVRChannel))
   {
