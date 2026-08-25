@@ -669,11 +669,6 @@ bool CInputStreamAddon::IsRealtime()
   return false;
 }
 
-bool CInputStreamAddon::IsLowLatencyLive()
-{
-  return (m_caps.m_mask & INPUTSTREAM_LOW_LATENCY_LIVE) != 0;
-}
-
 
 // IChapter
 CDVDInputStream::IChapter* CInputStreamAddon::GetIChapter()

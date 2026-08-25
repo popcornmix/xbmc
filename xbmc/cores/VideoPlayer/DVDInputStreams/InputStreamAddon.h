@@ -94,7 +94,6 @@ public:
                           unsigned int maxWidth,
                           unsigned int maxHeight) override;
   bool IsRealtime() override;
-  bool IsLowLatencyLive() override;
 
   // IChapter
   CDVDInputStream::IChapter* GetIChapter() override;

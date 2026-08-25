@@ -2099,16 +2099,8 @@ CacheInfo CVideoPlayer::GetCachingTimes()
 void CVideoPlayer::HandlePlaySpeed()
 {
   const bool isInMenu = IsInMenuInternal();
-  // A source that has asked to stay at the live edge would rather show a
-  // stale picture for a moment than pause to refill: what it is waiting for
-  // is usually the source having nothing new to send, and the second or two
-  // spent buffering is time a live stream never wins back.
-  const bool lowLatencyLive =
-      m_pInputStream && m_pInputStream->IsRealtime() && m_pInputStream->IsLowLatencyLive();
-
-  const bool tolerateStall = isInMenu ||
-                             (m_CurrentVideo.hint.flags & StreamFlags::FLAG_STILL_IMAGES) ||
-                             lowLatencyLive;
+  const bool tolerateStall =
+      isInMenu || (m_CurrentVideo.hint.flags & StreamFlags::FLAG_STILL_IMAGES);
 
   if (tolerateStall && m_caching != CACHESTATE_DONE)
     SetCaching(CACHESTATE_DONE);
@@ -2255,15 +2247,6 @@ void CVideoPlayer::HandlePlaySpeed()
             m_clock.SetSpeedAdjust(adjust);
           }
         }
-        else if (m_clock.GetSpeedAdjust() != 0.0)
-        {
-          // Nothing left to pace the clock against, so let it run at its own
-          // speed again. The adjustment above is only ever undone by an audio
-          // queue recovering, and a stream that goes away mid-playback never
-          // gets to do that -- leaving the clock slowed for the rest of the
-          // session, drifting 50ms further behind every second.
-          m_clock.SetSpeedAdjust(0.0);
-        }
       }
     }
   }
@@ -2311,29 +2294,7 @@ void CVideoPlayer::HandlePlaySpeed()
         CLog::Log(LOGDEBUG, "VideoPlayer::Sync - Video - pts: {:f}, cache: {:f}, totalcache: {:f}",
                   m_CurrentVideo.starttime, m_CurrentVideo.cachetime, m_CurrentVideo.cachetotal);
 
-      // The clock is normally started from the first frame that decoded. On a
-      // live stream that makes however long the stream players took to start
-      // into a presentation latency that lasts the whole session, because such
-      // a stream is produced in real time and so never catches back up. Where
-      // the source has asked to stay close to the live edge, start from the
-      // newest timestamp demuxed instead and let what was queued in front of
-      // it be dropped as late.
-      double liveEdge = DVD_NOPTS_VALUE;
-      if (m_pInputStream->IsRealtime() && m_pInputStream->IsLowLatencyLive())
-      {
-        if (m_CurrentVideo.id >= 0 && m_CurrentVideo.dts != DVD_NOPTS_VALUE)
-          liveEdge = m_CurrentVideo.dts;
-        if (m_CurrentAudio.id >= 0 && m_CurrentAudio.dts != DVD_NOPTS_VALUE)
-          liveEdge = (liveEdge == DVD_NOPTS_VALUE) ? m_CurrentAudio.dts
-                                                   : std::max(liveEdge, m_CurrentAudio.dts);
-      }
-
-      if (liveEdge != DVD_NOPTS_VALUE && m_playSpeed != DVD_PLAYSPEED_PAUSE)
-      {
-        clock = liveEdge - DVD_MSEC_TO_TIME(m_pInputStream->GetLiveEdgeMargin().count());
-        CLog::Log(LOGDEBUG, "VideoPlayer::Sync - starting at live edge: {:f}", clock);
-      }
-      else if (m_CurrentVideo.starttime != DVD_NOPTS_VALUE && m_CurrentVideo.packets > 0 &&
+      if (m_CurrentVideo.starttime != DVD_NOPTS_VALUE && m_CurrentVideo.packets > 0 &&
           m_playSpeed == DVD_PLAYSPEED_PAUSE)
       {
         clock = m_CurrentVideo.starttime;

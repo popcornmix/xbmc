@@ -199,21 +199,6 @@ public:
 
   virtual bool IsRealtime() { return m_realtime; }
 
-  /*!
-   * \brief Whether the stream would rather start at its live edge than keep
-   *        the buffer the player's startup delay would otherwise leave in
-   *        front of it. Only consulted for a real time stream.
-   */
-  virtual bool IsLowLatencyLive() { return false; }
-
-  /*!
-   * \brief How far behind the live edge to start such a stream. Smaller is
-   *        closer to the source but leaves less room for it to arrive
-   *        unevenly, which for audio is the difference between playing
-   *        smoothly and being resampled back into place.
-   */
-  std::chrono::milliseconds GetLiveEdgeMargin() const { return m_liveEdgeMargin; }
-
   void SetRealtime(bool realtime) { m_realtime = realtime; }
 
   // interfaces
@@ -300,5 +285,4 @@ protected:
   CFileItem m_item;
   bool m_contentLookup;
   bool m_realtime;
-  std::chrono::milliseconds m_liveEdgeMargin{100};
 };
