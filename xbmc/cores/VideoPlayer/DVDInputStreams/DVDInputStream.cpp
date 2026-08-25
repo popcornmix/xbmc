@@ -30,6 +30,8 @@ CDVDInputStream::CDVDInputStream(DVDStreamType streamType, const CFileItem& file
   m_streamType = streamType;
   m_contentLookup = true;
   m_realtime = fileitem.GetProperty(STREAM_PROPERTY_ISREALTIMESTREAM).asBoolean(false);
+  m_liveEdgeMargin = std::chrono::milliseconds(
+      fileitem.GetProperty(STREAM_PROPERTY_LIVE_EDGE_MARGIN).asInteger32(100));
   m_item = fileitem;
 }
 
