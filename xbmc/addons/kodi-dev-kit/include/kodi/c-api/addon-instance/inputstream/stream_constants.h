@@ -48,6 +48,15 @@
 #define STREAM_PROPERTY_ISREALTIMESTREAM "isrealtimestream"
 
 /// @ingroup cpp_kodi_addon_inputstream_Defs_StreamConstants
+/// @brief How far behind the live edge, in milliseconds, a stream that has
+/// asked to start there would like to be left.
+///
+/// Only meaningful with @ref STREAM_PROPERTY_ISREALTIMESTREAM and a stream
+/// declaring INPUTSTREAM_LOW_LATENCY_LIVE. Smaller is closer to the source
+/// and leaves less room for it to arrive unevenly. Defaults to 100.
+#define STREAM_PROPERTY_LIVE_EDGE_MARGIN "liveedgemargin"
+
+/// @ingroup cpp_kodi_addon_inputstream_Defs_StreamConstants
 /// @brief Special value for @ref STREAM_PROPERTY_INPUTSTREAM to use
 /// ffmpeg to directly play a stream URL.
 #define STREAM_PROPERTY_VALUE_INPUTSTREAMFFMPEG "inputstream.ffmpeg"

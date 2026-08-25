@@ -84,6 +84,20 @@ extern "C"
     ///
     /// If set must be @ref cpp_kodi_addon_inputstream_Chapter "Chapter support" included.
     INPUTSTREAM_SUPPORTS_ICHAPTER = (1 << 6),
+
+    /// @brief **0000 0000 1000 0000 :** Stream should start at the live edge.
+    ///
+    /// Only meaningful together with
+    /// @ref kodi::addon::CInstanceInputStream::IsRealTimeStream().
+    ///
+    /// A real time stream is normally started on the first frame that decodes,
+    /// which leaves the player however long it took to get going permanently
+    /// behind the source, as a live stream never catches back up. Set this for
+    /// a stream where being close to the source matters more than the buffer
+    /// that delay provides, such as screen mirroring: the player then starts
+    /// at the newest timestamp it has and discards what was queued ahead of
+    /// it, at the cost of a shorter safety margin against a stalling source.
+    INPUTSTREAM_LOW_LATENCY_LIVE = (1 << 7),
   };
   ///@}
   //----------------------------------------------------------------------------
