@@ -95,8 +95,6 @@ public:
                           unsigned int maxHeight) override;
   bool IsRealtime() override;
   bool IsLowLatencyLive() override;
-  bool SupportsTransportActions() override;
-  bool OnTransportAction(bool next) override;
 
   // IChapter
   CDVDInputStream::IChapter* GetIChapter() override;
