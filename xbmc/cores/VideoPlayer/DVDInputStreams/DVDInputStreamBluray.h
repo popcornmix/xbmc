@@ -110,6 +110,17 @@ public:
   */
   MenuType GetSupportedMenuType() override;
 
+  /*!
+   * \brief Whether the disc holds a menu that is not currently being navigated.
+   *
+   * A playlist played on its own never enters navigation mode, so OnMenu() has nothing to
+   * ask libbluray for and the disc's own menu is out of reach. Playing the disc again as a
+   * menu path is the way back to it, and this says whether that is worth offering.
+   *
+   * \return true if the disc supports menus and this is not already navigation mode
+   */
+  bool CanShowDiscMenu() const;
+
   bool IsInMenu() override;
   bool OnMouseMove(const CPoint &point) override  { return MouseMove(point); }
   bool OnMouseClick(const CPoint &point) override { return MouseClick(point); }
