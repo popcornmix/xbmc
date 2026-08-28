@@ -36,6 +36,10 @@ void CDRMAtomic::DrmAtomicCommit(int fb_id, int flags, bool rendered, bool video
   // referencing an invalid id and the kernel rejects with EINVAL.
   CDRMPropertyBlob modeBlob;
 
+  // Whether this commit asks the kernel for an out-fence, and so whether
+  // m_outFenceFd will name this commit's flip once it returns.
+  bool outFence = false;
+
   if (m_old_crtc != nullptr)
   {
     if (m_old_crtc->GetId() != m_crtc->GetId())
@@ -119,6 +123,7 @@ void CDRMAtomic::DrmAtomicCommit(int fb_id, int flags, bool rendered, bool video
     {
       AddProperty(m_crtc, "OUT_FENCE_PTR", reinterpret_cast<uint64_t>(&m_outFenceFd));
       AddProperty(outputPlane, "IN_FENCE_FD", m_inFenceFd);
+      outFence = true;
     }
   }
   //! @todo Reaching out to the window manager and application player
@@ -153,12 +158,16 @@ void CDRMAtomic::DrmAtomicCommit(int fb_id, int flags, bool rendered, bool video
     CDRMAtomicRequest::LogAtomicDiff(m_req, oldRequest);
     m_req = oldRequest;
 
+    // The fall-back request is not this one, so what it asks for is not known.
+    outFence = false;
+
     // update the old atomic request with the new fb id to avoid tearing
     if (rendered)
       AddProperty(outputPlane, "FB_ID", fb_id);
   }
 
   ret = drmModeAtomicCommit(m_fd, m_req->Get(), flags, nullptr);
+  NoteCommit(ret < 0 || !outFence ? -1 : m_outFenceFd);
   if (ret < 0)
   {
     CLog::LogF(LOGERROR, "atomic commit failed: {}", strerror(errno));
