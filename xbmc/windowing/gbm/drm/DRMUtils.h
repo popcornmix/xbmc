@@ -15,6 +15,8 @@
 #include "windowing/Resolution.h"
 #include "windowing/gbm/GBMUtils.h"
 
+#include <cstdint>
+#include <deque>
 #include <utility>
 #include <vector>
 
@@ -99,9 +101,34 @@ public:
     return std::exchange(m_outFenceFd, fd);
   }
 
+  //! \brief Whether the flip of a given atomic commit has happened yet.
+  enum class CommitState
+  {
+    COMPLETE, //!< the flip landed, so whatever it replaced is off screen
+    PENDING, //!< not yet issued, or issued with its flip still unsignalled
+    UNKNOWN, //!< that commit carried no out-fence, so it cannot be told
+  };
+
+  /*!
+   * \brief Sequence the next commit will carry - the commit that will present
+   *        the properties being added to the request now.
+   */
+  uint64_t GetNextCommitSequence() const { return m_commitSeq + 1; }
+
+  /*!
+   * \brief State of the commit with the given sequence.
+   *
+   * Lets a caller that has handed a buffer to a plane tell whether the commit
+   * meant to replace it on screen has actually landed. Non-blocking, and for
+   * the presenting thread: the sequence is not synchronised.
+   */
+  CommitState GetCommitState(uint64_t sequence);
+
 protected:
   bool OpenDrm(bool needConnector);
   drm_fb* DrmFbGetFromBo(struct gbm_bo* bo);
+  //! \brief Record an issued commit and, when it carried one, its out-fence.
+  void NoteCommit(int outFenceFd);
 
   int m_fd{-1};
   CDRMConnector* m_connector{nullptr};
@@ -120,6 +147,10 @@ protected:
 
   int m_inFenceFd{-1};
   int m_outFenceFd{-1};
+
+  uint64_t m_commitSeq{0};
+  //! Sequence and a dup of the out-fence of recent commits, oldest first.
+  std::deque<std::pair<uint64_t, int>> m_commitFences;
 
   std::vector<std::unique_ptr<CDRMPlane>> m_planes;
 
