@@ -16,6 +16,10 @@
 #include "utils/log.h"
 #include "windowing/GraphicContext.h"
 
+#include <algorithm>
+
+#include <poll.h>
+
 #include "PlatformDefs.h"
 
 using namespace KODI::WINDOWING::GBM;
@@ -802,12 +806,69 @@ void CDRMUtils::DestroyDrm()
   close(m_renderFd);
   close(m_fd);
 
+  for (const auto& commit : m_commitFences)
+    close(commit.second);
+  m_commitFences.clear();
+
   m_connector = nullptr;
   m_encoder = nullptr;
   m_crtc = nullptr;
   m_orig_crtc = nullptr;
   m_video_plane = nullptr;
   m_gui_plane = nullptr;
+}
+
+void CDRMUtils::NoteCommit(int outFenceFd)
+{
+  // Counts commits issued, whether or not they carried a fence, so the sequence
+  // a caller recorded still names its own commit after one without one.
+  m_commitSeq++;
+
+  if (outFenceFd < 0)
+    return;
+
+  // A dup: the commit's own fd belongs to the EGL fence path, which takes it.
+  const int fd = dup(outFenceFd);
+  if (fd < 0)
+    return;
+
+  m_commitFences.emplace_back(m_commitSeq, fd);
+
+  // Only the last few commits are ever asked about.
+  constexpr size_t maxTrackedCommits = 8;
+  while (m_commitFences.size() > maxTrackedCommits)
+  {
+    close(m_commitFences.front().second);
+    m_commitFences.pop_front();
+  }
+}
+
+CDRMUtils::CommitState CDRMUtils::GetCommitState(uint64_t sequence)
+{
+  if (sequence == 0)
+    return CommitState::UNKNOWN;
+
+  if (sequence > m_commitSeq)
+    return CommitState::PENDING;
+
+  // Older than anything tracked: several commits have been issued since, so its
+  // flip has long landed.
+  if (!m_commitFences.empty() && sequence < m_commitFences.front().first)
+    return CommitState::COMPLETE;
+
+  auto it = std::find_if(m_commitFences.begin(), m_commitFences.end(),
+                         [sequence](const auto& entry) { return entry.first == sequence; });
+  if (it == m_commitFences.end())
+    return CommitState::UNKNOWN;
+
+  // A sync_file reports POLLIN once its fence signals; a zero timeout makes this
+  // a test of that rather than a wait for it.
+  pollfd pfd{it->second, POLLIN, 0};
+  const int ret = poll(&pfd, 1, 0);
+  if (ret < 0)
+    return CommitState::UNKNOWN;
+
+  return ret > 0 ? CommitState::COMPLETE : CommitState::PENDING;
 }
 
 RESOLUTION_INFO CDRMUtils::GetResolutionInfo(drmModeModeInfoPtr mode)

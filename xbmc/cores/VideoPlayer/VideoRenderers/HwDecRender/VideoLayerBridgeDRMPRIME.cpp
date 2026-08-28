@@ -20,8 +20,15 @@
 #include <cstdint>
 #include <utility>
 
+using namespace std::chrono_literals;
 using namespace KODI::WINDOWING::GBM;
 using namespace DRMPRIME;
+
+namespace
+{
+//! How often the early release counters are logged while releases are early
+constexpr auto EARLY_RELEASE_LOG_INTERVAL = 5000ms;
+} // namespace
 
 CVideoLayerBridgeDRMPRIME::CVideoLayerBridgeDRMPRIME(std::shared_ptr<CDRMAtomic> drm)
   : m_DRM(std::move(drm))
@@ -66,6 +73,7 @@ void CVideoLayerBridgeDRMPRIME::Disable()
 void CVideoLayerBridgeDRMPRIME::Acquire(CVideoBufferDRMPRIME* buffer, uint32_t fbId)
 {
   // release the buffer that is no longer presented on screen
+  CheckScanoutRelease();
   Release(m_prev_buffer);
 
   // release the buffer currently being presented next call
@@ -76,6 +84,51 @@ void CVideoLayerBridgeDRMPRIME::Acquire(CVideoBufferDRMPRIME* buffer, uint32_t f
   m_buffer = buffer;
   m_fb_id = fbId;
   m_buffer->Acquire();
+
+  // The plane properties for this buffer go into the pending atomic request, so
+  // the next commit is the one that will put it on screen.
+  m_commitSeq = m_DRM->GetNextCommitSequence();
+}
+
+void CVideoLayerBridgeDRMPRIME::CheckScanoutRelease()
+{
+  if (!m_prev_buffer)
+    return;
+
+  m_releases++;
+
+  // m_prev_buffer is only off screen once the commit that presented m_buffer in
+  // its place has flipped. Holding just the two references assumes that has
+  // happened by the time the next buffer arrives, which is true of a one frame
+  // deep present pipeline. Count where it has not: the buffer goes back to the
+  // decoder pool while the plane is still scanning it out, and whatever the
+  // decoder writes there next appears on screen for a frame.
+  switch (m_DRM->GetCommitState(m_commitSeq))
+  {
+    case CDRMAtomic::CommitState::COMPLETE:
+      return;
+    case CDRMAtomic::CommitState::UNKNOWN:
+      m_indeterminateReleases++;
+      return;
+    case CDRMAtomic::CommitState::PENDING:
+      m_earlyReleases++;
+      break;
+  }
+
+  // The timer starts expired, so the first one is logged as it happens and the
+  // rest are summarised - at a display rate this can be every frame.
+  if (!m_earlyReleaseLogTimer.IsTimePast())
+    return;
+
+  m_earlyReleaseLogTimer.Set(EARLY_RELEASE_LOG_INTERVAL);
+
+  CLog::LogF(LOGWARNING,
+             "buffer released while the commit replacing it on screen was still pending: {} in "
+             "the last {}s - totals: early:{} of {} releases (indeterminate:{})",
+             m_earlyReleases - m_loggedEarlyReleases, EARLY_RELEASE_LOG_INTERVAL.count() / 1000,
+             m_earlyReleases, m_releases, m_indeterminateReleases);
+
+  m_loggedEarlyReleases = m_earlyReleases;
 }
 
 void CVideoLayerBridgeDRMPRIME::Release(CVideoBufferDRMPRIME* buffer)
@@ -327,6 +380,7 @@ void CVideoLayerBridgeDRMPRIME::UpdateVideoPlane()
     return;
 
   // release the buffer that is no longer presented on screen
+  CheckScanoutRelease();
   Release(m_prev_buffer);
   m_prev_buffer = nullptr;
 
