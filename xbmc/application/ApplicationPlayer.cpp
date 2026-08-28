@@ -468,6 +468,16 @@ MenuType CApplicationPlayer::GetSupportedMenuType() const
   return player->GetSupportedMenuType();
 }
 
+bool CApplicationPlayer::CanShowDiscMenu() const
+{
+  std::shared_ptr<const IPlayer> player = GetInternal();
+  if (!player)
+  {
+    return false;
+  }
+  return player->CanShowDiscMenu();
+}
+
 int CApplicationPlayer::GetCacheLevel() const
 {
   std::shared_ptr<const IPlayer> player = GetInternal();
