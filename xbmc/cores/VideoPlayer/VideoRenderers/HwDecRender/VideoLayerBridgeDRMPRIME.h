@@ -10,8 +10,10 @@
 
 #include "cores/VideoPlayer/Buffers/DmaBufIdentityCache.h"
 #include "cores/VideoPlayer/Interface/StreamInfo.h"
+#include "threads/SystemClock.h"
 #include "windowing/gbm/VideoLayerBridge.h"
 
+#include <cstdint>
 #include <memory>
 #include <span>
 
@@ -69,6 +71,12 @@ private:
   void SetPlaneRects(KODI::WINDOWING::GBM::CDRMPlane* plane,
                      CVideoBufferDRMPRIME* buffer,
                      const PlaneRects& rects);
+  /*!
+   * \brief Count the release of the previously presented buffer as safe or not.
+   *
+   * Call immediately before letting go of m_prev_buffer.
+   */
+  void CheckScanoutRelease();
 
   static constexpr size_t MAX_FB_CACHE = 32;
 
@@ -77,4 +85,12 @@ private:
   CVideoBufferDRMPRIME* m_prev_buffer = nullptr;
   uint32_t m_fb_id{0};
   uint32_t m_prev_fb_id{0};
+
+  //! Commit that presents m_buffer, i.e. that takes m_prev_buffer off screen.
+  uint64_t m_commitSeq{0};
+  unsigned int m_releases{0};
+  unsigned int m_earlyReleases{0};
+  unsigned int m_indeterminateReleases{0};
+  unsigned int m_loggedEarlyReleases{0};
+  XbmcThreads::EndTime<> m_earlyReleaseLogTimer;
 };
