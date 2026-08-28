@@ -51,6 +51,7 @@ struct SPlayerState
     player_state  = "";
     isInMenu = false;
     menuType = MenuType::NONE;
+    canShowDiscMenu = false;
     chapter = 0;
     chapters.clear();
     rawChapters.clear();
@@ -80,6 +81,11 @@ struct SPlayerState
   std::string player_state; // full player state
   bool isInMenu;
   MenuType menuType;
+
+  //! Whether a disc menu could be switched to, which a playlist played on its own has but
+  //! is not navigating. Not menuType: that says what is being navigated now, and several
+  //! decisions key off it being NONE.
+  bool canShowDiscMenu;
   bool streamsReady;
 
   // 1-based current chapter, numbered among the chapters visible to the user (i.e. excluding
@@ -308,6 +314,10 @@ public:
    * \return The supported menu type
   */
   MenuType GetSupportedMenuType() const override;
+  bool CanShowDiscMenu() const override;
+
+  //! \brief Play what is playing again as a menu path, so the disc starts at its menu.
+  void ShowDiscMenu();
 
   void SetSubTitleDelay(float fValue = 0.0f) override;
   float GetSubTitleDelay() override;

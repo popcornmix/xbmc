@@ -966,7 +966,10 @@ bool CVideoGUIInfo::GetBool(bool& value,
           CServiceBroker::GetGUI()->GetWindowManager().GetActiveWindow() == WINDOW_FULLSCREEN_GAME;
       return true;
     case VIDEOPLAYER_HASMENU:
-      value = m_appPlayer->GetSupportedMenuType() != MenuType::NONE;
+      // Either a menu is being navigated, or one can be switched to - a disc played as a
+      // playlist has a menu even though it is not in it.
+      value = m_appPlayer->GetSupportedMenuType() != MenuType::NONE ||
+              m_appPlayer->CanShowDiscMenu();
       return true;
     case VIDEOPLAYER_HASTELETEXT:
       value = m_appPlayer->HasTeletextCache();

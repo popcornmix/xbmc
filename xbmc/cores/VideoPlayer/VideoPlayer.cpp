@@ -5081,6 +5081,13 @@ bool CVideoPlayer::OnAction(const CAction &action)
           // Let everyone know that we've gone to the menu
           CServiceBroker::GetAnnouncementManager()->Announce(ANNOUNCEMENT::Player, "OnMenu");
         }
+        else if (CanShowDiscMenu())
+        {
+          // A playlist playing on its own is not navigating the disc, so there is no menu
+          // for libbluray to be asked for. Play the disc as a menu path instead, which is
+          // the same thing choosing the menu before playback would have done.
+          ShowDiscMenu();
+        }
         return true;
       }
       break;
@@ -5285,6 +5292,45 @@ MenuType CVideoPlayer::GetSupportedMenuType() const
 {
   std::unique_lock lock(m_StateSection);
   return m_State.menuType;
+}
+
+bool CVideoPlayer::CanShowDiscMenu() const
+{
+  std::unique_lock lock(m_StateSection);
+  return m_State.canShowDiscMenu;
+}
+
+void CVideoPlayer::ShowDiscMenu()
+{
+  const std::string menuPath{URIUtils::GetBlurayMenuPath(m_item.GetDynPath())};
+  if (menuPath.empty())
+  {
+    CLog::LogF(LOGERROR, "Unable to derive a menu path from {}",
+               CURL::GetRedacted(m_item.GetDynPath()));
+    return;
+  }
+
+  CLog::LogF(LOGDEBUG, "Restarting playback at {}", CURL::GetRedacted(menuPath));
+
+  auto menuItem{std::make_unique<CFileItem>(m_item)};
+  menuItem->SetPath(menuPath);
+  menuItem->SetDynPath(menuPath);
+
+  // CApplicationPlay::ResolvePath() puts the tag's own path back over the dynpath for
+  // anything already on a bluray:// path, which for a library item is the playlist that
+  // was playing. Leave nothing there to put back, or the menu never survives the trip.
+  if (menuItem->HasVideoInfoTag())
+  {
+    menuItem->GetVideoInfoTag()->SetPath(menuPath);
+    menuItem->GetVideoInfoTag()->SetFileNameAndPath(menuPath);
+  }
+
+  // The disc decides where a menu starts, and a resume position belonging to the playlist
+  // that was playing means nothing there.
+  menuItem->SetStartOffset(0);
+
+  CServiceBroker::GetAppMessenger()->PostMsg(TMSG_MEDIA_PLAY, 0, 0,
+                                            static_cast<void*>(menuItem.release()));
 }
 
 std::string CVideoPlayer::GetPlayerState()
@@ -5796,6 +5842,11 @@ void CVideoPlayer::UpdatePlayState(double timeout)
       }
       state.menuType = pMenu->GetSupportedMenuType();
     }
+
+    // Unconditional: state starts as a copy of the last one, and opening a file without
+    // closing the player swaps the input stream underneath it.
+    const auto bluray{std::dynamic_pointer_cast<CDVDInputStreamBluray>(m_pInputStream)};
+    state.canShowDiscMenu = bluray && bluray->CanShowDiscMenu();
 
     state.canpause = m_pInputStream->CanPause();
 
