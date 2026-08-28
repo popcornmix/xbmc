@@ -199,6 +199,12 @@ MenuDecision GetMenuDecisions(const CFileItem& item,
   if (isExternalPlayer || isRemotePlayer)
     return NO_ACTION;
 
+  // Already a menu path, so the choice of what to play has been made - by the setting, by
+  // the context menu, or by leaving a playlist for the disc's own menu. The searches below
+  // would only take it back off the menu, and a playlist search cannot be answered for one.
+  if (URIUtils::IsBlurayMenuPath(item.GetDynPath()))
+    return NO_ACTION;
+
   // See if disc image is a Blu-ray (as an image could be a DVD as well) or if the path is a BDMV folder
   const bool isBluray{::UTILS::DISCS::IsBlurayDiscImage(item) ||
                       URIUtils::IsBDFile(item.GetDynPath())};
