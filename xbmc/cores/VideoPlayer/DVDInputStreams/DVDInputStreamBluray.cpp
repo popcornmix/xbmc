@@ -1521,6 +1521,19 @@ MenuType CDVDInputStreamBluray::GetSupportedMenuType()
   return MenuType::NONE;
 }
 
+bool CDVDInputStreamBluray::CanShowDiscMenu() const
+{
+  // In navigation mode the menu is already a keypress away, through OnMenu().
+  if (m_navmode || !m_bd)
+    return false;
+
+  const BLURAY_DISC_INFO* discInfo{bd_get_disc_info(m_bd)};
+
+  // Same question CBlurayDirectory::HasMenuSupport() answers when it decides whether to
+  // offer the menu alongside the titles, so a disc offers it in both places or neither.
+  return discInfo && !discInfo->no_menu_support;
+}
+
 void CDVDInputStreamBluray::SetupPlayerSettings()
 {
   int region = CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(CSettings::SETTING_BLURAY_PLAYERREGION);

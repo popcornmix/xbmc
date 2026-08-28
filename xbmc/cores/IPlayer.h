@@ -193,6 +193,13 @@ public:
   */
   virtual MenuType GetSupportedMenuType() const { return MenuType::NONE; }
 
+  /*!
+   * \brief Whether a disc menu can be reached from what is playing, even though it is not
+   *        what is being navigated now. Acting on it restarts playback at the menu.
+   * \return true if a disc menu is available to switch to
+   */
+  virtual bool CanShowDiscMenu() const { return false; }
+
   virtual bool OnAction(const CAction& action) { return false; }
 
   //returns a state that is needed for resuming from a specific time
