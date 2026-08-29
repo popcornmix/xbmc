@@ -1,4 +1,5 @@
-set(SOURCES DemuxMultiSource.cpp
+set(SOURCES BlurayOffsetMetadata.cpp
+            DemuxMultiSource.cpp
             DVDDemux.cpp
             DVDDemuxCC.cpp
             DVDDemuxCC/CCBitstreamParserFactory.cpp
@@ -17,7 +18,8 @@ if(TARGET ${APP_NAME_LC}::Bluray)
   list(APPEND SOURCES DVDDemuxBluray3D.cpp)
 endif()
 
-set(HEADERS DemuxMultiSource.h
+set(HEADERS BlurayOffsetMetadata.h
+            DemuxMultiSource.h
             DVDDemux.h
             DVDDemuxCC.h
             DVDDemuxCC/Bitstream.h
