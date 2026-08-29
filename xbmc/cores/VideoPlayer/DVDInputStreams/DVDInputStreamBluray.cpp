@@ -1234,6 +1234,7 @@ void CDVDInputStreamBluray::UpdatePlaylistInformation()
 {
   m_playlistInfoValid = false;
   m_playlistInfo = {};
+  m_offsetMetadata->Flush();
 
   if (m_vfsRoot.empty() || m_playlist > MAX_PLAYLIST_ID)
     return;
@@ -1300,6 +1301,28 @@ bool CDVDInputStreamBluray::GetStereoscopicClip(unsigned int& clip, std::string&
 bool CDVDInputStreamBluray::IsBaseViewRightEye() const
 {
   return m_titleInfo && m_titleInfo->mvc_base_view_r_flag != 0;
+}
+
+int CDVDInputStreamBluray::GetSubtitleOffsetSequence(unsigned int pid) const
+{
+  if (!m_playlistInfoValid || m_playlistInfo.playItems.empty())
+    return -1;
+
+  const auto& playItems{m_playlistInfo.playItems};
+  const auto& playItem{m_playItem < playItems.size() ? playItems[m_playItem] : playItems.front()};
+
+  for (const auto& stream : playItem.presentationGraphicStreams)
+  {
+    if (stream.packetIdentifier != pid)
+      continue;
+
+    if (stream.offsetSequenceId == XFILE::NO_OFFSET_SEQUENCE)
+      return -1;
+
+    return static_cast<int>(stream.offsetSequenceId);
+  }
+
+  return -1;
 }
 
 std::shared_ptr<CDVDInputStreamBlurayFile> CDVDInputStreamBluray::OpenClipStream(

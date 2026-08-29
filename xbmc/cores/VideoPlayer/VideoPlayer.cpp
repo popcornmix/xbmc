@@ -976,6 +976,18 @@ bool CVideoPlayer::OpenInputStream()
     } // end loop over all subtitle files
   }
 
+  // A Blu-ray 3D title says how deep its subtitles sit, once per GOP, in the dependent
+  // view. The input stream owns what the demuxer reads out of it.
+  {
+    std::unique_lock lock(m_offsetMetadataSection);
+    m_offsetMetadata.reset();
+#if defined(HAVE_LIBBLURAY)
+    if (const auto bluray = std::dynamic_pointer_cast<CDVDInputStreamBluray>(m_pInputStream))
+      m_offsetMetadata = bluray->GetOffsetMetadata();
+#endif
+  }
+  m_subtitleOffsetSequence = -1;
+
   m_clock.Reset();
   m_dvd.Clear();
 
@@ -4254,6 +4266,8 @@ bool CVideoPlayer::OpenStream(CCurrentStream& current, int64_t demuxerId, int iS
       break;
     case StreamType::SUBTITLE:
       res = OpenSubtitleStream(hint);
+      if (res)
+        UpdateSubtitleOffsetSequence(stream);
       break;
     case StreamType::TELETEXT:
       res = OpenTeletextStream(hint);
@@ -4456,6 +4470,34 @@ bool CVideoPlayer::OpenVideoStream(CDVDStreamInfo& hint, bool reset)
   }
 
   return true;
+}
+
+void CVideoPlayer::UpdateSubtitleOffsetSequence(const CDemuxStream* stream)
+{
+  int sequence{-1};
+
+#if defined(HAVE_LIBBLURAY)
+  const auto bluray = std::dynamic_pointer_cast<CDVDInputStreamBluray>(m_pInputStream);
+  if (bluray && stream && stream->dvdNavId > 0)
+    sequence = bluray->GetSubtitleOffsetSequence(static_cast<unsigned int>(stream->dvdNavId));
+#endif
+
+  if (sequence != m_subtitleOffsetSequence.exchange(sequence) && sequence >= 0)
+    CLog::Log(LOGDEBUG, "CVideoPlayer::{} - subtitles follow plane offset sequence {}",
+              __FUNCTION__, sequence);
+}
+
+int CVideoPlayer::GetSubtitlePlaneOffset(double pts)
+{
+  const int sequence{m_subtitleOffsetSequence};
+  if (sequence < 0)
+    return 0;
+
+  std::unique_lock lock(m_offsetMetadataSection);
+  if (!m_offsetMetadata)
+    return 0;
+
+  return m_offsetMetadata->GetOffset(pts, static_cast<unsigned int>(sequence));
 }
 
 bool CVideoPlayer::OpenSubtitleStream(const CDVDStreamInfo& hint)

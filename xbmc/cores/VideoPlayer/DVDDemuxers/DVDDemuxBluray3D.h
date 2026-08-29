@@ -95,6 +95,18 @@ private:
   //! \brief Work out the fixed difference between the two views' timestamps.
   void CalculatePtsOffset();
 
+  //! \brief Note how long a frame lasts, which is what indexes the plane offsets.
+  void CalculateFrameDuration();
+
+  /*!
+   * \brief Keep the plane offsets a dependent view access unit carries, if it has any.
+   *
+   * A "1 plane + offset" title places its subtitles in depth by shifting the plane, and
+   * says by how much once per GOP, in the dependent view. \p pts is the base view's, being
+   * the time the player will present the first of the frames described.
+   */
+  void ReadOffsetMetadata(const DemuxPacket& dependent, double pts);
+
   //! \brief Read the next access unit of the dependent view, or nullptr at its end.
   DemuxPacket* ReadDependent();
 
@@ -151,6 +163,12 @@ private:
   //! Base view time at which the dependent view was last placed again for want of a pair,
   //! or DVD_NOPTS_VALUE. Each placing costs a seek and a re-read, so they are rate limited.
   double m_lastRealignPts{DVD_NOPTS_VALUE};
+
+  //! A frame's worth of presentation time, taken from the base view.
+  double m_frameDuration{0.0};
+
+  //! Whether the title has been said to carry plane offsets, which is said once.
+  bool m_loggedOffsetMetadata{false};
 
   //! Dependent view packet held back because it is ahead of the base view.
   DemuxPacket* m_pendingDependent{nullptr};

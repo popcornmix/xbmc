@@ -10,6 +10,7 @@
 
 #include "BlurayStateSerializer.h"
 #include "DVDInputStream.h"
+#include "cores/VideoPlayer/DVDDemuxers/BlurayOffsetMetadata.h"
 #include "filesystem/bluray/PlaylistStructure.h"
 #include "threads/CriticalSection.h"
 #if defined(HAS_UDFREAD)
@@ -181,6 +182,24 @@ public:
   bool IsBaseViewRightEye() const;
 
   /*!
+   * \brief The plane offsets read out of the dependent view of this title.
+   *
+   * Filled in by the demuxer as the dependent view is read and asked for by the render
+   * thread a moment later, so it is shared rather than owned by either.
+   */
+  const std::shared_ptr<KODI::VIDEO::BLURAY::COffsetMetadataStore>& GetOffsetMetadata() const
+  {
+    return m_offsetMetadata;
+  }
+
+  /*!
+   * \brief The offset sequence a subtitle stream follows, which places it in depth.
+   * \param pid the packet identifier of the subtitle stream
+   * \return the sequence, or -1 when the playlist gives the stream none
+   */
+  int GetSubtitleOffsetSequence(unsigned int pid) const;
+
+  /*!
    * \brief Open a clip that libbluray is not itself playing.
    *
    * Goes through bd_open_file_dec() so AACS and BD+ are handled, and works for a disc
@@ -313,6 +332,11 @@ protected:
     /*! Index of the current play item, tracked so the matching stereoscopic sub-play item
         can be found. */
     uint32_t m_playItem{0};
+
+    /*! Plane offsets of the GOPs around the current position, as the dependent view gives
+        them. Shared with the player, which reads it as each frame is presented. */
+    std::shared_ptr<KODI::VIDEO::BLURAY::COffsetMetadataStore> m_offsetMetadata{
+        std::make_shared<KODI::VIDEO::BLURAY::COffsetMetadataStore>()};
 
     /*! Bluray state serializer handler */
     CBlurayStateSerializer m_blurayStateSerializer;

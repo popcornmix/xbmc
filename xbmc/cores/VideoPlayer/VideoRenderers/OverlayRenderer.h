@@ -108,6 +108,15 @@ namespace OVERLAY {
     void Notify(const Observable& obs, const ObservableMessage msg) override;
 
     void AddOverlay(std::shared_ptr<CDVDOverlay> o, double pts, int index);
+
+    /*!
+     * \brief Set the shift the disc asks the subtitle plane to carry, in video pixels.
+     *
+     * A Blu-ray 3D title places its subtitles in depth by shifting the plane one way for
+     * the left eye and the other for the right. Set for each frame as it is presented,
+     * since the amount is the title's to vary.
+     */
+    void SetSubtitlePlaneOffset(int offset) { m_subtitlePlaneOffset = offset; }
     virtual void Render(int idx, float depth = 0.0f);
 
     /*!
@@ -185,6 +194,14 @@ namespace OVERLAY {
     };
 
     void Render(COverlay* o);
+
+    /*!
+     * \brief The horizontal shift the current eye's plane carries, in screen pixels.
+     *
+     * The disc gives it in the video's own pixels, so it is scaled the same way the
+     * overlay itself is, and it is signed by the eye being drawn.
+     */
+    float SubtitlePlaneOffset() const;
     std::shared_ptr<COverlay> Convert(SElement& e);
     // Build a COverlay (cached or freshly created) from the libass output
     // already produced by PrepareOverlays. Does not call ass_render_frame.
@@ -215,6 +232,9 @@ namespace OVERLAY {
     CRect m_rs; // Source size
     CRect m_rd; // Video size, may be influenced by video settings (e.g. zoom)
     std::string m_stereomode;
+
+    //! What the disc asks the subtitle plane to be shifted by, in the video's own pixels.
+    int m_subtitlePlaneOffset{0};
     // Current subtitle position
     int m_subtitlePosition{0};
     // Current subtitle position from resolution info,

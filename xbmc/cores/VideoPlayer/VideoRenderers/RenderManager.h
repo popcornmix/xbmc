@@ -60,6 +60,15 @@ protected:
   virtual void UpdateGuiRender(bool gui) = 0;
   virtual void UpdateVideoRender(bool video) = 0;
   virtual CVideoSettings GetVideoSettings() const = 0;
+
+  /*!
+   * \brief The shift the disc asks the subtitle plane to carry for the frame at \p pts.
+   *
+   * A Blu-ray 3D title places its subtitles in depth by shifting the plane one way for the
+   * left eye and the other for the right, by an amount it varies as the scene does. The
+   * answer is in the video's own pixels; anything else has no depth to place and says 0.
+   */
+  virtual int GetSubtitlePlaneOffset(double pts) { return 0; }
 };
 
 class CRenderManager

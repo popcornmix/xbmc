@@ -258,9 +258,27 @@ void CRenderer::Render(COverlay* o)
     }
   }
 
-  state.x += GetStereoscopicDepth();
+  state.x += GetStereoscopicDepth() + SubtitlePlaneOffset();
 
   o->Render(state);
+}
+
+float CRenderer::SubtitlePlaneOffset() const
+{
+  if (m_subtitlePlaneOffset == 0 || m_rs.Width() <= 0.0f)
+    return 0.0f;
+
+  const RenderStereoView view{CServiceBroker::GetWinSystem()->GetGfxContext().GetStereoView()};
+  if (view == RenderStereoView::OFF)
+    return 0.0f;
+
+  // The plane is drawn over the video and the offset is in the video's pixels, so the two
+  // scale alike. Shifting the left eye's copy right and the right eye's left is what puts
+  // the subtitle in front of the screen.
+  const float scale{m_rd.Width() / m_rs.Width()};
+
+  return (view == RenderStereoView::LEFT ? 1.0f : -1.0f) *
+         static_cast<float>(m_subtitlePlaneOffset) * scale;
 }
 
 bool CRenderer::HasVisibleOverlay(int idx) const

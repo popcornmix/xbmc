@@ -649,6 +649,8 @@ void CRenderManager::Render(bool clear, DWORD flags, DWORD alpha, bool gui)
     CRect src, dst, view;
     m_pRenderer->GetVideoRect(src, dst, view);
     m_overlays.SetVideoRect(src, dst, view);
+    m_overlays.SetSubtitlePlaneOffset(
+        m_playerPort->GetSubtitlePlaneOffset(m_Queue[m_presentsource].pts));
     m_overlays.Render(m_presentsource);
 
     if (m_renderDebug)
