@@ -864,6 +864,92 @@ bool ParsePlaylistMark(std::vector<std::byte>& buffer,
   return true;
 }
 
+/*!
+ \brief Read the stereoscopic extension of each play item's stream number table.
+
+ A Blu-ray 3D title places a monoscopic subtitle plane in depth by shifting it horizontally,
+ by its own amount each frame ("1 plane + offset"). The amounts travel in the dependent view
+ as up to 32 independent sequences; this table is where each subtitle stream says which of
+ them it follows, and where the play item says how many the dependent view carries.
+
+ There is one table per play item, and within it one entry per stream of the 2D table, in
+ the same order, so the two are matched up by position.
+ */
+bool ParseStreamNumberTableSS(std::vector<std::byte>& buffer,
+                              unsigned int offset,
+                              unsigned int length,
+                              BlurayPlaylistInformation& playlistInformation)
+{
+  const unsigned int end{offset + length};
+  unsigned int position{offset};
+
+  for (auto& playItem : playlistInformation.playItems)
+  {
+    if (position + 4 > end)
+      return false;
+
+    const unsigned int tableLength{GetWord(buffer, position)};
+    const unsigned int tableEnd{position + 2 + tableLength};
+    if (tableEnd > end)
+      return false;
+
+    unsigned int p{position + 4}; // past the table's reserved word
+
+    // One entry per video stream: the dependent view's stream entry and attributes, then
+    // the number of offset sequences it carries.
+    for ([[maybe_unused]] const auto& videoStream : playItem.videoStreams)
+    {
+      if (p >= tableEnd)
+        return false;
+      p += 1 + GetByte(buffer, p); // stream entry
+
+      if (p >= tableEnd)
+        return false;
+      p += 1 + GetByte(buffer, p); // stream attributes
+
+      if (p + 2 > tableEnd)
+        return false;
+      playItem.offsetSequences = GetWord(buffer, p);
+      p += 2;
+    }
+
+    for (auto& stream : playItem.presentationGraphicStreams)
+    {
+      if (p + 2 > tableEnd)
+        return false;
+
+      const unsigned int offsetSequenceId{GetByte(buffer, p)};
+      const unsigned int flags{GetByte(buffer, p + 1)};
+      p += 2;
+
+      // A stereoscopic subtitle stream has a right eye plane of its own, and a stream
+      // entry for it follows inline. Skipping an entry whose length is only guessed at
+      // would put every stream after it out of step, so stop here rather than mislabel
+      // them - the streams read so far keep what they were given.
+      if (flags != 0)
+      {
+        CLog::LogFC(LOGDEBUG, LOGBLURAY,
+                    "Stereoscopic stream number table - subtitle stream carries flags {:#04x}, "
+                    "stopping",
+                    flags);
+        return true;
+      }
+
+      stream.offsetSequenceId = offsetSequenceId;
+
+      if (offsetSequenceId != NO_OFFSET_SEQUENCE)
+        CLog::LogFC(LOGDEBUG, LOGBLURAY,
+                    "Stereoscopic stream number table - subtitle stream PID {:#06x} follows "
+                    "offset sequence {} of {}",
+                    stream.packetIdentifier, offsetSequenceId, playItem.offsetSequences);
+    }
+
+    position = tableEnd;
+  }
+
+  return true;
+}
+
 bool ParseExtensionData(std::vector<std::byte>& buffer,
                         unsigned int& offset,
                         BlurayPlaylistInformation& playlistInformation)
@@ -881,7 +967,16 @@ bool ParseExtensionData(std::vector<std::byte>& buffer,
   {
     const unsigned int extDataType{GetWord(buffer, offset)};
     const unsigned int extDataVersion{GetWord(buffer, offset + 2)};
-    if (extDataType == 2 && extDataVersion == 2)
+    if (extDataType == 2 && extDataVersion == 1)
+    {
+      const unsigned int extDataStartAddress{GetDWord(buffer, offset + 4)};
+      const unsigned int extDataLength{GetDWord(buffer, offset + 8)};
+      if (extensionDataPosition + extDataStartAddress + extDataLength <= buffer.size() &&
+          !ParseStreamNumberTableSS(buffer, extensionDataPosition + extDataStartAddress,
+                                    extDataLength, playlistInformation))
+        CLog::LogFC(LOGDEBUG, LOGBLURAY, "Invalid MPLS - stereoscopic stream number table");
+    }
+    else if (extDataType == 2 && extDataVersion == 2)
     {
       const unsigned int extDataStartAddress{GetDWord(buffer, offset + 4)};
       const unsigned int extDataLength{GetDWord(buffer, offset + 8)};

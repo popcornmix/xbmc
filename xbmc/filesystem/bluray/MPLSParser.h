@@ -89,6 +89,9 @@ enum class STREAM_TYPE : unsigned int
   DOLBY_VISION_STREAM
 };
 
+//! A stream whose plane follows no offset sequence, which is every stream of a 2D playlist.
+inline constexpr unsigned int NO_OFFSET_SEQUENCE{0xff};
+
 struct StreamInformation
 {
   BLURAY_STREAM_TYPE type{0};
@@ -109,6 +112,8 @@ struct StreamInformation
   std::vector<unsigned int> secondaryAudio_audioReferences;
   std::vector<unsigned int> secondaryVideo_audioReferences;
   std::vector<unsigned int> secondaryVideo_presentationGraphicReferences;
+  //! Blu-ray 3D: the offset sequence that places this stream's plane in depth
+  unsigned int offsetSequenceId{NO_OFFSET_SEQUENCE};
 };
 
 struct ProgramInformation
@@ -197,6 +202,8 @@ struct PlayItemInformation
   std::vector<StreamInformation> secondaryAudioStreams;
   std::vector<StreamInformation> secondaryVideoStreams;
   std::vector<StreamInformation> dolbyVisionStreams;
+  //! Blu-ray 3D: how many offset sequences the dependent view of this play item carries
+  unsigned int offsetSequences{0};
 };
 
 class CMPLSParser
