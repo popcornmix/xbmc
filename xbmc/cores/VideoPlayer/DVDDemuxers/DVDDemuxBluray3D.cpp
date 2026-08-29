@@ -203,6 +203,7 @@ bool CDVDDemuxBluray3D::OpenDependentView()
 
   MarkBaseViewStereoscopic();
   CalculatePtsOffset();
+  CalculateFrameDuration();
 
   CLog::Log(LOGDEBUG, "CDVDDemuxBluray3D - playing clip {:05} as the dependent view", clip);
 
@@ -216,6 +217,9 @@ void CDVDDemuxBluray3D::CloseDependentView()
     CDVDDemuxUtils::FreeDemuxPacket(m_pendingDependent);
     m_pendingDependent = nullptr;
   }
+
+  // The offsets describe the play item being left behind.
+  m_bluray->GetOffsetMetadata()->Flush();
 
   {
     std::unique_lock lock(m_dependentSection);
@@ -244,6 +248,35 @@ void CDVDDemuxBluray3D::MarkBaseViewStereoscopic()
 
   CLog::Log(LOGDEBUG, "CDVDDemuxBluray3D - the playlist says the base view is the {} eye ({})",
             baseViewIsRightEye ? "right" : "left", stream->stereo_mode);
+}
+
+void CDVDDemuxBluray3D::CalculateFrameDuration()
+{
+  m_frameDuration = 0.0;
+
+  const auto* stream{
+      dynamic_cast<const CDemuxStreamVideo*>(m_base->GetStream(m_baseVideoStreamId))};
+  if (stream && stream->iFpsRate > 0 && stream->iFpsScale > 0)
+    m_frameDuration = DVD_TIME_BASE * static_cast<double>(stream->iFpsScale) / stream->iFpsRate;
+}
+
+void CDVDDemuxBluray3D::ReadOffsetMetadata(const DemuxPacket& dependent, double pts)
+{
+  if (m_frameDuration <= 0.0 || pts == DVD_NOPTS_VALUE)
+    return;
+
+  KODI::VIDEO::BLURAY::OffsetMetadata metadata;
+  if (!KODI::VIDEO::BLURAY::ParseOffsetMetadata(dependent.pData, dependent.iSize, metadata))
+    return;
+
+  if (!m_loggedOffsetMetadata)
+  {
+    m_loggedOffsetMetadata = true;
+    CLog::Log(LOGDEBUG, "CDVDDemuxBluray3D - dependent view carries plane offsets, {} sequences",
+              metadata.sequences);
+  }
+
+  m_bluray->GetOffsetMetadata()->Add(pts, m_frameDuration, std::move(metadata));
 }
 
 void CDVDDemuxBluray3D::CalculatePtsOffset()
@@ -306,6 +339,8 @@ DemuxPacket* CDVDDemuxBluray3D::ReadDependent()
 
 DemuxPacket* CDVDDemuxBluray3D::MergeViews(DemuxPacket* base, DemuxPacket* dependent)
 {
+  ReadOffsetMetadata(*dependent, base->pts);
+
   const size_t skip{LeadingAccessUnitDelimiter(dependent->pData, dependent->iSize)};
 
   // Grown in place, so that every other field of the base view packet goes through as it
@@ -425,6 +460,7 @@ void CDVDDemuxBluray3D::FlushDependent()
   }
 
   m_dependentEnded = false;
+  m_bluray->GetOffsetMetadata()->Flush();
 
   if (m_dependent)
     m_dependent->Flush();
@@ -450,6 +486,7 @@ void CDVDDemuxBluray3D::AlignDependent(double basePts)
 
   m_dependentEnded = false;
   m_unmergedBase = 0;
+  m_bluray->GetOffsetMetadata()->Flush();
 
   if (!m_dependent)
     return;
