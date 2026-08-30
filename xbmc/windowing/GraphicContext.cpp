@@ -14,6 +14,7 @@
 #include "application/ApplicationPlayer.h"
 #include "guilib/GUIComponent.h"
 #include "guilib/GUIWindowManager.h"
+#include "guilib/StereoscopicsManager.h"
 #include "guilib/TextureManager.h"
 #include "guilib/gui3d.h"
 #include "input/InputManager.h"
@@ -1008,10 +1009,25 @@ void CGraphicContext::Flip(bool rendered, bool videoLayer)
 {
   CServiceBroker::GetRenderSystem()->PresentRender(rendered, videoLayer);
 
-  if(m_stereoMode != m_nextStereoMode)
+  const RenderStereoMode nextStereoMode{m_nextStereoMode.load()};
+  if (m_stereoMode != nextStereoMode)
   {
-    m_stereoMode = m_nextStereoMode;
-    SetVideoResolution(GetVideoResolution(), true);
+    m_stereoMode = nextStereoMode;
+
+    // The surface changes shape with the stereo mode, so the display mode is re-applied
+    // whatever it is. Choose the one the video being played needs in this arrangement here,
+    // so that it lands in that same reconfigure rather than in a second one when the
+    // player's own search catches up a frame later.
+    RESOLUTION resolution{GetVideoResolution()};
+    if (CGUIComponent* gui{CServiceBroker::GetGUI()})
+    {
+      const RESOLUTION forVideo{
+          gui->GetStereoscopicsManager().GetResolutionForPlayingVideo(m_stereoMode)};
+      if (forVideo != RES_INVALID)
+        resolution = forVideo;
+    }
+
+    SetVideoResolution(resolution, true);
     CServiceBroker::GetGUI()->GetWindowManager().SendMessage(GUI_MSG_NOTIFY_ALL, 0, 0, GUI_MSG_RENDERER_RESET);
   }
 }

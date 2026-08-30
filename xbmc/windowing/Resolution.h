@@ -134,7 +134,18 @@ public:
 class CResolutionUtils
 {
 public:
-  static RESOLUTION ChooseBestResolution(float fps, int width, int height, bool is3D);
+  /*!
+   * \brief Choose the display mode to play a stream in.
+   * \param outputMode the stereo output arrangement to choose for, where the caller is
+   *        about to apply one; UNDEFINED to use the one the graphics context has been
+   *        given. Naming it lets the mode be chosen before that one is applied, so the
+   *        two can be applied together.
+   */
+  static RESOLUTION ChooseBestResolution(float fps,
+                                         int width,
+                                         int height,
+                                         bool is3D,
+                                         RenderStereoMode outputMode = RenderStereoMode::UNDEFINED);
 
   /*!
    * \brief The stereoscopic output arrangement the display can present
@@ -162,7 +173,12 @@ public:
   static void GetMaxAllowedScreenResolution(unsigned int& width, unsigned int& height);
 
 protected:
-  static void FindResolutionFromWhitelist(float fps, int width, int height, bool is3D, RESOLUTION &resolution);
+  static void FindResolutionFromWhitelist(float fps,
+                                          int width,
+                                          int height,
+                                          bool is3D,
+                                          RESOLUTION& resolution,
+                                          RenderStereoMode outputMode);
   static bool FindResolutionFromOverride(float fps, int width, bool is3D, RESOLUTION &resolution, float& weight, bool fallback);
   static float RefreshWeight(float refresh, float fps);
 };

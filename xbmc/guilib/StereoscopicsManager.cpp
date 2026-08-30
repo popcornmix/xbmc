@@ -456,6 +456,11 @@ bool CStereoscopicsManager::OnMessage(CGUIMessage &message)
 {
   switch (message.GetMessage())
   {
+  case GUI_MSG_PLAYBACK_STARTED:
+    // A new item has nothing settled about it. Not OnPlaybackStopped(): the stereo mode is
+    // deliberately kept from one item of a playlist to the next.
+    m_stereoModeSettled = false;
+    break;
   case GUI_MSG_PLAYBACK_STOPPED:
   case GUI_MSG_PLAYLISTPLAYER_STOPPED:
     OnPlaybackStopped();
@@ -548,6 +553,32 @@ bool CStereoscopicsManager::OnAction(const CAction &action)
   return false;
 }
 
+RESOLUTION CStereoscopicsManager::GetResolutionForPlayingVideo(RenderStereoMode mode) const
+{
+  // Only where playback is allowed to change the display mode at all: with refresh rate
+  // adjusting off it is the one picked by hand in videoscreen.resolution.
+  if (m_settings->GetInt(CSettings::SETTING_VIDEOPLAYER_ADJUSTREFRESHRATE) ==
+      ADJUST_REFRESHRATE_OFF)
+    return RES_INVALID;
+
+  const auto& components = CServiceBroker::GetAppComponents();
+  const auto appPlayer = components.GetComponent<CApplicationPlayer>();
+  if (!appPlayer || !appPlayer->IsPlaying())
+    return RES_INVALID;
+
+  VideoStreamInfo info;
+  appPlayer->GetVideoStreamInfo(CURRENT_STREAM, info);
+  if (!info.valid || info.fpsRate == 0 || info.fpsScale == 0)
+    return RES_INVALID;
+
+  const std::string stereoMode{CServiceBroker::GetDataCacheCore().GetVideoStereoMode()};
+  const bool is3D{!stereoMode.empty() && stereoMode != "mono"};
+
+  return CResolutionUtils::ChooseBestResolution(static_cast<float>(info.fpsRate) /
+                                                    static_cast<float>(info.fpsScale),
+                                                info.width, info.height, is3D, mode);
+}
+
 void CStereoscopicsManager::ApplyStereoMode(const RenderStereoMode mode, bool notify)
 {
   RenderStereoMode currentMode = CServiceBroker::GetWinSystem()->GetGfxContext().GetStereoMode();
@@ -557,6 +588,10 @@ void CStereoscopicsManager::ApplyStereoMode(const RenderStereoMode mode, bool no
             ConvertGuiStereoModeToString(currentMode), ConvertGuiStereoModeToString(mode));
   if (currentMode != mode)
   {
+    // The display mode the arrangement needs is chosen as the mode is applied, in
+    // CGraphicContext::Flip() on the render thread, so that the display is reconfigured
+    // once rather than twice: applying a stereo mode re-applies the display mode by itself,
+    // and a mode change arriving a frame later would re-apply it again.
     CServiceBroker::GetWinSystem()->GetGfxContext().SetStereoMode(mode);
     CLog::Log(LOGDEBUG, "StereoscopicsManager: stereo mode changed to {}",
               ConvertGuiStereoModeToString(mode));
@@ -570,8 +605,9 @@ void CStereoscopicsManager::ApplyStereoMode(const RenderStereoMode mode, bool no
         // arrangement mid-playback too. Left in place for "Play as 2D" the sink
         // keeps signalling 3D, and a half 3D mode's doubled fPixelRatio is no
         // longer compensated for by GetResInfo() once the GUI leaves the split
-        // mode, which squeezes the single eye into half the screen width. Let the
-        // player re-run the search: it owns the stream parameters it needs.
+        // mode, which squeezes the single eye into half the screen width. The mode it
+        // settles on is the one just applied above, so this changes nothing further; it
+        // is what keeps the display latency and the player's own parameters in step.
         appPlayer->TriggerUpdateResolution();
       }
       // With nothing playing there is no search to trigger, so run it here - but only
@@ -618,6 +654,34 @@ bool CStereoscopicsManager::IsVideoStereoscopic() const
 
 void CStereoscopicsManager::OnStreamChange()
 {
+  UpdateStereoModeForStream();
+
+  // The display mode a stereoscopic source needs follows from the stereo mode, so the
+  // search for it is left until that mode is known - which is now. Where the decision
+  // above changed the mode, applying it has already re-run the search; where it left the
+  // mode as it was, nothing else will, and the source would keep whatever mode the last
+  // one left behind.
+  auto& components = CServiceBroker::GetAppComponents();
+  const auto appPlayer = components.GetComponent<CApplicationPlayer>();
+  // Not settled until the source is known to be stereoscopic: a stream change that
+  // arrives before the player has said what it is playing has decided nothing, and
+  // taking it for a decision leaves the display mode to be chosen against a stereo mode
+  // that has not been applied yet.
+  if (m_stereoModeSettled || !appPlayer || !appPlayer->IsPlaying() || !IsVideoStereoscopic())
+    return;
+
+  m_stereoModeSettled = true;
+
+  // Where the decision above changed the stereo mode, applying it chose the display mode
+  // to go with it; where it left the mode alone, nothing has, and a stereoscopic source
+  // would keep whatever mode the title before it left behind. Ask for the search that was
+  // left until now - once, since servicing it is announced as another stream change and
+  // asking again on that would not end.
+  appPlayer->TriggerUpdateResolution();
+}
+
+void CStereoscopicsManager::UpdateStereoModeForStream()
+{
   STEREOSCOPIC_PLAYBACK_MODE playbackMode = static_cast<STEREOSCOPIC_PLAYBACK_MODE>(m_settings->GetInt(CSettings::SETTING_VIDEOPLAYER_STEREOSCOPICPLAYBACKMODE));
   RenderStereoMode mode = GetStereoMode();
 
@@ -654,8 +718,13 @@ void CStereoscopicsManager::OnStreamChange()
     if (m_settings->GetBool(CSettings::SETTING_VIDEOPLAYER_QUITSTEREOMODEONSTOP) == false)
       return;
 
-    // only change to new stereo mode if not yet in preferred stereo mode
-    if (mode == preferred || (preferred == RenderStereoMode::AUTO && mode == playing))
+    // only change to new stereo mode if not yet in preferred stereo mode, comparing
+    // against the arrangement the display can carry, since that is what would be applied.
+    // A mode that suits the source but not the display - side by side where the display
+    // offers only top and bottom, which is how a stream whose geometry was not yet known
+    // ends up - is not a mode to settle for, and nothing else would revisit it.
+    if (mode == ArrangementForDisplay(preferred) ||
+        (preferred == RenderStereoMode::AUTO && mode == ArrangementForDisplay(playing)))
       return;
   }
 
@@ -726,6 +795,8 @@ void CStereoscopicsManager::OnPlaybackStopped(void)
   if (m_settings->GetBool(CSettings::SETTING_VIDEOPLAYER_QUITSTEREOMODEONSTOP) &&
       mode != RenderStereoMode::OFF)
     SetStereoMode(RenderStereoMode::OFF);
+
+  m_stereoModeSettled = false;
 
   // reset user modes on playback end to start over new on next playback and not end up in a probably unwanted mode
   if (m_stereoModeSetByUser != RenderStereoMode::OFF)
