@@ -16,7 +16,9 @@
 #include "guilib/IMsgTargetCallback.h"
 #include "rendering/RenderSystemTypes.h"
 #include "settings/lib/ISettingCallback.h"
+#include "windowing/Resolution.h"
 
+#include <atomic>
 #include <stdlib.h>
 
 class CAction;
@@ -61,6 +63,30 @@ public:
 
   void OnSettingChanged(const std::shared_ptr<const CSetting>& setting) override;
   void OnStreamChange();
+
+  /*!
+   * \brief Whether the stereo mode of the stream being played has been settled.
+   *
+   * A stereoscopic source's display mode follows from its stereo mode, so until this is
+   * true there is nothing to choose one against and the choice is left alone. Settled
+   * the moment the stream is announced, which is well before its first picture.
+   */
+  bool IsStereoModeSettled() const { return m_stereoModeSettled; }
+
+  /*!
+   * \brief The display mode the video being played needs in a given arrangement.
+   *
+   * Asked by CGraphicContext::Flip() as it applies a stereo mode, so that the display is
+   * reconfigured once for both.
+   *
+   * \param mode the stereo output arrangement about to be applied
+   * \return the display mode, or RES_INVALID when nothing is playing or playback is not
+   *         allowed to change the display mode
+   */
+  RESOLUTION GetResolutionForPlayingVideo(RenderStereoMode mode) const;
+
+  //! \brief Choose and apply the stereo mode the stream that just started calls for.
+  void UpdateStereoModeForStream();
   bool OnMessage(CGUIMessage &message) override;
   /*!
    * @brief Handle 3D specific cActions
@@ -79,6 +105,10 @@ private:
   bool IsVideoStereoscopic() const;
 
   void SetStereoModeByUser(const RenderStereoMode mode);
+
+  /*! Whether the stereo mode of the stream being played has been settled - see
+      IsStereoModeSettled(). Set from the player's event thread, read on the render thread. */
+  std::atomic<bool> m_stereoModeSettled{false};
 
   void ApplyStereoMode(const RenderStereoMode mode, bool notify = true);
   void OnPlaybackStopped(void);
