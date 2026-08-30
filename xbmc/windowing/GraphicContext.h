@@ -15,6 +15,7 @@
 #include "utils/Geometry.h" // for CRect/CPoint
 #include "utils/TransformMatrix.h" // for the members m_guiTransform etc.
 
+#include <atomic>
 #include <stack>
 #include <string>
 #include <vector>
@@ -156,6 +157,14 @@ public:
   void SetCameraPosition(const CPoint &camera);
   void SetStereoView(RenderStereoView view);
   RenderStereoView GetStereoView() { return m_stereoView; }
+  /*! \brief Set the stereo mode Flip() will make current.
+   *
+   * Requested from the player's event thread and applied on the render thread, so the
+   * request is atomic. Flip() chooses the display mode the arrangement needs and applies
+   * the two together: applying a stereo mode re-applies the display mode by itself, the
+   * surface changing shape with it, and a mode change sent separately would cost a second
+   * reconfigure, which on a display that resynchronises is seconds of blank screen.
+   */
   void SetStereoMode(RenderStereoMode mode) { m_nextStereoMode = mode; }
   RenderStereoMode GetStereoMode() { return m_stereoMode; }
   /*! \brief The stereo mode SetStereoMode() has requested, which Flip() makes
@@ -273,7 +282,7 @@ protected:
   std::stack<UITransform, std::vector<UITransform>> m_transforms;
   RenderStereoView m_stereoView = RenderStereoView::OFF;
   RenderStereoMode m_stereoMode = RenderStereoMode::OFF;
-  RenderStereoMode m_nextStereoMode = RenderStereoMode::OFF;
+  std::atomic<RenderStereoMode> m_nextStereoMode{RenderStereoMode::OFF};
 
   bool m_isTransferPQ{false};
   RENDER_ORDER m_renderOrder{RENDER_ORDER_ALL_BACK_TO_FRONT};
