@@ -155,4 +155,11 @@ struct CVideoShowExtras : CStaticContextMenuAction
   bool Execute(const std::shared_ptr<CFileItem>& item) const override;
 };
 
+struct CVideoChoosePlaylist : CStaticContextMenuAction
+{
+  CVideoChoosePlaylist() : CStaticContextMenuAction(13424) {} // Choose playlist
+  bool IsVisible(const CFileItem& item) const override;
+  bool Execute(const std::shared_ptr<CFileItem>& item) const override;
+};
+
 } // namespace CONTEXTMENU
