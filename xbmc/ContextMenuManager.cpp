@@ -112,6 +112,7 @@ void CContextMenuManager::Init()
       std::make_shared<CONTEXTMENU::CAddRemoveFavourite>(),
       std::make_shared<CONTEXTMENU::CFavouritesTargetContextMenu>(),
       std::make_shared<CONTEXTMENU::CVideoShowExtras>(),
+      std::make_shared<CONTEXTMENU::CVideoChoosePlaylist>(),
   };
 
   ReloadAddonItems();

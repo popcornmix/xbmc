@@ -506,4 +506,22 @@ bool CVideoShowExtras::Execute(const std::shared_ptr<CFileItem>& item) const
   return true;
 }
 
+bool CVideoChoosePlaylist::IsVisible(const CFileItem& item) const
+{
+  // Only a disc has playlists to choose between, and one already on the disc's menu is not
+  // playing any of them.
+  return !item.IsFolder() && URIUtils::IsBlurayPath(item.GetDynPath()) &&
+         !URIUtils::IsBlurayMenuPath(item.GetDynPath());
+}
+
+bool CVideoChoosePlaylist::Execute(const std::shared_ptr<CFileItem>& item) const
+{
+  // Asks before playing whatever the disc playback setting would otherwise have decided,
+  // and the choices include the disc's own menu.
+  item->SetProperty("force_playlist_selection", true);
+
+  VIDEO::UTILS::PlayItem(item, "", ContentUtils::PlayMode::PLAY_ONLY_THIS);
+  return true;
+}
+
 } // namespace CONTEXTMENU
