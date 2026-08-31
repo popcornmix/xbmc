@@ -1113,10 +1113,8 @@ void CGUIWindowVideoBase::GetContextButtons(int itemNumber, CContextButtons &but
       if (PLAYLIST::IsSmartPlayList(*item) || PLAYLIST::IsSmartPlayList(*m_vecItems))
         buttons.Add(CONTEXT_BUTTON_EDIT_SMART_PLAYLIST, 586);
 
-      if (URIUtils::IsBlurayPath(item->GetDynPath()) && !item->IsFolder())
-      {
-        buttons.Add(CONTEXT_BUTTON_CHOOSE_PLAYLIST, 13424);
-      }
+      // Choosing a playlist is CONTEXTMENU::CVideoChoosePlaylist, so that it is offered
+      // wherever the item appears rather than only in this window.
     }
   }
   CGUIMediaWindow::GetContextButtons(itemNumber, buttons);
@@ -1177,13 +1175,6 @@ bool CGUIWindowVideoBase::OnContextButton(int itemNumber, CONTEXT_BUTTON button)
     return OnPlayAndQueueMedia(item);
   case CONTEXT_BUTTON_PLAY_ONLY_THIS:
     return OnPlayMedia(itemNumber);
-  case CONTEXT_BUTTON_CHOOSE_PLAYLIST:
-  {
-    const CBackgroundInfoLoader::CItemHold itemHold{m_thumbLoader, item.get()};
-
-    item->SetProperty("force_playlist_selection", true);
-    return OnPlayMedia(itemNumber);
-  }
   default:
     break;
   }
