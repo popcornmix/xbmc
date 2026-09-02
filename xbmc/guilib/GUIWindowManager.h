@@ -100,12 +100,12 @@ public:
    */
   void MarkDirty(const CRect& rect);
 
-  /*! \brief True if Process() collected any dirty regions this frame.
-   *   Callable after Process() to decide whether the render pass needs
-   *   to run; used by the dirty-driven skip in CApplication::FrameMove
-   *   (currently gated to D2P plane and HDR GUI compositing FBO contexts).
+  /*! \brief True while a marked dirty region still awaits a render pass. Stays
+   *   true for bufferAge + 1 passes so every buffer of the swap chain is
+   *   repainted, and includes regions marked after Process() - which is where
+   *   the video render loop reports a changed subtitle bitmap.
    */
-  bool HasDirtyRegions() const { return !m_dirtyregions.empty(); }
+  bool HasMarkedDirtyRegions() const { return !m_tracker.GetMarkedRegions().empty(); }
 
   /*! \brief Rendering of the current window and any dialogs
    Render is called every frame to draw the current window and any dialogs.
