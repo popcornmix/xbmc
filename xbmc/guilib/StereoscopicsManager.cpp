@@ -581,7 +581,13 @@ RESOLUTION CStereoscopicsManager::GetResolutionForPlayingVideo(RenderStereoMode 
 
 void CStereoscopicsManager::ApplyStereoMode(const RenderStereoMode mode, bool notify)
 {
-  RenderStereoMode currentMode = CServiceBroker::GetWinSystem()->GetGfxContext().GetStereoMode();
+  // The arrangement already asked for, which is not the one in use until the next flip.
+  // Two arrangements chosen for the same title arrive within a frame of each other - the
+  // outgoing one being cleared, then the incoming one being detected - and comparing
+  // against the arrangement in use would read the second as a no-op and leave the first
+  // one queued.
+  const RenderStereoMode currentMode{
+      CServiceBroker::GetWinSystem()->GetGfxContext().GetNextStereoMode()};
   CLog::Log(LOGDEBUG,
             "StereoscopicsManager::ApplyStereoMode: trying to apply stereo mode. Current: {} | "
             "Target: {}",
