@@ -207,23 +207,58 @@ void RemoveDuplicatePlaylists(std::vector<PlaylistInformation>& playlists)
   // so two playlists sharing a clip but offering different streams are not seen as identical.
   // The duration is compared as well as the chapters, as two playlists can play the same clips
   // from the same chapter starts but to different out times (ie. they are distinct cuts).
-  std::unordered_set<unsigned int> duplicatePlaylists;
+  std::map<unsigned int, unsigned int> duplicatePlaylists; // duplicate -> what it duplicates
   for (size_t i = 0; i + 1 < playlists.size(); ++i)
   {
     for (size_t j = i + 1; j < playlists.size(); ++j)
     {
-      if (playlists[i].duration == playlists[j].duration &&
-          playlists[i].audioStreams == playlists[j].audioStreams &&
-          playlists[i].pgStreams == playlists[j].pgStreams &&
-          playlists[i].chapters == playlists[j].chapters &&
-          playlists[i].clips == playlists[j].clips)
+      if (playlists[i].duration != playlists[j].duration ||
+          playlists[i].audioStreams != playlists[j].audioStreams ||
+          playlists[i].pgStreams != playlists[j].pgStreams ||
+          playlists[i].chapters != playlists[j].chapters ||
+          playlists[i].clips != playlists[j].clips)
+        continue;
+
+      // None of that tells a 3D playlist from the 2D one beside it. A 3D Blu-ray carries both
+      // presentations of its feature, and they differ only in the dependent view named in the
+      // playlist's extension data - same length, same chapters, same clip for the base view,
+      // and the same streams exposed.
+      const bool iIs3D{!playlists[i].dependentViewClips.empty()};
+      const bool jIs3D{!playlists[j].dependentViewClips.empty()};
+
+      // Two stereoscopic presentations of the same content are still two presentations.
+      if (iIs3D && jIs3D && playlists[i].dependentViewClips != playlists[j].dependentViewClips)
+        continue;
+
+      // Where only one is stereoscopic, keep that one. Its base view is the 2D presentation,
+      // so a viewer who wants 2D loses nothing, while dropping it would leave a 3D disc with
+      // no way to reach its second eye - and as the 3D playlist is usually the higher numbered
+      // of the two, that is what keeping the lower number would do.
+      if (iIs3D != jIs3D)
       {
-        duplicatePlaylists.emplace(std::max(playlists[i].playlist, playlists[j].playlist));
+        const size_t drop{iIs3D ? j : i};
+        const size_t keep{iIs3D ? i : j};
+        duplicatePlaylists.try_emplace(playlists[drop].playlist, playlists[keep].playlist);
+      }
+      else
+      {
+        const auto [lower, higher]{std::minmax(playlists[i].playlist, playlists[j].playlist)};
+        duplicatePlaylists.try_emplace(higher, lower);
       }
     }
   }
-  std::erase_if(playlists, [&duplicatePlaylists](const PlaylistInformation& p)
-                { return duplicatePlaylists.contains(p.playlist); });
+
+  std::erase_if(playlists,
+                [&duplicatePlaylists](const PlaylistInformation& p)
+                {
+                  const auto it{duplicatePlaylists.find(p.playlist)};
+                  if (it == duplicatePlaylists.end())
+                    return false;
+
+                  CLog::LogF(LOGDEBUG, "Discarding playlist {} - duplicate of playlist {}",
+                             p.playlist, it->second);
+                  return true;
+                });
 }
 
 bool SetStreamDetails(const CURL& url,

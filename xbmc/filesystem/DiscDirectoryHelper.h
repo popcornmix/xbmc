@@ -118,6 +118,10 @@ struct PlaylistInformation
   std::vector<SubtitleStreamInfo> pgStreams;
   std::string languages;
 
+  //! Clips holding the MVC dependent view, one for each play item that has one. Empty
+  //! unless the playlist is a stereoscopic presentation.
+  std::vector<unsigned int> dependentViewClips;
+
   //! Whether the playlist carries a secondary video stream, ie. it presents the content
   //! picture-in-picture (see IsPictureInPicturePresentation)
   bool hasSecondaryVideo{false};
@@ -133,6 +137,7 @@ struct PlaylistInformation
     audioStreams.clear();
     pgStreams.clear();
     languages.clear();
+    dependentViewClips.clear();
     hasSecondaryVideo = false;
   }
 };

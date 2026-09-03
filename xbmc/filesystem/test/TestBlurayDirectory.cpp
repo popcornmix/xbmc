@@ -40,13 +40,15 @@ namespace
 PlaylistInformation MakePlaylist(unsigned int playlist,
                                  std::chrono::milliseconds duration,
                                  std::vector<unsigned int> clips,
-                                 std::vector<std::chrono::milliseconds> chapters = {1min})
+                                 std::vector<std::chrono::milliseconds> chapters = {1min},
+                                 std::vector<unsigned int> dependentViewClips = {})
 {
   PlaylistInformation info;
   info.playlist = playlist;
   info.duration = duration;
   info.clips = std::move(clips);
   info.chapters = std::move(chapters);
+  info.dependentViewClips = std::move(dependentViewClips);
   return info;
 }
 
@@ -226,6 +228,66 @@ TEST_F(TestBlurayDirectory, FilterPlaylists_RemovesAllCopiesOfADuplicate)
 
   EXPECT_TRUE(FilterPlaylists(playlists));
   EXPECT_EQ(PlaylistNumbers(playlists), (std::vector<unsigned int>{800u, 803u}));
+}
+
+// A 3D Blu-ray carries both presentations of its feature, alike in everything the comparison
+// looks at bar the dependent view. The stereoscopic one is kept whichever way round the disc
+// numbers them - its base view is the 2D presentation, so nothing is lost, and it is usually
+// the higher numbered of the two.
+TEST_F(TestBlurayDirectory, FilterPlaylists_KeepsTheStereoscopicCopyOfADuplicate)
+{
+  std::vector<PlaylistInformation> playlists{
+      MakePlaylist(800u, 2h, {1u}),
+      MakePlaylist(801u, 2h, {1u}, {1min}, {2u}),
+  };
+
+  EXPECT_TRUE(FilterPlaylists(playlists));
+  EXPECT_EQ(PlaylistNumbers(playlists), std::vector<unsigned int>{801u});
+
+  playlists = {
+      MakePlaylist(800u, 2h, {1u}, {1min}, {2u}),
+      MakePlaylist(801u, 2h, {1u}),
+  };
+
+  EXPECT_TRUE(FilterPlaylists(playlists));
+  EXPECT_EQ(PlaylistNumbers(playlists), std::vector<unsigned int>{800u});
+}
+
+// Two stereoscopic presentations of the same content are still two presentations
+TEST_F(TestBlurayDirectory, FilterPlaylists_KeepsPlaylistsDifferingByDependentView)
+{
+  std::vector<PlaylistInformation> playlists{
+      MakePlaylist(800u, 2h, {1u}, {1min}, {2u}),
+      MakePlaylist(801u, 2h, {1u}, {1min}, {3u}),
+  };
+
+  EXPECT_TRUE(FilterPlaylists(playlists));
+  EXPECT_EQ(PlaylistNumbers(playlists), (std::vector<unsigned int>{800u, 801u}));
+}
+
+// Two copies of the same stereoscopic presentation collapse like any other pair
+TEST_F(TestBlurayDirectory, FilterPlaylists_RemovesDuplicateStereoscopicPlaylists)
+{
+  std::vector<PlaylistInformation> playlists{
+      MakePlaylist(801u, 2h, {1u}, {1min}, {2u}),
+      MakePlaylist(800u, 2h, {1u}, {1min}, {2u}),
+  };
+
+  EXPECT_TRUE(FilterPlaylists(playlists));
+  EXPECT_EQ(PlaylistNumbers(playlists), std::vector<unsigned int>{800u});
+}
+
+// The stereoscopic playlist survives however many 2D copies stand beside it
+TEST_F(TestBlurayDirectory, FilterPlaylists_KeepsTheStereoscopicCopyAmongSeveral)
+{
+  std::vector<PlaylistInformation> playlists{
+      MakePlaylist(800u, 2h, {1u}),
+      MakePlaylist(801u, 2h, {1u}, {1min}, {2u}),
+      MakePlaylist(802u, 2h, {1u}),
+  };
+
+  EXPECT_TRUE(FilterPlaylists(playlists));
+  EXPECT_EQ(PlaylistNumbers(playlists), std::vector<unsigned int>{801u});
 }
 
 // What a playlist offers has to survive being recorded, or the movie and episode searches decide
