@@ -359,6 +359,12 @@ void CStreamParser::ConvertBlurayPlaylistInformation(const BlurayPlaylistInforma
     p.clips.emplace_back(clip.clip);
     p.clipDuration[clip.clip] = clip.duration;
   }
+  p.dependentViewClips.reserve(b.extensionSubPlayItems.size());
+  for (const SubPlayItemInformation& subPlayItem : b.extensionSubPlayItems)
+  {
+    if (!subPlayItem.clips.empty())
+      p.dependentViewClips.emplace_back(subPlayItem.clips.front().clip);
+  }
 
   const DefaultStreams defaults{GetDefaultStreams(b)};
 
