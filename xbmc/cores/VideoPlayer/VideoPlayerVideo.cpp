@@ -25,6 +25,7 @@
 
 #include <iomanip>
 #include <iterator>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <numeric>
@@ -36,6 +37,20 @@ namespace
 {
 //! How often the frame loss counters are written to the log while frames are being lost
 constexpr auto STATS_LOG_INTERVAL = 5000ms;
+
+//! \brief Name the same packed layout with the eyes the other way round.
+std::string SwapStereoscopicEyes(const std::string& stereoMode)
+{
+  static const std::map<std::string, std::string, std::less<>> swapped{
+      {"left_right", "right_left"},
+      {"right_left", "left_right"},
+      {"top_bottom", "bottom_top"},
+      {"bottom_top", "top_bottom"},
+  };
+
+  const auto it{swapped.find(stereoMode)};
+  return it == swapped.end() ? stereoMode : it->second;
+}
 } // namespace
 
 class CDVDMsgVideoCodecChange : public CDVDMsg
@@ -684,6 +699,11 @@ void CVideoPlayerVideo::LogPlaybackStats()
 
 bool CVideoPlayerVideo::ProcessDecoderOutput(double &frametime, double &pts)
 {
+  // The picture is reused from one frame to the next and not every decoder writes the stereo
+  // mode, while the hint fallback below runs on what it finds here - as does the viewer's eye
+  // swap - so start each frame with nothing left over from the one before.
+  m_picture.stereoMode.clear();
+
   CDVDVideoCodec::VCReturn decoderState = m_pVideoCodec->GetPicture(&m_picture);
 
   if (decoderState == CDVDVideoCodec::VC_BUFFER)
@@ -783,13 +803,9 @@ bool CVideoPlayerVideo::ProcessDecoderOutput(double &frametime, double &pts)
       {
         case RenderStereoMode::SPLIT_VERTICAL:
           stereoMode = "left_right";
-          if (m_processInfo.GetVideoSettings().m_StereoInvert)
-            stereoMode = "right_left";
           break;
         case RenderStereoMode::SPLIT_HORIZONTAL:
           stereoMode = "top_bottom";
-          if (m_processInfo.GetVideoSettings().m_StereoInvert)
-            stereoMode = "bottom_top";
           break;
         default:
           stereoMode = m_hints.stereo_mode;
@@ -800,6 +816,11 @@ bool CVideoPlayerVideo::ProcessDecoderOutput(double &frametime, double &pts)
         m_picture.stereoMode = stereoMode;
       }
     }
+
+    // A stream that states its own layout can state it wrongly, and a viewer looking at
+    // swapped eyes has nothing else to correct it with.
+    if (m_processInfo.GetVideoSettings().m_StereoInvert)
+      m_picture.stereoMode = SwapStereoscopicEyes(m_picture.stereoMode);
 
     // if frame has a pts (usually originating from demux packet), use that
     if (m_picture.pts != DVD_NOPTS_VALUE)
