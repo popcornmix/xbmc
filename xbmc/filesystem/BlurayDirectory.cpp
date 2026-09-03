@@ -220,35 +220,59 @@ void RemoveDuplicatePlaylists(std::vector<PlaylistInformation>& playlists)
   // The duration is compared as well as the chapters, as two playlists can play the same clips
   // from the same chapter starts but to different out times (ie. they are distinct cuts).
   // Kodi does not play the secondary video, so a picture-in-picture copy is a copy all the same -
-  // but it is the one discarded, as it never leads the movie search. Of other copies the one with
-  // a Dolby Vision enhancement layer is kept, then the lowest numbered.
+  // but it is the one discarded, as it never leads the movie search. Where only one of the pair
+  // is stereoscopic, that one is kept: its base view is the 2D presentation, so a viewer who
+  // wants 2D loses nothing, while dropping it would leave a 3D disc with no way to reach its
+  // second eye - and as the 3D playlist is usually the higher numbered of the two, that is what
+  // keeping the lower number would do. Of other copies the one with a Dolby Vision enhancement
+  // layer is kept, then the lowest numbered.
   const auto isDiscarded{[](const PlaylistInformation& a, const PlaylistInformation& b)
                          {
                            if (a.hasSecondaryVideo != b.hasSecondaryVideo)
                              return a.hasSecondaryVideo;
+                           if (a.dependentViewClips.empty() != b.dependentViewClips.empty())
+                             return a.dependentViewClips.empty();
                            if (a.hasDolbyVision != b.hasDolbyVision)
                              return b.hasDolbyVision;
                            return a.playlist > b.playlist;
                          }};
 
-  std::unordered_set<unsigned int> duplicatePlaylists;
+  std::map<unsigned int, unsigned int> duplicatePlaylists; // duplicate -> what it duplicates
   for (size_t i = 0; i + 1 < playlists.size(); ++i)
   {
     for (size_t j = i + 1; j < playlists.size(); ++j)
     {
-      if (playlists[i].duration == playlists[j].duration &&
-          playlists[i].audioStreams == playlists[j].audioStreams &&
-          playlists[i].pgStreams == playlists[j].pgStreams &&
-          playlists[i].chapters == playlists[j].chapters &&
-          playlists[i].clips == playlists[j].clips)
-      {
-        duplicatePlaylists.emplace(isDiscarded(playlists[i], playlists[j]) ? playlists[i].playlist
-                                                                           : playlists[j].playlist);
-      }
+      if (playlists[i].duration != playlists[j].duration ||
+          playlists[i].audioStreams != playlists[j].audioStreams ||
+          playlists[i].pgStreams != playlists[j].pgStreams ||
+          playlists[i].chapters != playlists[j].chapters ||
+          playlists[i].clips != playlists[j].clips)
+        continue;
+
+      // None of that tells a 3D playlist from the 2D one beside it, nor one 3D presentation
+      // from another: a 3D Blu-ray carries both presentations of its feature, and they differ
+      // only in the playlist's extension data - same length, same chapters, same clip for the
+      // base view, and the same streams exposed.
+      if (AreDifferentStereoscopicPresentations(playlists[i], playlists[j]))
+        continue;
+
+      const bool dropI{isDiscarded(playlists[i], playlists[j])};
+      duplicatePlaylists.try_emplace(playlists[dropI ? i : j].playlist,
+                                     playlists[dropI ? j : i].playlist);
     }
   }
-  std::erase_if(playlists, [&duplicatePlaylists](const PlaylistInformation& p)
-                { return duplicatePlaylists.contains(p.playlist); });
+
+  std::erase_if(playlists,
+                [&duplicatePlaylists](const PlaylistInformation& p)
+                {
+                  const auto it{duplicatePlaylists.find(p.playlist)};
+                  if (it == duplicatePlaylists.end())
+                    return false;
+
+                  CLog::LogF(LOGDEBUG, "Discarding playlist {} - duplicate of playlist {}",
+                             p.playlist, it->second);
+                  return true;
+                });
 }
 
 bool SetStreamDetails(const CURL& url,

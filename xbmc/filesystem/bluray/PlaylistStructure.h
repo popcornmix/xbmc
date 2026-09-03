@@ -37,6 +37,10 @@ struct BlurayPlaylistInformation
   std::vector<PlaylistMarkInformation> playlistMarks;
   std::vector<ChapterInformation> chapters;
 
+  //! Whether the playlist calls its base view the right eye (MVC_Base_view_R_flag).
+  //! Meaningless where the playlist names no dependent view.
+  bool baseViewIsRightEye{false};
+
   //! Whether the clips carry the stream information from their .clpi (see CMPLSParser::ReadMPLS)
   bool clipStreamsRead{false};
 };
