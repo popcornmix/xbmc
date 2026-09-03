@@ -74,6 +74,19 @@ BlurayPlaylistInformation MakePlaylist(unsigned int playlist,
   return info;
 }
 
+// Give the playlist a stereoscopic sub-path, naming the clip that holds the dependent view of
+// each play item.
+void AddDependentView(BlurayPlaylistInformation& info, const std::vector<unsigned int>& clips)
+{
+  for (unsigned int i = 0; i < clips.size(); ++i)
+  {
+    SubPlayItemInformation subPlayItem;
+    subPlayItem.syncPlayItemId = i;
+    subPlayItem.clips.emplace_back(clips[i], "M2TS");
+    info.extensionSubPlayItems.emplace_back(std::move(subPlayItem));
+  }
+}
+
 std::vector<std::string> AudioLanguagesOf(const PlaylistInformation& p)
 {
   std::vector<std::string> languages;
@@ -235,4 +248,47 @@ TEST(TestStreamParser, TheM2TSDisplayAspectRatioIsPreferredToTheClipsFrameFlag)
 
   ASSERT_EQ(unsignalled.videoStreams.size(), 1U);
   EXPECT_FLOAT_EQ(unsignalled.videoStreams[0].videoAspectRatio, 16.0f / 9.0f);
+}
+
+// The dependent view is what tells a 3D playlist from the 2D one beside it, which is otherwise
+// alike in everything the directory records, so it has to be carried through
+TEST(TestStreamParser, TheDependentViewClipsAreCarriedThrough)
+{
+  const std::vector<StreamInformation> audio{MakeStream(ENCODING_TYPE::AUDIO_DTSHD_MASTER, 0x1100,
+                                                        "eng")};
+  const std::vector<StreamInformation> subtitles{MakeStream(ENCODING_TYPE::SUB_PG, 0x1200, "eng")};
+
+  BlurayPlaylistInformation flat{MakePlaylist(800, 1, audio, subtitles)};
+  PlaylistInformation p;
+  CStreamParser::ConvertBlurayPlaylistInformation(flat, p, {}, StreamDetails::INCLUDE);
+  EXPECT_TRUE(p.dependentViewClips.empty());
+
+  BlurayPlaylistInformation stereoscopic{MakePlaylist(801, 1, audio, subtitles)};
+  AddDependentView(stereoscopic, {2, 3});
+  PlaylistInformation p3d;
+  CStreamParser::ConvertBlurayPlaylistInformation(stereoscopic, p3d, {}, StreamDetails::INCLUDE);
+  EXPECT_EQ(p3d.dependentViewClips, (std::vector<unsigned int>{2, 3}));
+
+  // The playlist search is answered without reading the clips, and needs it just the same
+  PlaylistInformation deferred;
+  CStreamParser::ConvertBlurayPlaylistInformation(stereoscopic, deferred, {},
+                                                  StreamDetails::DEFER);
+  EXPECT_EQ(deferred.dependentViewClips, (std::vector<unsigned int>{2, 3}));
+}
+
+// A disc can hold the same feature over the same clips both ways round, so which coded view the
+// playlist calls the left eye is part of what tells its presentations apart
+TEST(TestStreamParser, TheBaseViewEyeIsCarriedThrough)
+{
+  BlurayPlaylistInformation b{MakePlaylist(100, 1, {}, {})};
+  AddDependentView(b, {2});
+
+  PlaylistInformation left;
+  CStreamParser::ConvertBlurayPlaylistInformation(b, left, {}, StreamDetails::INCLUDE);
+  EXPECT_FALSE(left.baseViewIsRightEye);
+
+  b.baseViewIsRightEye = true;
+  PlaylistInformation right;
+  CStreamParser::ConvertBlurayPlaylistInformation(b, right, {}, StreamDetails::INCLUDE);
+  EXPECT_TRUE(right.baseViewIsRightEye);
 }

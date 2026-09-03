@@ -4643,6 +4643,100 @@ TEST_F(TestDiscDirectoryHelper, GetMoviePlaylists_RemovesDuplicatesBuiltFromCopi
   EXPECT_TRUE(std::ranges::includes(returned, expected));
 }
 
+// A 3D Blu-ray carries both presentations of its feature over the same base view clips, alike in
+// everything the comparison looks at bar the playlist's extension data. The stereoscopic one is
+// the copy kept: its base view is the flat presentation, so nothing is lost, whereas dropping it
+// would leave the disc with no way to reach its second eye.
+TEST_F(TestDiscDirectoryHelper, GetMoviePlaylists_RemovesDuplicatesKeepingTheStereoscopic)
+{
+  CDiscDirectoryHelper helper;
+  CURL url("bluray://test/");
+  CFileItemList items;
+  CFileItemList allTitles;
+
+  PlaylistMap playlists{
+      {800u, MakePlaylist(800u, 120min, {196u}, {120min}, "eng", MakeAudioStreams(2),
+                          MakeSubtitleStreams(2))},
+      {801u, MakePlaylist(801u, 120min, {196u}, {120min}, "eng", MakeAudioStreams(2),
+                          MakeSubtitleStreams(2))},
+  };
+  playlists[801u].dependentViewClips = {197u};
+  ClipMap clips{{196u, MakeClip(120min, {800u, 801u})}};
+  ASSERT_TRUE(Validate(clips, playlists));
+
+  EXPECT_TRUE(
+      helper.GetMoviePlaylists(url, items, allTitles, -1, GetTitle::MAIN, clips, playlists));
+  ASSERT_EQ(items.Size(), 1);
+  EXPECT_EQ(GetPlaylistFromPath(items[0]->GetPath()), 801u);
+
+  // Whichever way round the disc numbers the pair
+  playlists = {
+      {800u, MakePlaylist(800u, 120min, {196u}, {120min}, "eng", MakeAudioStreams(2),
+                          MakeSubtitleStreams(2))},
+      {801u, MakePlaylist(801u, 120min, {196u}, {120min}, "eng", MakeAudioStreams(2),
+                          MakeSubtitleStreams(2))},
+  };
+  playlists[800u].dependentViewClips = {197u};
+  ASSERT_TRUE(Validate(clips, playlists));
+
+  EXPECT_TRUE(
+      helper.GetMoviePlaylists(url, items, allTitles, -1, GetTitle::MAIN, clips, playlists));
+  ASSERT_EQ(items.Size(), 1);
+  EXPECT_EQ(GetPlaylistFromPath(items[0]->GetPath()), 800u);
+}
+
+// Two stereoscopic presentations of the same content are still two presentations, whether they
+// name different clips for the second eye or disagree about which coded view is the left one.
+// (Example: Drive Angry, whose playlists 99 and 100 differ only in the latter - the disc plays
+// 100, and 99 alone leaves a viewer with the eyes the wrong way round and 100 out of reach.)
+TEST_F(TestDiscDirectoryHelper, GetMoviePlaylists_KeepsBothStereoscopicPresentations)
+{
+  CDiscDirectoryHelper helper;
+  CURL url("bluray://test/");
+  CFileItemList items;
+  CFileItemList allTitles;
+
+  PlaylistMap playlists{
+      {99u, MakePlaylist(99u, 120min, {196u}, {120min}, "eng", MakeAudioStreams(5),
+                         MakeSubtitleStreams(9))},
+      {100u, MakePlaylist(100u, 120min, {196u}, {120min}, "eng", MakeAudioStreams(5),
+                          MakeSubtitleStreams(9))},
+  };
+  playlists[99u].dependentViewClips = {197u};
+  playlists[100u].dependentViewClips = {197u};
+  playlists[100u].baseViewIsRightEye = true;
+  ClipMap clips{{196u, MakeClip(120min, {99u, 100u})}};
+  ASSERT_TRUE(Validate(clips, playlists));
+
+  EXPECT_TRUE(
+      helper.GetMoviePlaylists(url, items, allTitles, -1, GetTitle::MAIN, clips, playlists));
+  ASSERT_EQ(items.Size(), 2);
+  const auto returned{GetPlaylists(items)};
+  const std::set<unsigned int> expected{99u, 100u};
+  EXPECT_TRUE(std::ranges::includes(returned, expected));
+
+  // Different clips for the second eye tell them apart just the same
+  playlists[100u].baseViewIsRightEye = false;
+  playlists[100u].dependentViewClips = {198u};
+  ASSERT_TRUE(Validate(clips, playlists));
+
+  EXPECT_TRUE(
+      helper.GetMoviePlaylists(url, items, allTitles, -1, GetTitle::MAIN, clips, playlists));
+  ASSERT_EQ(items.Size(), 2);
+  EXPECT_TRUE(std::ranges::includes(GetPlaylists(items), expected));
+
+  // The flag describes a second eye, so it says nothing about a pair that names none
+  playlists[99u].dependentViewClips.clear();
+  playlists[100u].dependentViewClips.clear();
+  playlists[100u].baseViewIsRightEye = true;
+  ASSERT_TRUE(Validate(clips, playlists));
+
+  EXPECT_TRUE(
+      helper.GetMoviePlaylists(url, items, allTitles, -1, GetTitle::MAIN, clips, playlists));
+  ASSERT_EQ(items.Size(), 1);
+  EXPECT_EQ(GetPlaylistFromPath(items[0]->GetPath()), 99u);
+}
+
 // Playlists that share no clip are not copies of one another, however alike their durations and
 // chapters - two unrelated titles can run for the same length
 TEST_F(TestDiscDirectoryHelper, GetMoviePlaylists_KeepsPlaylistsSharingNoClip)
