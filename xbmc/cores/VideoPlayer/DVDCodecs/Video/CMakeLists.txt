@@ -1,13 +1,15 @@
 set(SOURCES AddonVideoCodec.cpp
             DVDVideoCodec.cpp
             DVDVideoCodecFFmpeg.cpp
-            DropControl.cpp)
+            DropControl.cpp
+            MultiviewFramePairer.cpp)
 
 set(HEADERS AddonVideoCodec.h
             DVDVideoCodec.h
             DVDVideoCodecFFmpeg.h
             DVDVideoPP.h
-            DropControl.h)
+            DropControl.h
+            MultiviewFramePairer.h)
 
 if(TARGET ffmpeg::libpostproc)
   list(APPEND SOURCES DVDVideoPPFFmpeg.cpp)

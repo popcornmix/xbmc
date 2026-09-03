@@ -9,6 +9,7 @@
 #pragma once
 
 #include "DropControl.h"
+#include "MultiviewFramePairer.h"
 #include "cores/VideoPlayer/Buffers/VideoBuffer.h"
 #include "cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.h"
 #include "cores/VideoPlayer/DVDStreamInfo.h"
@@ -49,7 +50,6 @@ protected:
   void Drain();
   bool SetPictureParams(VideoPicture* pVideoPicture);
   void UpdateProcessInfo(struct AVCodecContext* avctx, const enum AVPixelFormat fmt);
-  AVFilterContext* SelectViewInput();
   CDVDVideoCodec::VCReturn ProcessFilterIn();
   CDVDVideoCodec::VCReturn ProcessFilterOut();
   static enum AVPixelFormat GetFormat(struct AVCodecContext* avctx, const enum AVPixelFormat* fmt);
@@ -77,7 +77,7 @@ protected:
 
   //! Eyes are coded as separate views and are packed side by side by the filter graph.
   bool m_multiview = false;
-  int m_baseViewId = -1; //!< view id of the view that goes in the left half
+  CMultiviewFramePairer m_multiviewPairer; //!< routes the views to the graph's two inputs
   std::string m_stereoMode; //!< mode the packed frame is in, empty when not stereoscopic
 
   std::shared_ptr<CVideoBufferPoolDRMPRIMEFFmpeg> m_hwVideoBufferPool;
