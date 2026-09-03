@@ -1624,6 +1624,12 @@ void CApplication::FrameMove(bool processEvents, bool processGUI)
     if (!m_bStop)
       CServiceBroker::GetGUI()->GetWindowManager().Process(CTimeUtils::GetFrameTime());
 
+    // Dirty-driven skip: on paths with a persistent framebuffer (D2P plane or
+    // HDR GUI compositing FBO), skip Render when no controls dirtied themselves
+    // this frame. The persistence keeps the previous OSD on screen for free.
+    if (!m_skipGuiRender && appPlayer->IsRenderingVideoLayer() &&
+        !CServiceBroker::GetGUI()->GetWindowManager().HasDirtyRegions())
+      m_skipGuiRender = true;
     CServiceBroker::GetGUI()->GetWindowManager().FrameMove();
   }
 
@@ -1631,15 +1637,6 @@ void CApplication::FrameMove(bool processEvents, bool processGUI)
 
   // this will go away when render systems gets its own thread
   CServiceBroker::GetWinSystem()->DriveRenderLoop();
-
-  // Dirty-driven skip: on paths with a persistent framebuffer (D2P plane or HDR
-  // GUI compositing FBO), skip Render when nothing marked itself dirty. Must
-  // come after the render loop, which is where the picture to present is chosen
-  // and a subtitle changing with it marks itself dirty; decided earlier, the
-  // subtitle lands a display period after its picture.
-  if (processGUI && renderGUI && !m_skipGuiRender && appPlayer->IsRenderingVideoLayer() &&
-      !CServiceBroker::GetGUI()->GetWindowManager().HasMarkedDirtyRegions())
-    m_skipGuiRender = true;
 }
 
 
