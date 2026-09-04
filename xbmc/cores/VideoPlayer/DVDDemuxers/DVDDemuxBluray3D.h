@@ -173,6 +173,9 @@ private:
   //! Dependent view packet held back because it is ahead of the base view.
   DemuxPacket* m_pendingDependent{nullptr};
 
+  //! Whether an untimed dependent view packet has been reported, which is done once.
+  bool m_loggedUntimedDependent{false};
+
   //! Added to a dependent view timestamp to compare it with a base view one. The two
   //! clips are timestamped alike, but each demuxer subtracts its own start time.
   double m_ptsOffset{0.0};

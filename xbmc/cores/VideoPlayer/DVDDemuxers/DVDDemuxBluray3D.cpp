@@ -325,12 +325,21 @@ DemuxPacket* CDVDDemuxBluray3D::ReadDependent()
       return nullptr;
     }
 
-    // Without a timestamp an access unit cannot be paired with anything, so there is no
-    // point keeping it.
-    if (packet->iStreamId == m_dependentVideoStreamId && packet->iSize > 0 &&
-        packet->pts != DVD_NOPTS_VALUE)
+    if (packet->iStreamId == m_dependentVideoStreamId && packet->iSize > 0)
     {
-      return packet;
+      if (packet->pts != DVD_NOPTS_VALUE)
+        return packet;
+
+      // Without a timestamp an access unit cannot be paired with anything. The one way to
+      // get here is the demuxer having split an access unit larger than its packet limit,
+      // which the limit set for this stream is meant to rule out, so say so if it happens.
+      if (!m_loggedUntimedDependent)
+      {
+        m_loggedUntimedDependent = true;
+        CLog::LogF(LOGWARNING, "dropping a dependent view access unit without a timestamp ({} "
+                               "bytes) - a split access unit?",
+                   packet->iSize);
+      }
     }
 
     CDVDDemuxUtils::FreeDemuxPacket(packet);

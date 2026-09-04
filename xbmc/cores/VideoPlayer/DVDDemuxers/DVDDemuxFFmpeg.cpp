@@ -482,9 +482,11 @@ bool CDVDDemuxFFmpeg::Open(const std::shared_ptr<CDVDInputStream>& pInput, bool 
   {
     m_pFormatContext->flags |= AVFMT_FLAG_NOPARSE | AVFMT_FLAG_NOFILLIN;
 
-    // Such a stream cannot be decoded on its own, so probing will never manage to describe
-    // it fully. Cap how long it spends trying.
-    av_opt_set_int(m_pFormatContext, "analyzeduration", 500000, 0);
+    // Without a parser the container framing is all there is, and the mpegts demuxer hands a
+    // PES payload over in pieces of at most max_packet_size (200 KiB by default), only the
+    // first of them timestamped. An access unit of the dependent view can be several times
+    // that, so let a packet be as large as an access unit.
+    av_opt_set_int(m_pFormatContext, "max_packet_size", 8 << 20, AV_OPT_SEARCH_CHILDREN);
 
     CLog::Log(LOGDEBUG, "{} - parsing disabled, relying on container framing", __FUNCTION__);
   }
@@ -577,7 +579,15 @@ bool CDVDDemuxFFmpeg::Open(const std::shared_ptr<CDVDInputStream>& pInput, bool 
     m_checkTransportStream = true;
     skipCreateStreams = true;
   }
-  else if (noParse || !isMpegTs || forceFullAnalysis)
+  else if (noParse)
+  {
+    // Such a stream cannot be decoded on its own, so analysing it would only spend the whole
+    // analysis window failing to and then report that its parameters are unknown - which the
+    // caller, who asked for it unparsed, already knows. Take the streams straight from the
+    // program map.
+    m_streaminfo = false;
+  }
+  else if (!isMpegTs || forceFullAnalysis)
   {
     m_streaminfo = true;
   }
@@ -623,7 +633,7 @@ bool CDVDDemuxFFmpeg::Open(const std::shared_ptr<CDVDInputStream>& pInput, bool 
       ResetVideoStreams();
     }
   }
-  else
+  else if (!noParse)
   {
     m_program = 0;
     m_checkTransportStream = true;
