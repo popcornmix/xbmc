@@ -76,6 +76,9 @@ private:
 
   //! Number of video planes in use: 2 while scanning out an eye per plane.
   size_t m_planeCount{1};
+  //! Whether the first plane shows the picture's second view. Where the views are
+  //! packed the crop already picks the eye, and this stays false.
+  bool m_planeViewSwapped{false};
   CRect m_planeSourceRect;
   CRect m_planeDestRect;
   CRect m_planeSourceRect2;
@@ -86,5 +89,7 @@ private:
   struct BUFFER
   {
     CVideoBuffer* videoBuffer = nullptr;
+    //! The second eye, when the decoder kept the views in a buffer each.
+    CVideoBuffer* videoBuffer2 = nullptr;
   } m_buffers[NUM_BUFFERS];
 };
