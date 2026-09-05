@@ -701,10 +701,16 @@ bool CVideoPlayerVideo::ProcessDecoderOutput(double &frametime, double &pts)
 {
   // The picture is reused from one frame to the next and not every decoder writes the stereo
   // mode, while the hint fallback below runs on what it finds here - as does the viewer's eye
-  // swap - so start each frame with nothing left over from the one before.
+  // swap - so start each frame with nothing left over from the one before. Put it back where
+  // no picture arrives: the one still held was decoded with that layout, and the stillframe
+  // path renders it again rather than letting it go.
+  std::string heldStereoMode{std::move(m_picture.stereoMode)};
   m_picture.stereoMode.clear();
 
   CDVDVideoCodec::VCReturn decoderState = m_pVideoCodec->GetPicture(&m_picture);
+
+  if (decoderState != CDVDVideoCodec::VC_PICTURE)
+    m_picture.stereoMode = std::move(heldStereoMode);
 
   if (decoderState == CDVDVideoCodec::VC_BUFFER)
   {
