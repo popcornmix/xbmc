@@ -96,6 +96,8 @@ private:
   struct BUFFER
   {
     CVideoBuffer* videoBuffer = nullptr;
+    //! The second eye, when the decoder kept the views in a buffer each.
+    CVideoBuffer* videoBuffer2 = nullptr;
     std::unique_ptr<KODI::UTILS::EGL::CEGLFence> fence;
   } m_buffers[NUM_BUFFERS];
 

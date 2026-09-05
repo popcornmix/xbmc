@@ -97,7 +97,7 @@ bool CRendererDRMPRIMEGLES::Configure(const VideoPicture& picture,
   m_iFlags = GetFlagsChromaPosition(picture.chroma_position) |
              GetFlagsColorMatrix(picture.color_space, picture.iWidth, picture.iHeight) |
              GetFlagsColorPrimaries(picture.color_primaries) |
-             GetFlagsStereoMode(picture.stereoMode);
+             GetFlagsStereoMode(picture.stereoMode, picture.separateViews);
 
   // Calculate the input frame aspect ratio.
   CalculateFrameAspectRatio(picture.iDisplayWidth, picture.iDisplayHeight);
@@ -281,17 +281,24 @@ void CRendererDRMPRIMEGLES::AddVideoPicture(const VideoPicture& picture, int ind
   if (buf.videoBuffer)
   {
     CLog::LogF(LOGERROR, "unreleased video buffer");
-    if (buf.fence)
-      buf.fence->DestroyFence();
-    buf.videoBuffer->Release();
+    ReleaseBuffer(index);
   }
+
   buf.videoBuffer = picture.videoBuffer;
   buf.videoBuffer->Acquire();
+  if (picture.videoBuffer2)
+  {
+    buf.videoBuffer2 = picture.videoBuffer2;
+    buf.videoBuffer2->Acquire();
+  }
 
   // CDVDVideoCodecDRMPRIME fills its buffers at decode; CVideoBufferDMA arrives unfilled
-  auto* drmBuffer = dynamic_cast<CVideoBufferDRMPRIME*>(picture.videoBuffer);
-  if (drmBuffer && !dynamic_cast<CVideoBufferDRMPRIMEFFmpeg*>(drmBuffer))
-    drmBuffer->SetPictureParams(picture);
+  for (CVideoBuffer* videoBuffer : {picture.videoBuffer, picture.videoBuffer2})
+  {
+    auto* drmBuffer = dynamic_cast<CVideoBufferDRMPRIME*>(videoBuffer);
+    if (drmBuffer && !dynamic_cast<CVideoBufferDRMPRIMEFFmpeg*>(drmBuffer))
+      drmBuffer->SetPictureParams(picture);
+  }
 }
 
 bool CRendererDRMPRIMEGLES::Flush(bool saveBuffers)
@@ -314,6 +321,11 @@ void CRendererDRMPRIMEGLES::ReleaseBuffer(int index)
   {
     buf.videoBuffer->Release();
     buf.videoBuffer = nullptr;
+  }
+  if (buf.videoBuffer2)
+  {
+    buf.videoBuffer2->Release();
+    buf.videoBuffer2 = nullptr;
   }
 }
 
@@ -456,7 +468,13 @@ void CRendererDRMPRIMEGLES::Render(unsigned int flags, int index)
 {
   BUFFER& buf = m_buffers[index];
 
-  CVideoBufferDRMPRIME* buffer = dynamic_cast<CVideoBufferDRMPRIME*>(buf.videoBuffer);
+  // Where the decoder kept the views apart, the eye being drawn picks the buffer rather
+  // than a half of one, and the source rect stays the whole frame.
+  CVideoBuffer* videoBuffer = buf.videoBuffer;
+  if (buf.videoBuffer2 && GetEffectiveStereoView() == RenderStereoView::RIGHT)
+    videoBuffer = buf.videoBuffer2;
+
+  CVideoBufferDRMPRIME* buffer = dynamic_cast<CVideoBufferDRMPRIME*>(videoBuffer);
   if (!buffer || !buffer->IsValid())
     return;
 
