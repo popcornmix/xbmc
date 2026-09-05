@@ -295,14 +295,19 @@ void CRenderer::Render(COverlay* o)
     }
   }
 
-  state.x += GetStereoscopicDepth() + SubtitlePlaneOffset();
+  state.x += SubtitleDepth();
 
   o->Render(state);
 }
 
-float CRenderer::SubtitlePlaneOffset() const
+float CRenderer::SubtitleDepth() const
 {
-  if (m_subtitlePlaneOffset == 0 || m_rs.Width() <= 0.0f)
+  // The setting is what places a subtitle the title says nothing about - an external file,
+  // a 2D disc, a stream that carries no depth of its own.
+  if (!m_subtitlePlaneOffset)
+    return static_cast<float>(GetStereoscopicDepth());
+
+  if (*m_subtitlePlaneOffset == 0 || m_rs.Width() <= 0.0f)
     return 0.0f;
 
   const RenderStereoView view{CServiceBroker::GetWinSystem()->GetGfxContext().GetStereoView()};
@@ -315,7 +320,7 @@ float CRenderer::SubtitlePlaneOffset() const
   const float scale{m_rd.Width() / m_rs.Width()};
 
   return (view == RenderStereoView::LEFT ? 1.0f : -1.0f) *
-         static_cast<float>(m_subtitlePlaneOffset) * scale;
+         static_cast<float>(*m_subtitlePlaneOffset) * scale;
 }
 
 bool CRenderer::HasVisibleOverlay(int idx) const

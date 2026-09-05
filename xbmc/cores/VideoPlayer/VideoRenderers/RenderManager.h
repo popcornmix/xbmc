@@ -24,6 +24,7 @@
 #include <deque>
 #include <list>
 #include <memory>
+#include <optional>
 
 #include "PlatformDefs.h"
 
@@ -66,9 +67,11 @@ protected:
    *
    * A Blu-ray 3D title places its subtitles in depth by shifting the plane one way for the
    * left eye and the other for the right, by an amount it varies as the scene does. The
-   * answer is in the video's own pixels; anything else has no depth to place and says 0.
+   * answer is in the video's own pixels, and 0 is a depth like any other - the subtitle
+   * sitting at the screen for that frame. Anything with no depth of its own answers
+   * nothing, which is what leaves the subtitles.stereoscopicdepth setting in charge.
    */
-  virtual int GetSubtitlePlaneOffset(double pts) { return 0; }
+  virtual std::optional<int> GetSubtitlePlaneOffset(double pts) { return std::nullopt; }
 };
 
 class CRenderManager

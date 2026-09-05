@@ -425,7 +425,7 @@ protected:
   void UpdateRenderBuffers(int queued, int discard, int free) override;
   void UpdateGuiRender(bool gui) override;
   void UpdateVideoRender(bool video) override;
-  int GetSubtitlePlaneOffset(double pts) override;
+  std::optional<int> GetSubtitlePlaneOffset(double pts) override;
 
   virtual void CreatePlayers();
   void DestroyPlayers();
@@ -621,7 +621,9 @@ protected:
     }
   } m_SpeedState;
 
-  double m_offset_pts;
+  /*! What CheckContinuity() has taken off the demuxer's timestamps to keep the player
+      clock monotonic. Read by the render thread (see GetSubtitlePlaneOffset), so atomic. */
+  std::atomic<double> m_offset_pts{0.0};
 
   CDVDMessageQueue m_messenger;
   std::unique_ptr<CJobQueue> m_outboundEvents;

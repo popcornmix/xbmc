@@ -70,6 +70,7 @@
 #include <limits>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <ranges>
 #include <string_view>
 #include <utility>
@@ -4519,17 +4520,19 @@ void CVideoPlayer::UpdateSubtitleOffsetSequence(const CDemuxStream* stream)
               __FUNCTION__, sequence);
 }
 
-int CVideoPlayer::GetSubtitlePlaneOffset(double pts)
+std::optional<int> CVideoPlayer::GetSubtitlePlaneOffset(double pts)
 {
   const int sequence{m_subtitleOffsetSequence};
   if (sequence < 0)
-    return 0;
+    return std::nullopt;
 
   std::unique_lock lock(m_offsetMetadataSection);
   if (!m_offsetMetadata)
-    return 0;
+    return std::nullopt;
 
-  return m_offsetMetadata->GetOffset(pts, static_cast<unsigned int>(sequence));
+  // The store is keyed by the demuxer's timestamps and this is a presentation time, which
+  // ReadPacket() has already had m_offset_pts taken off (see UpdateCorrection).
+  return m_offsetMetadata->GetOffset(pts + m_offset_pts, static_cast<unsigned int>(sequence));
 }
 
 bool CVideoPlayer::OpenSubtitleStream(const CDVDStreamInfo& hint)

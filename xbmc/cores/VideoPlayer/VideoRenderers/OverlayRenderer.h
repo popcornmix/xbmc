@@ -19,6 +19,7 @@
 #include <atomic>
 #include <map>
 #include <memory>
+#include <optional>
 #include <vector>
 
 typedef struct ass_image ASS_Image;
@@ -117,9 +118,10 @@ namespace OVERLAY {
      *
      * A Blu-ray 3D title places its subtitles in depth by shifting the plane one way for
      * the left eye and the other for the right. Set for each frame as it is presented,
-     * since the amount is the title's to vary.
+     * since the amount is the title's to vary; nothing where the subtitle being shown
+     * follows no such sequence, which is what leaves the setting in charge.
      */
-    void SetSubtitlePlaneOffset(int offset) { m_subtitlePlaneOffset = offset; }
+    void SetSubtitlePlaneOffset(std::optional<int> offset) { m_subtitlePlaneOffset = offset; }
     virtual void Render(int idx, float depth = 0.0f);
 
     // render overlays already in HDR (not sRGB)
@@ -202,12 +204,14 @@ namespace OVERLAY {
     void Render(COverlay* o);
 
     /*!
-     * \brief The horizontal shift the current eye's plane carries, in screen pixels.
+     * \brief The horizontal shift the current eye's subtitles carry, in screen pixels.
      *
-     * The disc gives it in the video's own pixels, so it is scaled the same way the
-     * overlay itself is, and it is signed by the eye being drawn.
+     * A title that places its subtitles in depth itself answers for the frame being
+     * presented, in the video's own pixels, so that is scaled the same way the overlay is;
+     * the subtitles.stereoscopicdepth setting answers for everything else. Either way it
+     * is signed by the eye being drawn.
      */
-    float SubtitlePlaneOffset() const;
+    float SubtitleDepth() const;
     std::shared_ptr<COverlay> Convert(SElement& e);
     // Build a COverlay (cached or freshly created) from the libass output
     // already produced by PrepareOverlays. Does not call ass_render_frame.
@@ -239,8 +243,9 @@ namespace OVERLAY {
     CRect m_rd; // Video size, may be influenced by video settings (e.g. zoom)
     std::string m_stereomode;
 
-    //! What the disc asks the subtitle plane to be shifted by, in the video's own pixels.
-    int m_subtitlePlaneOffset{0};
+    //! What the disc asks the subtitle plane to be shifted by, in the video's own pixels,
+    //! or nothing where the title places its subtitles in depth no differently frame to frame.
+    std::optional<int> m_subtitlePlaneOffset;
     // Current subtitle position
     int m_subtitlePosition{0};
     // Current subtitle position from resolution info,
