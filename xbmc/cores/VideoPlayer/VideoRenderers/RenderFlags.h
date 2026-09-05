@@ -57,6 +57,9 @@
 #define CONF_FLAGS_STEREO_MODE_MASK(a) ((a) & 0x007000)
 #define CONF_FLAGS_STEREO_MODE_SBS     0x001000
 #define CONF_FLAGS_STEREO_MODE_TAB     0x002000
+//! The views are not packed into the frame: each is a picture of its own, so nothing is
+//! cropped and each carries its own aspect. The cadence still says which eye is which.
+#define CONF_FLAGS_STEREO_MODE_SEPARATE 0x004000
 
 #define CONF_FLAGS_STEREO_CADENCE(a) ((a) & 0x008000)
 #define CONF_FLAGS_STEREO_CADANCE_LEFT_RIGHT 0x000000
@@ -66,3 +69,5 @@ unsigned int GetFlagsColorMatrix(unsigned int color_matrix, unsigned width, unsi
 unsigned int GetFlagsChromaPosition(unsigned int chroma_position);
 unsigned int GetFlagsColorPrimaries(unsigned int color_primaries);
 unsigned int GetFlagsStereoMode(const std::string& mode);
+//! \brief As above, but reporting the views as separate pictures rather than packed.
+unsigned int GetFlagsStereoMode(const std::string& mode, bool separateViews);
