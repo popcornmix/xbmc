@@ -13,6 +13,7 @@
 #include "VideoShaders/ShaderFormats.h"
 #include "cores/IPlayer.h"
 #include "cores/VideoPlayer/Buffers/VideoBuffer.h"
+#include "rendering/RenderSystemTypes.h"
 #include "utils/Geometry.h"
 
 #include <utility>
@@ -137,6 +138,15 @@ protected:
    * non-stereoscopic sources are returned unchanged.
    */
   float GetPerEyeAspectRatio() const;
+
+  /*!
+   * \brief The stereo view to present, with the source's right_left cadence applied.
+   *
+   * The window system's view says which half of the display is being drawn; the cadence
+   * says which eye the source puts first. Renderers need the combination, to crop the
+   * right half of a packed frame or to pick the right one of two separate views.
+   */
+  RenderStereoView GetEffectiveStereoView() const;
 
   virtual void ManageRenderArea();
   virtual void ReorderDrawPoints();

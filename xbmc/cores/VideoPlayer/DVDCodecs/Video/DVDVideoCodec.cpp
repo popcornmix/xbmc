@@ -22,6 +22,10 @@ VideoPicture::~VideoPicture()
   {
     videoBuffer->Release();
   }
+  if (videoBuffer2)
+  {
+    videoBuffer2->Release();
+  }
 }
 
 void VideoPicture::Reset()
@@ -29,6 +33,10 @@ void VideoPicture::Reset()
   if (videoBuffer)
     videoBuffer->Release();
   videoBuffer = nullptr;
+  if (videoBuffer2)
+    videoBuffer2->Release();
+  videoBuffer2 = nullptr;
+  separateViews = false;
   pts = DVD_NOPTS_VALUE;
   dts = DVD_NOPTS_VALUE;
   iFlags = 0;
@@ -63,9 +71,13 @@ VideoPicture& VideoPicture::CopyRef(const VideoPicture &pic)
 {
   if (videoBuffer)
     videoBuffer->Release();
+  if (videoBuffer2)
+    videoBuffer2->Release();
   *this = pic;
   if (videoBuffer)
     videoBuffer->Acquire();
+  if (videoBuffer2)
+    videoBuffer2->Acquire();
   return *this;
 }
 
@@ -73,8 +85,13 @@ VideoPicture& VideoPicture::SetParams(const VideoPicture &pic)
 {
   if (videoBuffer)
     videoBuffer->Release();
+  if (videoBuffer2)
+    videoBuffer2->Release();
+  // separateViews is a parameter rather than a reference, so it survives here: it is
+  // how a consumer holding only this copy knows the picture had a second view.
   *this = pic;
   videoBuffer = nullptr;
+  videoBuffer2 = nullptr;
   return *this;
 }
 
@@ -99,7 +116,8 @@ bool VideoPicture::IsSameParams(const VideoPicture& pic) const
 {
   return this->iWidth == pic.iWidth && this->iHeight == pic.iHeight &&
          this->iDisplayWidth == pic.iDisplayWidth && this->iDisplayHeight == pic.iDisplayHeight &&
-         this->stereoMode == pic.stereoMode && this->color_primaries == pic.color_primaries &&
+         this->stereoMode == pic.stereoMode && this->separateViews == pic.separateViews &&
+         this->color_primaries == pic.color_primaries &&
          this->color_transfer == pic.color_transfer && this->hdrType == pic.hdrType &&
          CompareDisplayMetadata(pic);
 }

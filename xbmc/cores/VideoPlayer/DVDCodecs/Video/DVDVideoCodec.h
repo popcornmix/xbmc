@@ -45,6 +45,14 @@ public:
 
   CVideoBuffer *videoBuffer = nullptr;
 
+  //! The other eye, when the decoder hands the two views of a stereoscopic picture over
+  //! separately rather than packed into videoBuffer. stereoMode says which eye is which.
+  CVideoBuffer* videoBuffer2 = nullptr;
+
+  //! Whether the views arrive separately. Beside the pointer because it has to survive
+  //! SetParams(), which drops the buffer references.
+  bool separateViews = false;
+
   double pts; // timestamp in seconds, used in the CVideoPlayer class to keep track of pts
   double dts;
   unsigned int iFlags;

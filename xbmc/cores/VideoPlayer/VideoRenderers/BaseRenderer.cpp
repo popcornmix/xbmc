@@ -319,15 +319,7 @@ void CBaseRenderer::ManageRenderArea()
   m_sourceRect.y2 = (float)m_sourceHeight;
 
   unsigned int stereo_mode  = CONF_FLAGS_STEREO_MODE_MASK(m_iFlags);
-  auto stereo_view = CServiceBroker::GetWinSystem()->GetGfxContext().GetStereoView();
-
-  if(CONF_FLAGS_STEREO_CADENCE(m_iFlags) == CONF_FLAGS_STEREO_CADANCE_RIGHT_LEFT)
-  {
-    if (stereo_view == RenderStereoView::LEFT)
-      stereo_view = RenderStereoView::RIGHT;
-    else if (stereo_view == RenderStereoView::RIGHT)
-      stereo_view = RenderStereoView::LEFT;
-  }
+  const RenderStereoView stereo_view = GetEffectiveStereoView();
 
   switch(stereo_mode)
   {
@@ -358,6 +350,20 @@ void CBaseRenderer::ManageRenderArea()
                            CDisplaySettings::GetInstance().GetPixelRatio(),
                        CDisplaySettings::GetInstance().GetZoomAmount(),
                        CDisplaySettings::GetInstance().GetVerticalShift());
+}
+
+RenderStereoView CBaseRenderer::GetEffectiveStereoView() const
+{
+  const RenderStereoView view = CServiceBroker::GetWinSystem()->GetGfxContext().GetStereoView();
+
+  if (CONF_FLAGS_STEREO_CADENCE(m_iFlags) != CONF_FLAGS_STEREO_CADANCE_RIGHT_LEFT)
+    return view;
+
+  if (view == RenderStereoView::LEFT)
+    return RenderStereoView::RIGHT;
+  if (view == RenderStereoView::RIGHT)
+    return RenderStereoView::LEFT;
+  return view;
 }
 
 float CBaseRenderer::GetPerEyeAspectRatio() const
