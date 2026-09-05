@@ -48,7 +48,14 @@ public:
 
 protected:
   void Drain();
-  bool SetPictureParams(VideoPicture* pVideoPicture);
+  //! \brief Fill the picture from m_pFrame, and from \p dependentView when the views are
+  //!        handed over separately. Both frames are taken.
+  bool SetPictureParams(VideoPicture* pVideoPicture, AVFrame* dependentView = nullptr);
+  //! \brief Take the buffer behind a decoded frame, leaving the frame empty. Null if
+  //!        the frame is in a format this codec does not hand out.
+  CVideoBuffer* BufferFromFrame(AVFrame* frame, const VideoPicture& picture);
+  //! \brief Make the picture from the pair the pairer has just completed.
+  bool PictureFromViewPair(VideoPicture* pVideoPicture);
   void UpdateProcessInfo(struct AVCodecContext* avctx, const enum AVPixelFormat fmt);
   CDVDVideoCodec::VCReturn ProcessFilterIn();
   CDVDVideoCodec::VCReturn ProcessFilterOut();
@@ -75,10 +82,13 @@ protected:
   AVFilterContext* m_pFilterIn2 = nullptr; //!< second view of a multiview stream
   AVFilterContext* m_pFilterOut = nullptr;
 
-  //! Eyes are coded as separate views and are packed side by side by the filter graph.
+  //! Eyes are coded as separate views. They are handed to the renderer a buffer each,
+  //! except while a filter chain is up, which needs them packed into one frame.
   bool m_multiview = false;
-  CMultiviewFramePairer m_multiviewPairer; //!< routes the views to the graph's two inputs
-  std::string m_stereoMode; //!< mode the packed frame is in, empty when not stereoscopic
+  CMultiviewFramePairer m_multiviewPairer; //!< pairs up the views of an access unit
+  AVFrame* m_pBaseViewFrame = nullptr; //!< scratch for the leading view of a pair
+  AVFrame* m_pDependentViewFrame = nullptr; //!< scratch for the other view of a pair
+  std::string m_stereoMode; //!< eye order of a stereoscopic stream, empty when not one
 
   std::shared_ptr<CVideoBufferPoolDRMPRIMEFFmpeg> m_hwVideoBufferPool;
 

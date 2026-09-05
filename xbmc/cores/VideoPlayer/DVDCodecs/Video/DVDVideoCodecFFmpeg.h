@@ -81,7 +81,9 @@ protected:
 
   //! Eyes are coded as separate views and are packed side by side by the filter graph.
   bool m_multiview = false;
-  CMultiviewFramePairer m_multiviewPairer; //!< routes the views to the graph's two inputs
+  CMultiviewFramePairer m_multiviewPairer; //!< pairs up the views of an access unit
+  AVFrame* m_pBaseViewFrame = nullptr; //!< scratch for the leading view of a pair
+  AVFrame* m_pDependentViewFrame = nullptr; //!< scratch for the other view of a pair
   std::string m_stereoMode; //!< mode the packed frame is in, empty when not stereoscopic
 
   std::unique_ptr<IDVDVideoPP> m_postProc;

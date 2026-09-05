@@ -453,6 +453,19 @@ bool CDVDVideoCodecFFmpeg::Open(CDVDStreamInfo &hints, CDVDCodecOptions &options
     return false;
   }
 
+  m_pBaseViewFrame = av_frame_alloc();
+  m_pDependentViewFrame = av_frame_alloc();
+  if (!m_pBaseViewFrame || !m_pDependentViewFrame)
+  {
+    av_frame_free(&m_pFrame);
+    av_frame_free(&m_pDecodedFrame);
+    av_frame_free(&m_pFilterFrame);
+    av_frame_free(&m_pBaseViewFrame);
+    av_frame_free(&m_pDependentViewFrame);
+    avcodec_free_context(&m_pCodecContext);
+    return false;
+  }
+
   UpdateName();
   const char* pixFmtName = av_get_pix_fmt_name(m_pCodecContext->pix_fmt);
   m_processInfo.SetVideoDimensions(m_pCodecContext->coded_width, m_pCodecContext->coded_height);
@@ -468,6 +481,8 @@ void CDVDVideoCodecFFmpeg::Dispose()
   av_frame_free(&m_pFrame);
   av_frame_free(&m_pDecodedFrame);
   av_frame_free(&m_pFilterFrame);
+  av_frame_free(&m_pBaseViewFrame);
+  av_frame_free(&m_pDependentViewFrame);
   avcodec_free_context(&m_pCodecContext);
 
   if (m_pHardware)
@@ -1386,8 +1401,6 @@ int CDVDVideoCodecFFmpeg::FilterOpen(const std::string& filters, bool scale)
     return result;
   }
 
-  m_multiviewPairer.SetInputs(m_pFilterIn, m_pFilterIn2);
-
   if (CServiceBroker::GetLogging().CanLogComponent(LOGVIDEO))
   {
     char* graphDump = avfilter_graph_dump(m_pFilterGraph, nullptr);
@@ -1404,10 +1417,13 @@ int CDVDVideoCodecFFmpeg::FilterOpen(const std::string& filters, bool scale)
 
 void CDVDVideoCodecFFmpeg::FilterClose()
 {
-  m_multiviewPairer.SetInputs(nullptr, nullptr);
-
   if (m_pFilterGraph)
   {
+    // The held frame was decoded for the packing graph that is going away. Test
+    // graphs never pack, so they must not take it.
+    if (m_pFilterIn2)
+      m_multiviewPairer.DropHeldFrame();
+
     CLog::Log(LOGDEBUG, LOGVIDEO, "CDVDVideoCodecFFmpeg::FilterClose - Freeing filter graph");
     avfilter_graph_free(&m_pFilterGraph);
 
@@ -1424,11 +1440,21 @@ CDVDVideoCodec::VCReturn CDVDVideoCodecFFmpeg::FilterProcess(AVFrame* frame)
 
   if (frame || (m_codecControlFlags & DVD_CODEC_CTRL_DRAIN))
   {
-    // A multiview graph is fed through the pairer, which holds a base view frame back
-    // until it knows whether a dependent view is coming, and drains both of its inputs.
+    // A multiview graph is fed a pair at a time: it emits nothing until both of its
+    // inputs have a frame, so a lone view would wedge it.
     if (m_pFilterIn2)
-      result =
-          frame ? m_multiviewPairer.AddFrame(frame, m_stereoMode) : m_multiviewPairer.Drain();
+    {
+      result = 0;
+      const bool paired =
+          frame ? m_multiviewPairer.AddFrame(frame, m_stereoMode, m_pBaseViewFrame,
+                                             m_pDependentViewFrame)
+                : m_multiviewPairer.FlushHeldFrame(m_pBaseViewFrame, m_pDependentViewFrame);
+      if (paired)
+        result = FeedMultiviewPair(m_pFilterIn, m_pFilterIn2, m_pBaseViewFrame,
+                                   m_pDependentViewFrame);
+      if (!frame && result >= 0)
+        result = DrainMultiviewInputs(m_pFilterIn, m_pFilterIn2);
+    }
     else
       result = av_buffersrc_add_frame(m_pFilterIn, frame);
 
