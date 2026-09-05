@@ -87,3 +87,13 @@ unsigned int GetFlagsStereoMode(const std::string& mode)
   return convert[mode];
 }
 
+unsigned int GetFlagsStereoMode(const std::string& mode, bool separateViews)
+{
+  const unsigned int flags = GetFlagsStereoMode(mode);
+  if (!separateViews || CONF_FLAGS_STEREO_MODE_MASK(flags) == 0)
+    return flags;
+
+  // Only the packing changes: which eye leads is still the cadence's to say.
+  return (flags & ~CONF_FLAGS_STEREO_MODE_MASK(~0u)) | CONF_FLAGS_STEREO_MODE_SEPARATE;
+}
+
