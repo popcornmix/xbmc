@@ -37,8 +37,10 @@ CVideoLayerBridgeDRMPRIME::CVideoLayerBridgeDRMPRIME(std::shared_ptr<CDRMAtomic>
 
 CVideoLayerBridgeDRMPRIME::~CVideoLayerBridgeDRMPRIME()
 {
-  Release(m_prev_buffer);
-  Release(m_buffer);
+  for (auto* buffer : m_prevBuffers)
+    Release(buffer);
+  for (auto* buffer : m_buffers)
+    Release(buffer);
 
   // the plane-off commit from Disable has run by now, so these are plain frees
   for (uint32_t fbId : m_fbCache.TakeAll())
@@ -70,35 +72,46 @@ void CVideoLayerBridgeDRMPRIME::Disable()
   }
 }
 
-void CVideoLayerBridgeDRMPRIME::Acquire(CVideoBufferDRMPRIME* buffer, uint32_t fbId)
+void CVideoLayerBridgeDRMPRIME::Present(const BufferSet& buffers, const FbIdSet& fbIds)
 {
-  // release the buffer that is no longer presented on screen
+  // Presenting the same buffers again - the framebuffer can still have changed under
+  // them, so take the ids, but nothing has left the screen.
+  if (buffers == m_buffers)
+  {
+    m_fbIds = fbIds;
+    return;
+  }
+
+  // release the buffers that are no longer presented on screen
   CheckScanoutRelease();
-  Release(m_prev_buffer);
+  for (auto* buffer : m_prevBuffers)
+    Release(buffer);
 
-  // release the buffer currently being presented next call
-  m_prev_buffer = m_buffer;
-  m_prev_fb_id = m_fb_id;
+  // release the buffers currently being presented next call
+  m_prevBuffers = m_buffers;
+  m_prevFbIds = m_fbIds;
 
-  // reference count the buffer that is going to be presented on screen
-  m_buffer = buffer;
-  m_fb_id = fbId;
-  m_buffer->Acquire();
+  // reference count the buffers that are going to be presented on screen
+  m_buffers = buffers;
+  m_fbIds = fbIds;
+  for (auto* buffer : m_buffers)
+    if (buffer)
+      buffer->Acquire();
 
-  // The plane properties for this buffer go into the pending atomic request, so
-  // the next commit is the one that will put it on screen.
+  // The plane properties for these buffers go into the pending atomic request, so
+  // the next commit is the one that will put them on screen.
   m_commitSeq = m_DRM->GetNextCommitSequence();
 }
 
 void CVideoLayerBridgeDRMPRIME::CheckScanoutRelease()
 {
-  if (!m_prev_buffer)
+  if (!m_prevBuffers[0])
     return;
 
   m_releases++;
 
-  // m_prev_buffer is only off screen once the commit that presented m_buffer in
-  // its place has flipped. Holding just the two references assumes that has
+  // m_prevBuffers are only off screen once the commit that presented m_buffers in
+  // their place has flipped. Holding just the two generations assumes that has
   // happened by the time the next buffer arrives, which is true of a one frame
   // deep present pipeline. Count where it has not: the buffer goes back to the
   // decoder pool while the plane is still scanning it out, and whatever the
@@ -139,13 +152,13 @@ void CVideoLayerBridgeDRMPRIME::Release(CVideoBufferDRMPRIME* buffer)
   buffer->Release();
 }
 
-bool CVideoLayerBridgeDRMPRIME::PrepareBuffer(CVideoBufferDRMPRIME* buffer)
+uint32_t CVideoLayerBridgeDRMPRIME::FramebufferFor(CVideoBufferDRMPRIME* buffer)
 {
   if (!buffer->AcquireDescriptor())
   {
     CLog::Log(LOGERROR, "CVideoLayerBridgeDRMPRIME::{} - failed to acquire descriptor",
               __FUNCTION__);
-    return false;
+    return 0;
   }
 
   const auto identity =
@@ -155,32 +168,19 @@ bool CVideoLayerBridgeDRMPRIME::PrepareBuffer(CVideoBufferDRMPRIME* buffer)
     buffer->ReleaseDescriptor();
     CLog::Log(LOGERROR, "CVideoLayerBridgeDRMPRIME::{} - failed to identify buffer memory",
               __FUNCTION__);
-    return false;
+    return 0;
   }
 
   uint32_t fbId = m_fbCache.Lookup(*identity);
   if (!fbId)
   {
     fbId = CreateFramebuffer(buffer);
-    if (!fbId)
-    {
-      buffer->ReleaseDescriptor();
-      return false;
-    }
-    m_fbCache.Insert(*identity, fbId);
+    if (fbId)
+      m_fbCache.Insert(*identity, fbId);
   }
   buffer->ReleaseDescriptor();
 
-  if (m_buffer != buffer)
-    Acquire(buffer, fbId);
-  else
-    m_fb_id = fbId;
-
-  // reap after the id shift so protection covers the new presented pair
-  for (uint32_t doomed : m_fbCache.Reap({m_fb_id, m_prev_fb_id}))
-    drmModeRmFB(m_DRM->GetFileDescriptor(), doomed);
-
-  return true;
+  return fbId;
 }
 
 uint32_t CVideoLayerBridgeDRMPRIME::CreateFramebuffer(CVideoBufferDRMPRIME* buffer)
@@ -257,12 +257,20 @@ uint32_t CVideoLayerBridgeDRMPRIME::CreateFramebuffer(CVideoBufferDRMPRIME* buff
   return fbId;
 }
 
+void CVideoLayerBridgeDRMPRIME::ReapFramebuffers()
+{
+  const std::array<uint32_t, MAX_VIDEO_PLANES * 2> presented{
+      m_fbIds[0], m_fbIds[1], m_prevFbIds[0], m_prevFbIds[1]};
+
+  for (uint32_t doomed : m_fbCache.Reap(presented))
+    drmModeRmFB(m_DRM->GetFileDescriptor(), doomed);
+}
+
 void CVideoLayerBridgeDRMPRIME::Configure(CVideoBufferDRMPRIME* buffer)
 {
   // a new renderer generation brings a new buffer pool; old entries can never match again
   m_fbCache.InvalidateAll();
-  for (uint32_t doomed : m_fbCache.Reap({m_fb_id, m_prev_fb_id}))
-    drmModeRmFB(m_DRM->GetFileDescriptor(), doomed);
+  ReapFramebuffers();
 
   auto plane = m_DRM->GetVideoPlane();
   if (!plane)
@@ -295,8 +303,8 @@ void CVideoLayerBridgeDRMPRIME::Configure(CVideoBufferDRMPRIME* buffer)
 }
 
 void CVideoLayerBridgeDRMPRIME::SetPlaneRects(CDRMPlane* plane,
-                                              CVideoBufferDRMPRIME* buffer,
-                                              const PlaneRects& rects)
+                                              const PlaneLayer& layer,
+                                              uint32_t fbId)
 {
   // Buffer dimensions equal the picture dimensions, so the source rect maps
   // straight to the plane crop. SRC_* are 16.16 fixed point, which exists so a
@@ -307,16 +315,16 @@ void CVideoLayerBridgeDRMPRIME::SetPlaneRects(CDRMPlane* plane,
   // Clamp the edges to the buffer and derive the size from them so the crop
   // stays consistent, falling back to the whole buffer if it is empty.
   constexpr int64_t fpOne = 1 << 16;
-  const int64_t bufferWidth = static_cast<int64_t>(buffer->GetWidth()) * fpOne;
-  const int64_t bufferHeight = static_cast<int64_t>(buffer->GetHeight()) * fpOne;
+  const int64_t bufferWidth = static_cast<int64_t>(layer.buffer->GetWidth()) * fpOne;
+  const int64_t bufferHeight = static_cast<int64_t>(layer.buffer->GetHeight()) * fpOne;
 
   const auto toFixed = [](float value)
   { return static_cast<int64_t>(std::lround(static_cast<double>(value) * fpOne)); };
 
-  int64_t srcX = std::clamp<int64_t>(toFixed(rects.source.x1), 0, bufferWidth);
-  int64_t srcY = std::clamp<int64_t>(toFixed(rects.source.y1), 0, bufferHeight);
-  int64_t srcW = std::clamp<int64_t>(toFixed(rects.source.x2), srcX, bufferWidth) - srcX;
-  int64_t srcH = std::clamp<int64_t>(toFixed(rects.source.y2), srcY, bufferHeight) - srcY;
+  int64_t srcX = std::clamp<int64_t>(toFixed(layer.source.x1), 0, bufferWidth);
+  int64_t srcY = std::clamp<int64_t>(toFixed(layer.source.y1), 0, bufferHeight);
+  int64_t srcW = std::clamp<int64_t>(toFixed(layer.source.x2), srcX, bufferWidth) - srcX;
+  int64_t srcH = std::clamp<int64_t>(toFixed(layer.source.y2), srcY, bufferHeight) - srcY;
   if (srcW == 0 || srcH == 0)
   {
     srcX = srcY = 0;
@@ -324,7 +332,7 @@ void CVideoLayerBridgeDRMPRIME::SetPlaneRects(CDRMPlane* plane,
     srcH = bufferHeight;
   }
 
-  m_DRM->AddProperty(plane, "FB_ID", m_fb_id);
+  m_DRM->AddProperty(plane, "FB_ID", fbId);
   m_DRM->AddProperty(plane, "CRTC_ID", m_DRM->GetCrtc()->GetCrtcId());
   m_DRM->AddProperty(plane, "SRC_X", static_cast<uint64_t>(srcX));
   m_DRM->AddProperty(plane, "SRC_Y", static_cast<uint64_t>(srcY));
@@ -336,10 +344,10 @@ void CVideoLayerBridgeDRMPRIME::SetPlaneRects(CDRMPlane* plane,
   // (1080 + 45 = 1125); rounding that down to 1124 shifts one eye up a line and
   // takes its last line from the active space gap. Use the rounded edges so the
   // position and the size stay consistent with each other.
-  const int32_t dstX1 = MathUtils::round_int(static_cast<double>(rects.dest.x1));
-  const int32_t dstY1 = MathUtils::round_int(static_cast<double>(rects.dest.y1));
-  const int32_t dstX2 = MathUtils::round_int(static_cast<double>(rects.dest.x2));
-  const int32_t dstY2 = MathUtils::round_int(static_cast<double>(rects.dest.y2));
+  const int32_t dstX1 = MathUtils::round_int(static_cast<double>(layer.dest.x1));
+  const int32_t dstY1 = MathUtils::round_int(static_cast<double>(layer.dest.y1));
+  const int32_t dstX2 = MathUtils::round_int(static_cast<double>(layer.dest.x2));
+  const int32_t dstY2 = MathUtils::round_int(static_cast<double>(layer.dest.y2));
 
   m_DRM->AddProperty(plane, "CRTC_X", dstX1);
   m_DRM->AddProperty(plane, "CRTC_Y", dstY1);
@@ -347,23 +355,31 @@ void CVideoLayerBridgeDRMPRIME::SetPlaneRects(CDRMPlane* plane,
   m_DRM->AddProperty(plane, "CRTC_H", static_cast<uint32_t>(std::max(0, dstY2 - dstY1)));
 }
 
-void CVideoLayerBridgeDRMPRIME::SetVideoPlane(CVideoBufferDRMPRIME* buffer,
-                                              std::span<const PlaneRects> rects)
+void CVideoLayerBridgeDRMPRIME::SetVideoPlane(std::span<const PlaneLayer> layers)
 {
   CDRMPlane* planes[] = {m_DRM->GetVideoPlane(), m_DRM->GetVideoPlane2()};
-  if (!planes[0] || rects.empty())
+  if (!planes[0] || layers.empty())
     return;
 
-  if (!PrepareBuffer(buffer))
-    return;
+  const size_t used = std::min(layers.size(), planes[1] ? MAX_VIDEO_PLANES : size_t{1});
 
-  size_t used = 0;
-  for (auto* plane : planes)
+  BufferSet buffers{};
+  FbIdSet fbIds{};
+  for (size_t i = 0; i < used; i++)
   {
-    if (!plane || used == rects.size())
-      break;
-    SetPlaneRects(plane, buffer, rects[used++]);
+    fbIds[i] = FramebufferFor(layers[i].buffer);
+    if (!fbIds[i])
+      return;
+    buffers[i] = layers[i].buffer;
   }
+
+  Present(buffers, fbIds);
+
+  // reap after the id shift so protection covers the newly presented buffers
+  ReapFramebuffers();
+
+  for (size_t i = 0; i < used; i++)
+    SetPlaneRects(planes[i], layers[i], fbIds[i]);
 
   // Detach a claimed second plane that this frame does not use, so a switch out
   // of a split stereo mode does not leave the second eye on screen.
@@ -376,18 +392,24 @@ void CVideoLayerBridgeDRMPRIME::SetVideoPlane(CVideoBufferDRMPRIME* buffer,
 
 void CVideoLayerBridgeDRMPRIME::UpdateVideoPlane()
 {
-  if (!m_buffer || !m_fb_id)
+  if (!m_buffers[0] || !m_fbIds[0])
     return;
 
-  // release the buffer that is no longer presented on screen
+  // release the buffers that are no longer presented on screen
   CheckScanoutRelease();
-  Release(m_prev_buffer);
-  m_prev_buffer = nullptr;
+  for (auto*& buffer : m_prevBuffers)
+  {
+    Release(buffer);
+    buffer = nullptr;
+  }
 
-  auto plane = m_DRM->GetVideoPlane();
-  if (!plane)
-    return;
+  CDRMPlane* planes[] = {m_DRM->GetVideoPlane(), m_DRM->GetVideoPlane2()};
+  for (size_t i = 0; i < MAX_VIDEO_PLANES; i++)
+  {
+    if (!planes[i] || !m_buffers[i])
+      break;
 
-  m_DRM->AddProperty(plane, "FB_ID", m_fb_id);
-  m_DRM->AddProperty(plane, "CRTC_ID", m_DRM->GetCrtc()->GetCrtcId());
+    m_DRM->AddProperty(planes[i], "FB_ID", m_fbIds[i]);
+    m_DRM->AddProperty(planes[i], "CRTC_ID", m_DRM->GetCrtc()->GetCrtcId());
+  }
 }
