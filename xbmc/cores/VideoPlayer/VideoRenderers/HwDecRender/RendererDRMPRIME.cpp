@@ -88,6 +88,19 @@ CBaseRenderer* CRendererDRMPRIME::Create(CVideoBuffer* buffer)
     if (!drm->FindVideoAndGuiPlane(format, modifier, width, height))
       return nullptr;
 
+    // Views delivered a buffer each need a plane each. There is no crop that shows
+    // both of two buffers on one plane, so leave the stream to a renderer that
+    // composites rather than show one eye twice, handing back the reservation the
+    // search above made.
+    if (buf->GetPicture().separateViews &&
+        !drm->FindSecondVideoPlane(format, modifier, width, height))
+    {
+      CLog::Log(LOGDEBUG, "CRendererDRMPRIME::{} - no second video plane for the second view",
+                __FUNCTION__);
+      drm->ReleaseVideoPlane();
+      return nullptr;
+    }
+
     return new CRendererDRMPRIME();
   }
 
@@ -118,7 +131,7 @@ bool CRendererDRMPRIME::Configure(const VideoPicture& picture, float fps, unsign
   m_iFlags = GetFlagsChromaPosition(picture.chroma_position) |
              GetFlagsColorMatrix(picture.color_space, picture.iWidth, picture.iHeight) |
              GetFlagsColorPrimaries(picture.color_primaries) |
-             GetFlagsStereoMode(picture.stereoMode);
+             GetFlagsStereoMode(picture.stereoMode, picture.separateViews);
 
   // Signal source colorimetry and HDR metadata on the scanout via the DRM
   // Colorspace and HDR_OUTPUT_METADATA connector properties. The direct-to-
@@ -205,7 +218,15 @@ bool CRendererDRMPRIME::SetStereoPlaneGeometry()
 
   auto* winSystem = dynamic_cast<CWinSystemGbm*>(CServiceBroker::GetWinSystem());
   if (!winSystem || !winSystem->GetDrm()->GetVideoPlane2())
+  {
+    // Nothing to scan out packed when the views are in a buffer each, so leave the
+    // leading one to the ordinary single-plane geometry. Only reachable if a display
+    // mode change takes the second plane away, since Create() insists on one.
+    if (CONF_FLAGS_STEREO_MODE_MASK(m_iFlags) == CONF_FLAGS_STEREO_MODE_SEPARATE)
+      return false;
+
     return SetPackedPlaneGeometry(stereoMode);
+  }
 
   // One plane per eye. CBaseRenderer::ManageRenderArea() crops the source to the
   // eye of the current view and fits it to the halved screen GetResInfo()
@@ -219,6 +240,9 @@ bool CRendererDRMPRIME::SetStereoPlaneGeometry()
   CBaseRenderer::ManageRenderArea();
   m_planeSourceRect = m_sourceRect;
   m_planeDestRect = gfxContext.StereoCorrection(m_destRect);
+  // Which view the display's first half wants. For a packed frame the crop above has
+  // already picked it; for separate views it picks the buffer instead.
+  m_planeViewSwapped = GetEffectiveStereoView() == RenderStereoView::RIGHT;
 
   gfxContext.SetStereoView(RenderStereoView::RIGHT);
   CBaseRenderer::ManageRenderArea();
@@ -308,6 +332,7 @@ void CRendererDRMPRIME::ManageRenderArea()
   // CBaseRenderer::ManageRenderArea() has cropped it to the eye to show.
   m_planeCount = 1;
   m_planeSourceRect = m_sourceRect;
+  m_planeViewSwapped = GetEffectiveStereoView() == RenderStereoView::RIGHT;
 
   RESOLUTION_INFO info = CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo();
   if (info.iScreenWidth != info.iWidth)
@@ -329,15 +354,24 @@ void CRendererDRMPRIME::AddVideoPicture(const VideoPicture& picture, int index)
   if (buf.videoBuffer)
   {
     CLog::LogF(LOGERROR, "unreleased video buffer");
-    buf.videoBuffer->Release();
+    ReleaseBuffer(index);
   }
+
   buf.videoBuffer = picture.videoBuffer;
   buf.videoBuffer->Acquire();
+  if (picture.videoBuffer2)
+  {
+    buf.videoBuffer2 = picture.videoBuffer2;
+    buf.videoBuffer2->Acquire();
+  }
 
   // CDVDVideoCodecDRMPRIME fills its buffers at decode; CVideoBufferDMA arrives unfilled
-  auto* drmBuffer = dynamic_cast<CVideoBufferDRMPRIME*>(picture.videoBuffer);
-  if (drmBuffer && !dynamic_cast<CVideoBufferDRMPRIMEFFmpeg*>(drmBuffer))
-    drmBuffer->SetPictureParams(picture);
+  for (CVideoBuffer* videoBuffer : {picture.videoBuffer, picture.videoBuffer2})
+  {
+    auto* drmBuffer = dynamic_cast<CVideoBufferDRMPRIME*>(videoBuffer);
+    if (drmBuffer && !dynamic_cast<CVideoBufferDRMPRIMEFFmpeg*>(drmBuffer))
+      drmBuffer->SetPictureParams(picture);
+  }
 }
 
 bool CRendererDRMPRIME::Flush(bool saveBuffers)
@@ -357,6 +391,11 @@ void CRendererDRMPRIME::ReleaseBuffer(int index)
   {
     buf.videoBuffer->Release();
     buf.videoBuffer = nullptr;
+  }
+  if (buf.videoBuffer2)
+  {
+    buf.videoBuffer2->Release();
+    buf.videoBuffer2 = nullptr;
   }
 }
 
@@ -423,9 +462,18 @@ void CRendererDRMPRIME::RenderUpdate(
   if (m_iLastRenderBuffer == -1)
     m_videoLayerBridge->Configure(buffer);
 
-  const std::array<CVideoLayerBridgeDRMPRIME::PlaneRects, 2> rects{
-      {{m_planeSourceRect, m_planeDestRect}, {m_planeSourceRect2, m_planeDestRect2}}};
-  m_videoLayerBridge->SetVideoPlane(buffer, std::span(rects).first(m_planeCount));
+  // Where the decoder kept the views apart, the eye a plane shows picks the buffer;
+  // where it packed them, both planes crop the one buffer.
+  auto* buffer2 = dynamic_cast<CVideoBufferDRMPRIME*>(m_buffers[index].videoBuffer2);
+  if (!buffer2)
+    buffer2 = buffer;
+  CVideoBufferDRMPRIME* first = m_planeViewSwapped ? buffer2 : buffer;
+  CVideoBufferDRMPRIME* second = m_planeViewSwapped ? buffer : buffer2;
+
+  const std::array<CVideoLayerBridgeDRMPRIME::PlaneLayer, 2> layers{
+      {{first, m_planeSourceRect, m_planeDestRect},
+       {second, m_planeSourceRect2, m_planeDestRect2}}};
+  m_videoLayerBridge->SetVideoPlane(std::span(layers).first(m_planeCount));
 
   m_iLastRenderBuffer = index;
 }

@@ -13,6 +13,7 @@
 #include "threads/SystemClock.h"
 #include "windowing/gbm/VideoLayerBridge.h"
 
+#include <array>
 #include <cstdint>
 #include <memory>
 #include <span>
@@ -36,9 +37,10 @@ class CVideoBufferDRMPRIME;
 class CVideoLayerBridgeDRMPRIME : public KODI::WINDOWING::GBM::CVideoLayerBridge
 {
 public:
-  //! \brief One scanout rectangle pair: a crop of the buffer onto a screen area.
-  struct PlaneRects
+  //! \brief One scanout: a crop of a buffer onto a screen area.
+  struct PlaneLayer
   {
+    CVideoBufferDRMPRIME* buffer{nullptr};
     CRect source;
     CRect dest;
   };
@@ -50,43 +52,55 @@ public:
   virtual void Configure(CVideoBufferDRMPRIME* buffer);
 
   /*!
-   * \brief Scan the buffer out on the video plane(s).
+   * \brief Scan the layers out on the video plane(s).
    *
-   * One entry presents the buffer on the single video plane. Two entries need
-   * a second video plane and present one stereoscopic eye on each; the second
-   * is ignored if no second plane was claimed.
+   * One layer presents on the single video plane. Two need a second video plane and
+   * present one stereoscopic eye on each - the two halves of one buffer where the views
+   * are packed into a frame, a buffer each where they are not. The second layer is
+   * ignored if no second plane was claimed.
    */
-  virtual void SetVideoPlane(CVideoBufferDRMPRIME* buffer, std::span<const PlaneRects> rects);
+  virtual void SetVideoPlane(std::span<const PlaneLayer> layers);
   virtual void UpdateVideoPlane();
 
 protected:
   std::shared_ptr<KODI::WINDOWING::GBM::CDRMAtomic> m_DRM;
 
 private:
-  void Acquire(CVideoBufferDRMPRIME* buffer, uint32_t fbId);
+  //! An eye per plane is as many as anything here presents at once.
+  static constexpr size_t MAX_VIDEO_PLANES = 2;
+  using BufferSet = std::array<CVideoBufferDRMPRIME*, MAX_VIDEO_PLANES>;
+  using FbIdSet = std::array<uint32_t, MAX_VIDEO_PLANES>;
+
+  //! \brief Take up the buffers to present and let go of the ones they replace.
+  void Present(const BufferSet& buffers, const FbIdSet& fbIds);
   void Release(CVideoBufferDRMPRIME* buffer);
-  bool PrepareBuffer(CVideoBufferDRMPRIME* buffer);
+  //! \brief The framebuffer for a buffer, made if the cache does not have one; 0 on failure.
+  uint32_t FramebufferFor(CVideoBufferDRMPRIME* buffer);
+  //! \brief Destroy the framebuffers the cache has done with, keeping the presented ones.
+  void ReapFramebuffers();
   //! \brief Convert the buffer's descriptor to a framebuffer; 0 on failure.
   uint32_t CreateFramebuffer(CVideoBufferDRMPRIME* buffer);
   void SetPlaneRects(KODI::WINDOWING::GBM::CDRMPlane* plane,
-                     CVideoBufferDRMPRIME* buffer,
-                     const PlaneRects& rects);
+                     const PlaneLayer& layer,
+                     uint32_t fbId);
   /*!
-   * \brief Count the release of the previously presented buffer as safe or not.
+   * \brief Count the release of the previously presented buffers as safe or not.
    *
-   * Call immediately before letting go of m_prev_buffer.
+   * Call immediately before letting go of m_prevBuffers.
    */
   void CheckScanoutRelease();
 
-  static constexpr size_t MAX_FB_CACHE = 32;
+  //! Must exceed the decoder's dma-buf pool, which has a frame per view in flight
+  //! for a multiview stream; an overflow re-imports the buffer it just evicted.
+  static constexpr size_t MAX_FB_CACHE = 64;
 
   DRMPRIME::CDmaBufIdentityCache m_fbCache{MAX_FB_CACHE, "bridge-fb"};
-  CVideoBufferDRMPRIME* m_buffer = nullptr;
-  CVideoBufferDRMPRIME* m_prev_buffer = nullptr;
-  uint32_t m_fb_id{0};
-  uint32_t m_prev_fb_id{0};
+  BufferSet m_buffers{};
+  BufferSet m_prevBuffers{};
+  FbIdSet m_fbIds{};
+  FbIdSet m_prevFbIds{};
 
-  //! Commit that presents m_buffer, i.e. that takes m_prev_buffer off screen.
+  //! Commit that presents m_buffers, i.e. that takes m_prevBuffers off screen.
   uint64_t m_commitSeq{0};
   unsigned int m_releases{0};
   unsigned int m_earlyReleases{0};
