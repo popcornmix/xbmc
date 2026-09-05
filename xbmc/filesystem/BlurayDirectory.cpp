@@ -219,16 +219,15 @@ void RemoveDuplicatePlaylists(std::vector<PlaylistInformation>& playlists)
           playlists[i].clips != playlists[j].clips)
         continue;
 
-      // None of that tells a 3D playlist from the 2D one beside it. A 3D Blu-ray carries both
-      // presentations of its feature, and they differ only in the dependent view named in the
-      // playlist's extension data - same length, same chapters, same clip for the base view,
-      // and the same streams exposed.
+      // None of that tells a 3D playlist from the 2D one beside it, nor one 3D presentation
+      // from another: a 3D Blu-ray carries both presentations of its feature, and they differ
+      // only in the playlist's extension data - same length, same chapters, same clip for the
+      // base view, and the same streams exposed.
+      if (AreDifferentStereoscopicPresentations(playlists[i], playlists[j]))
+        continue;
+
       const bool iIs3D{!playlists[i].dependentViewClips.empty()};
       const bool jIs3D{!playlists[j].dependentViewClips.empty()};
-
-      // Two stereoscopic presentations of the same content are still two presentations.
-      if (iIs3D && jIs3D && playlists[i].dependentViewClips != playlists[j].dependentViewClips)
-        continue;
 
       // Where only one is stereoscopic, keep that one. Its base view is the 2D presentation,
       // so a viewer who wants 2D loses nothing, while dropping it would leave a 3D disc with

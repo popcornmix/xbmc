@@ -122,6 +122,10 @@ struct PlaylistInformation
   //! unless the playlist is a stereoscopic presentation.
   std::vector<unsigned int> dependentViewClips;
 
+  //! Whether the playlist calls its base view the right eye (MVC_Base_view_R_flag). Only
+  //! means anything alongside dependentViewClips.
+  bool baseViewIsRightEye{false};
+
   //! Whether the playlist carries a secondary video stream, ie. it presents the content
   //! picture-in-picture (see IsPictureInPicturePresentation)
   bool hasSecondaryVideo{false};
@@ -138,9 +142,30 @@ struct PlaylistInformation
     pgStreams.clear();
     languages.clear();
     dependentViewClips.clear();
+    baseViewIsRightEye = false;
     hasSecondaryVideo = false;
   }
 };
+
+/*!
+ * \brief Whether two playlists of the same content present it differently in 3D.
+ *
+ * A 3D Blu-ray carries both presentations of its feature, and two stereoscopic playlists can
+ * differ in the clip that holds the second eye or in which coded view they call the left eye -
+ * neither of which anything else in a duplicate search looks at, the two being alike in length,
+ * chapters, base view clips and the streams they expose. Disagreeing about either makes them
+ * two presentations. A stereoscopic playlist beside the flat one it was built from is not
+ * covered here: that pair is one presentation, the flat one being the other's base view.
+ */
+inline bool AreDifferentStereoscopicPresentations(const PlaylistInformation& a,
+                                                  const PlaylistInformation& b)
+{
+  if (a.dependentViewClips.empty() || b.dependentViewClips.empty())
+    return false;
+
+  return a.dependentViewClips != b.dependentViewClips ||
+         a.baseViewIsRightEye != b.baseViewIsRightEye;
+}
 
 struct ClipInfo
 {

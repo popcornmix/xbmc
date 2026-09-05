@@ -419,6 +419,7 @@ void CStreamParser::ConvertBlurayPlaylistInformation(const BlurayPlaylistInforma
     if (!subPlayItem.clips.empty())
       p.dependentViewClips.emplace_back(subPlayItem.clips.front().clip);
   }
+  p.baseViewIsRightEye = b.baseViewIsRightEye;
 
   const DefaultStreams defaults{GetDefaultStreams(b)};
   const AspectRatioMap aspectRatios{GetClipAspectRatios(b)};

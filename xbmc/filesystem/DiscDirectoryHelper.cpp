@@ -2503,6 +2503,8 @@ bool IsSamePresentation(const PlaylistInformation& a,
 {
   if (a.duration != b.duration)
     return false;
+  if (AreDifferentStereoscopicPresentations(a, b))
+    return false;
   if (a.clips == b.clips)
     return true;
   if (aClipDurations.size() < 2 || a.chapters.size() != b.chapters.size() ||
@@ -2562,6 +2564,13 @@ const PlaylistInformation& GetBestMoviePlaylist(const std::vector<PlaylistInform
 
 bool IsRicherPresentation(const PlaylistInformation& a, const PlaylistInformation& b)
 {
+  // A stereoscopic playlist is the flat one plus a second eye, so the flat one is what its base
+  // view already plays. Dropping the other way round would leave a 3D disc with no way to reach
+  // its second eye - and as the 3D playlist is usually the higher numbered of the pair, that is
+  // what falling through to the playlist number would do.
+  if (a.dependentViewClips.empty() != b.dependentViewClips.empty())
+    return !a.dependentViewClips.empty();
+
   if (a.audioStreams.size() != b.audioStreams.size())
     return a.audioStreams.size() > b.audioStreams.size();
   if (a.pgStreams.size() != b.pgStreams.size())

@@ -275,3 +275,20 @@ TEST(TestStreamParser, TheDependentViewClipsAreCarriedThrough)
                                                   StreamDetails::DEFER);
   EXPECT_EQ(deferred.dependentViewClips, (std::vector<unsigned int>{2, 3}));
 }
+
+// A disc can hold the same feature over the same clips both ways round, so which coded view the
+// playlist calls the left eye is part of what tells its presentations apart
+TEST(TestStreamParser, TheBaseViewEyeIsCarriedThrough)
+{
+  BlurayPlaylistInformation b{MakePlaylist(100, 1, {}, {})};
+  AddDependentView(b, {2});
+
+  PlaylistInformation left;
+  CStreamParser::ConvertBlurayPlaylistInformation(b, left, {}, StreamDetails::INCLUDE);
+  EXPECT_FALSE(left.baseViewIsRightEye);
+
+  b.baseViewIsRightEye = true;
+  PlaylistInformation right;
+  CStreamParser::ConvertBlurayPlaylistInformation(b, right, {}, StreamDetails::INCLUDE);
+  EXPECT_TRUE(right.baseViewIsRightEye);
+}

@@ -265,6 +265,33 @@ TEST_F(TestBlurayDirectory, FilterPlaylists_KeepsPlaylistsDifferingByDependentVi
   EXPECT_EQ(PlaylistNumbers(playlists), (std::vector<unsigned int>{800u, 801u}));
 }
 
+// A disc can hold the same feature over the same clips both ways round, and the playlists then
+// differ in nothing else the comparison looks at (eg. Drive Angry, playlists 99 and 100)
+TEST_F(TestBlurayDirectory, FilterPlaylists_KeepsPlaylistsDifferingByBaseViewEye)
+{
+  std::vector<PlaylistInformation> playlists{
+      MakePlaylist(99u, 2h, {1u}, {1min}, {2u}),
+      MakePlaylist(100u, 2h, {1u}, {1min}, {2u}),
+  };
+  playlists[1].baseViewIsRightEye = true;
+
+  EXPECT_TRUE(FilterPlaylists(playlists));
+  EXPECT_EQ(PlaylistNumbers(playlists), (std::vector<unsigned int>{99u, 100u}));
+}
+
+// The flag describes a second eye, so it says nothing about a playlist that names none
+TEST_F(TestBlurayDirectory, FilterPlaylists_IgnoresTheBaseViewEyeOfAFlatPlaylist)
+{
+  std::vector<PlaylistInformation> playlists{
+      MakePlaylist(800u, 2h, {1u}),
+      MakePlaylist(801u, 2h, {1u}),
+  };
+  playlists[1].baseViewIsRightEye = true;
+
+  EXPECT_TRUE(FilterPlaylists(playlists));
+  EXPECT_EQ(PlaylistNumbers(playlists), std::vector<unsigned int>{800u});
+}
+
 // Two copies of the same stereoscopic presentation collapse like any other pair
 TEST_F(TestBlurayDirectory, FilterPlaylists_RemovesDuplicateStereoscopicPlaylists)
 {
