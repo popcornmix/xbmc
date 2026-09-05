@@ -162,6 +162,37 @@ bool ParseOffsetMetadata(const uint8_t* data, size_t size, OffsetMetadata& metad
   return false;
 }
 
+bool ParseOffsetMetadataAvcc(const uint8_t* data,
+                             size_t size,
+                             unsigned int nalLengthSize,
+                             OffsetMetadata& metadata)
+{
+  if (!data || nalLengthSize < 1 || nalLengthSize > 4)
+    return false;
+
+  size_t i{0};
+  while (i + nalLengthSize <= size)
+  {
+    size_t length{0};
+    for (unsigned int b = 0; b < nalLengthSize; ++b)
+      length = (length << 8) | data[i + b];
+    i += nalLengthSize;
+
+    if (length == 0 || length > size - i)
+      return false;
+
+    if ((data[i] & NAL_TYPE_MASK) == NAL_TYPE_SEI && length <= MAX_SEI_SIZE)
+    {
+      if (ParseSei(Unescape(data + i + 1, length - 1), metadata))
+        return true;
+    }
+
+    i += length;
+  }
+
+  return false;
+}
+
 void COffsetMetadataStore::Add(double startPts, double frameDuration, OffsetMetadata&& metadata)
 {
   if (frameDuration <= 0.0)
