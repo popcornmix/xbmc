@@ -1301,12 +1301,14 @@ CDVDVideoCodec::VCReturn CDVDVideoCodecDRMPRIME::GetPicture(VideoPicture* pVideo
 
   int64_t framePTS = m_pFrame->best_effort_timestamp;
 
-  // While we are asked to drop, a gap in the pts of what comes out of the decoder is how many
-  // pictures it threw away. With the views of a multiview stream arriving as separate frames
-  // that share a pts the deltas are meaningless, so do not guess there.
-  if (m_pCodecContext->skip_frame > AVDISCARD_DEFAULT && !m_multiview)
+  // The second view of a multiview access unit repeats the first one's pts and is not a
+  // picture of its own, so it takes no part in measuring or counting them.
+  if (m_dropCtrl.IsNewPicture(framePTS))
   {
-    if (m_dropCtrl.m_state == CDropControl::VALID && m_dropCtrl.m_lastPTS != AV_NOPTS_VALUE &&
+    // While we are asked to drop, a gap in the pts of what comes out of the decoder is how
+    // many pictures it threw away.
+    if (m_pCodecContext->skip_frame > AVDISCARD_DEFAULT &&
+        m_dropCtrl.m_state == CDropControl::VALID && m_dropCtrl.m_lastPTS != AV_NOPTS_VALUE &&
         framePTS != AV_NOPTS_VALUE &&
         framePTS > (m_dropCtrl.m_lastPTS + m_dropCtrl.m_diffPTS * 1.5))
     {
@@ -1316,9 +1318,9 @@ CDVDVideoCodec::VCReturn CDVDVideoCodecDRMPRIME::GetPicture(VideoPicture* pVideo
                        static_cast<double>(m_dropCtrl.m_diffPTS))) - 1;
       m_droppedFrames += std::max(missed, 1);
     }
-  }
 
-  m_dropCtrl.Process(framePTS, m_pCodecContext->skip_frame > AVDISCARD_DEFAULT);
+    m_dropCtrl.Process(framePTS, m_pCodecContext->skip_frame > AVDISCARD_DEFAULT);
+  }
 
   if ((m_pFrame->flags & AV_FRAME_FLAG_KEY) != 0 || m_pFrame->pict_type == AV_PICTURE_TYPE_NONE)
   {
