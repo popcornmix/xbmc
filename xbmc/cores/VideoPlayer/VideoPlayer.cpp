@@ -992,6 +992,16 @@ bool CVideoPlayer::OpenDemuxStream()
     return false;
   }
 
+  // A matroska remux of a 3D disc carries the same plane offsets in its dependent view.
+  // The Blu-ray input stream's store wins when there is one; otherwise the demuxer's is
+  // the one to read
+  if (!IsBlurayInput())
+  {
+    std::unique_lock lock(m_offsetMetadataSection);
+    if (const auto* ffmpeg = dynamic_cast<CDVDDemuxFFmpeg*>(m_pDemuxer.get()))
+      m_offsetMetadata = ffmpeg->GetOffsetMetadata();
+  }
+
   m_SelectionStreams.Clear(StreamType::NONE, STREAM_SOURCE_DEMUX);
   m_SelectionStreams.Clear(StreamType::NONE, STREAM_SOURCE_NAV);
   m_SelectionStreams.Update(m_pInputStream, m_pDemuxer.get());
@@ -1022,6 +1032,14 @@ bool CVideoPlayer::OpenDemuxStream()
 
 void CVideoPlayer::CloseDemuxer()
 {
+  // the demuxer owns the remux offset store; the Blu-ray one outlives the demuxer
+  if (!IsBlurayInput())
+  {
+    std::unique_lock lock(m_offsetMetadataSection);
+    m_offsetMetadata.reset();
+    m_subtitleOffsetSequence = -1;
+  }
+
   m_pDemuxer.reset();
   m_SelectionStreams.Clear(StreamType::NONE, STREAM_SOURCE_DEMUX);
 
@@ -4450,15 +4468,51 @@ bool CVideoPlayer::OpenVideoStream(CDVDStreamInfo& hint, bool reset)
   return true;
 }
 
+bool CVideoPlayer::IsBlurayInput() const
+{
+#if defined(HAVE_LIBBLURAY)
+  return std::dynamic_pointer_cast<CDVDInputStreamBluray>(m_pInputStream) != nullptr;
+#else
+  return false;
+#endif
+}
+
 void CVideoPlayer::UpdateSubtitleOffsetSequence(const CDemuxStream* stream)
 {
   int sequence{-1};
+  bool isBluray{false};
 
 #if defined(HAVE_LIBBLURAY)
   const auto bluray = std::dynamic_pointer_cast<CDVDInputStreamBluray>(m_pInputStream);
+  isBluray = bluray != nullptr;
   if (bluray && stream && stream->dvdNavId > 0)
     sequence = bluray->GetSubtitleOffsetSequence(static_cast<unsigned int>(stream->dvdNavId));
 #endif
+
+  // A remux has no playlist to say which sequence a PG stream follows, but it keeps the
+  // disc's stream order, and on the discs measured PG stream n follows sequence n. Only
+  // the main demuxer's PG streams count: an external subtitle file comes from another
+  // demuxer, and a muxed-in text track would shift the numbering
+  if (!isBluray && stream && m_pDemuxer && stream->codec == AV_CODEC_ID_HDMV_PGS_SUBTITLE &&
+      stream->demuxerId == m_pDemuxer->GetDemuxerId())
+  {
+    std::unique_lock lock(m_offsetMetadataSection);
+    if (m_offsetMetadata)
+    {
+      int index{0};
+      for (const CDemuxStream* candidate : m_pDemuxer->GetStreams())
+      {
+        if (candidate->codec != AV_CODEC_ID_HDMV_PGS_SUBTITLE)
+          continue;
+        if (candidate->uniqueId == stream->uniqueId)
+        {
+          sequence = index;
+          break;
+        }
+        ++index;
+      }
+    }
+  }
 
   if (sequence != m_subtitleOffsetSequence.exchange(sequence) && sequence >= 0)
     CLog::Log(LOGDEBUG, "CVideoPlayer::{} - subtitles follow plane offset sequence {}",

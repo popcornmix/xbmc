@@ -412,6 +412,7 @@ public:
   void UpdateSubtitleOffsetSequence(const CDemuxStream* stream);
 
 protected:
+  bool IsBlurayInput() const;
   friend class CSelectionStreams;
 
   void OnStartup() override;

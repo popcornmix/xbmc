@@ -778,6 +778,9 @@ void CDVDDemuxFFmpeg::Flush()
   m_displayTime = 0;
   m_dtsAtDisplayTime = DVD_NOPTS_VALUE;
   m_seekToKeyFrame = false;
+
+  if (m_offsetMetadata)
+    m_offsetMetadata->Flush();
 }
 
 void CDVDDemuxFFmpeg::Abort()
@@ -1296,6 +1299,13 @@ DemuxPacket* CDVDDemuxFFmpeg::ReadInternal(bool keep)
       return pPacket;
     }
 
+    // Both sides of this test are ffmpeg stream indices: it has to run before iStreamId is
+    // rewritten to the Kodi uniqueId below. Not on a seek probe (keep), which hands the
+    // same access unit out again through Read().
+    if (!keep && m_offsetMetadata && pPacket->iStreamId == m_offsetStreamIndex &&
+        pPacket->pts != DVD_NOPTS_VALUE)
+      ReadOffsetMetadata(*pPacket);
+
     pPacket->iStreamId = stream->uniqueId;
     pPacket->demuxerId = GetDemuxerId();
   }
@@ -1800,6 +1810,7 @@ void CDVDDemuxFFmpeg::DisposeStreams()
     delete it->second;
   m_streams.clear();
   m_parsers.clear();
+  ResetOffsetMetadata();
 }
 
 CDemuxStream* CDVDDemuxFFmpeg::AddStream(int streamIdx)
@@ -2005,6 +2016,8 @@ CDemuxStream* CDVDDemuxFFmpeg::AddStream(int streamIdx)
           st->stereo_mode = stereoMode;
           st->multiview = multiview;
         }
+        if (multiview && pStream->codecpar->codec_id == AV_CODEC_ID_H264)
+          ConfigureOffsetMetadata(pStream, st);
 
         if (m_pInput->IsStreamType(DVDSTREAM_TYPE_DVD))
         {
@@ -2603,6 +2616,71 @@ bool CDVDDemuxFFmpeg::SupportsMultiviewDecode(AVCodecID codecId)
   // H.264 gained it well after HEVC, so this cannot be a version check.
   const AVClass* avClass = codec->priv_class;
   return av_opt_find(&avClass, "view_ids", nullptr, 0, AV_OPT_SEARCH_FAKE_OBJ) != nullptr;
+}
+
+void CDVDDemuxFFmpeg::ConfigureOffsetMetadata(const AVStream* pStream,
+                                              const CDemuxStreamVideo* stream)
+{
+  ResetOffsetMetadata();
+
+  // ISO 14496-15 avcC: the low two bits of byte 4 hold lengthSizeMinusOne
+  const uint8_t* extradata = pStream->codecpar->extradata;
+  if (!extradata || pStream->codecpar->extradata_size < 5 || extradata[0] != 1)
+    return;
+  if (stream->iFpsRate <= 0 || stream->iFpsScale <= 0)
+    return;
+
+  if (!m_offsetMetadata)
+    m_offsetMetadata = std::make_shared<KODI::VIDEO::BLURAY::COffsetMetadataStore>();
+  m_offsetStreamIndex = pStream->index;
+  m_offsetNalLengthSize = (extradata[4] & 0x03) + 1;
+  m_offsetFrameDuration = DVD_TIME_BASE * static_cast<double>(stream->iFpsScale) / stream->iFpsRate;
+}
+
+void CDVDDemuxFFmpeg::ReadOffsetMetadata(const DemuxPacket& packet)
+{
+  // Enough access units to cover a couple of GOPs before concluding the stream has none
+  constexpr unsigned int ACCESS_UNITS_BEFORE_GIVING_UP{120};
+
+  KODI::VIDEO::BLURAY::OffsetMetadata metadata;
+  if (!KODI::VIDEO::BLURAY::ParseOffsetMetadataAvcc(packet.pData, packet.iSize,
+                                                    m_offsetNalLengthSize, metadata))
+  {
+    if (!m_loggedOffsetMetadata && !m_loggedOffsetMetadataMissing &&
+        ++m_offsetAccessUnitsWithout == ACCESS_UNITS_BEFORE_GIVING_UP)
+    {
+      m_loggedOffsetMetadataMissing = true;
+      CLog::Log(LOGDEBUG,
+                "CDVDDemuxFFmpeg - expected plane offsets in the MVC dependent view, found none "
+                "in {} access units",
+                m_offsetAccessUnitsWithout);
+    }
+    return;
+  }
+
+  m_offsetAccessUnitsWithout = 0;
+  if (!m_loggedOffsetMetadata)
+  {
+    m_loggedOffsetMetadata = true;
+    CLog::Log(LOGDEBUG,
+              "CDVDDemuxFFmpeg - the MVC dependent view carries plane offsets, {} sequences",
+              metadata.sequences);
+  }
+
+  m_offsetMetadata->Add(packet.pts, m_offsetFrameDuration, std::move(metadata));
+}
+
+void CDVDDemuxFFmpeg::ResetOffsetMetadata()
+{
+  // Keep the store itself: CVideoPlayer holds a reference to it across a stream rebuild
+  if (m_offsetMetadata)
+    m_offsetMetadata->Flush();
+  m_offsetStreamIndex = -1;
+  m_offsetNalLengthSize = 0;
+  m_offsetFrameDuration = 0.0;
+  m_offsetAccessUnitsWithout = 0;
+  m_loggedOffsetMetadata = false;
+  m_loggedOffsetMetadataMissing = false;
 }
 
 bool CDVDDemuxFFmpeg::HasMvcExtension(const AVStream* pStream)

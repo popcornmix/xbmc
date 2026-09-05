@@ -55,6 +55,17 @@ struct OffsetMetadata
 bool ParseOffsetMetadata(const uint8_t* data, size_t size, OffsetMetadata& metadata);
 
 /*!
+ * \brief The same for an access unit whose NAL units are length-prefixed (ISO 14496-15
+ *        avcC), as a matroska or mp4 remux of an MVC disc carries them.
+ *
+ * \param nalLengthSize the size of the length field in bytes, from the avcC box
+ */
+bool ParseOffsetMetadataAvcc(const uint8_t* data,
+                             size_t size,
+                             unsigned int nalLengthSize,
+                             OffsetMetadata& metadata);
+
+/*!
  * \brief The offset metadata of the GOPs around the current position.
  *
  * Written by the demuxer as the dependent view is read and read by the render thread a few
