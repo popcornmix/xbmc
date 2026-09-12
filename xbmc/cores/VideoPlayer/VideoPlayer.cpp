@@ -3042,6 +3042,11 @@ void CVideoPlayer::HandleMessages()
       m_processInfo->ResetVideoCodecInfo();
       m_renderManager.ResetPictureInfo();
 
+      // A disc menu is kept out of the flush so that a seek does not wipe a page libbluray
+      // will not draw again. Nothing draws it again here either, and the disc it belongs to
+      // is about to go, so it would be left over the title that follows.
+      m_overlayContainer.Clear(DVDOverlaySource::MENU);
+
       m_pDemuxer.reset();
       m_pSubtitleDemuxer.reset();
       m_subtitleDemuxerMap.clear();
