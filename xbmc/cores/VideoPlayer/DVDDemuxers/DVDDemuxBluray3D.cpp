@@ -151,7 +151,8 @@ bool CDVDDemuxBluray3D::OpenDependentView()
 
   unsigned int clip{0};
   std::string codec;
-  if (!m_bluray->GetStereoscopicClip(clip, codec))
+  std::chrono::milliseconds inTime{0};
+  if (!m_bluray->GetStereoscopicClip(clip, codec, inTime))
     return false;
 
   // A clip that will not open is not going to open on the next access unit either, and
@@ -197,15 +198,21 @@ bool CDVDDemuxBluray3D::OpenDependentView()
 
   m_unopenableClip = -1;
 
-  // The clip starts at its beginning and the play item need not, so place the dependent
-  // view against the first base view timestamp rather than leave it to catch up.
-  m_resyncPending = true;
-
   MarkBaseViewStereoscopic();
   CalculatePtsOffset();
   CalculateFrameDuration();
 
   CLog::Log(LOGDEBUG, "CDVDDemuxBluray3D - playing clip {:05} as the dependent view", clip);
+
+  // The clip starts at its beginning and the play item need not, so place the dependent view
+  // where the play item does. The base view cannot be asked where that is: libbluray reaches
+  // the next play item while the base view access units of the one before it are still coming
+  // out of the demuxer, so the next base view timestamp may still belong to the play item
+  // being left - and where each clip restarts its timestamps, seeking to it lands the new clip
+  // past its own end. A resync already pending is a seek, which does need a base view
+  // timestamp: the play item it lands in need not be entered at its in time.
+  if (!m_resyncPending)
+    SeekDependent(inTime);
 
   return true;
 }
@@ -442,7 +449,8 @@ void CDVDDemuxBluray3D::CheckDependentView()
 {
   unsigned int clip{0};
   std::string codec;
-  if (!m_bluray->GetStereoscopicClip(clip, codec))
+  std::chrono::milliseconds inTime{0};
+  if (!m_bluray->GetStereoscopicClip(clip, codec, inTime))
   {
     // The play item now being read has no second eye of its own.
     if (m_dependent)
@@ -483,7 +491,7 @@ void CDVDDemuxBluray3D::FlushDependent()
   m_unopenableClip = -1;
 }
 
-void CDVDDemuxBluray3D::AlignDependent(double basePts)
+void CDVDDemuxBluray3D::PlaceDependent(double targetMs)
 {
   m_resyncPending = false;
 
@@ -501,17 +509,32 @@ void CDVDDemuxBluray3D::AlignDependent(double basePts)
     return;
 
   m_dependent->Flush();
+  m_dependent->SeekTime(std::max(0.0, targetMs), true, nullptr);
+}
 
-  // Convert the base view timestamp to the dependent view's own timeline, then land
-  // deliberately early. Being behind is recoverable by dropping packets, being ahead is not.
-  const double target{
-      std::max(0.0, DVD_TIME_TO_MSEC(basePts - m_ptsOffset) - SEEK_BACK_OFF_MS)};
+void CDVDDemuxBluray3D::SeekDependent(std::chrono::milliseconds inTime)
+{
+  const double target{static_cast<double>(inTime.count()) - SEEK_BACK_OFF_MS};
+
+  CLog::Log(LOGDEBUG,
+            "CDVDDemuxBluray3D - placing the dependent view at {}ms for a play item starting at "
+            "{}ms",
+            static_cast<int64_t>(std::max(0.0, target)), inTime.count());
+
+  PlaceDependent(target);
+}
+
+void CDVDDemuxBluray3D::AlignDependent(double basePts)
+{
+  // Convert the base view timestamp to the dependent view's own timeline.
+  const double target{DVD_TIME_TO_MSEC(basePts - m_ptsOffset) - SEEK_BACK_OFF_MS};
 
   CLog::Log(LOGDEBUG, "CDVDDemuxBluray3D - placing the dependent view at {}ms for a base view "
                       "at {}ms",
-            static_cast<int64_t>(target), static_cast<int64_t>(DVD_TIME_TO_MSEC(basePts)));
+            static_cast<int64_t>(std::max(0.0, target)),
+            static_cast<int64_t>(DVD_TIME_TO_MSEC(basePts)));
 
-  m_dependent->SeekTime(target, true, nullptr);
+  PlaceDependent(target);
 }
 
 bool CDVDDemuxBluray3D::SeekTime(double time, bool backwards, double* startpts)

@@ -121,6 +121,12 @@ private:
   //! \brief Discard buffered dependent view data and place it again once the base view lands.
   void FlushDependent();
 
+  //! \brief Discard anything buffered from the dependent view and seek it to \p targetMs.
+  void PlaceDependent(double targetMs);
+
+  //! \brief Seek the dependent view to just before where the current play item starts in it.
+  void SeekDependent(std::chrono::milliseconds inTime);
+
   //! \brief Seek the dependent view to just before the given base view timestamp.
   void AlignDependent(double basePts);
 

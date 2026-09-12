@@ -182,9 +182,12 @@ public:
    * \brief Get the clip holding the MVC dependent view for the current play item.
    * \param clip filled with the dependent view clip number
    * \param codec filled with the clip codec id, which gives the file extension
+   * \param inTime filled with where in the clip the play item starts
    * \return true if a dependent view clip was found
    */
-  bool GetStereoscopicClip(unsigned int& clip, std::string& codec) const;
+  bool GetStereoscopicClip(unsigned int& clip,
+                           std::string& codec,
+                           std::chrono::milliseconds& inTime) const;
 
   /*!
    * \brief Whether the base view is the right eye rather than the left.
