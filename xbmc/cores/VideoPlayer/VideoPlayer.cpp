@@ -751,6 +751,7 @@ CVideoPlayer::CVideoPlayer(IPlayerCallback& callback)
 
   m_bAbortRequest = false;
   m_offset_pts = 0.0;
+  m_seekRecoverTime = DVD_NOPTS_VALUE;
   m_playSpeed = DVD_PLAYSPEED_NORMAL;
   m_streamPlayerSpeed = DVD_PLAYSPEED_NORMAL;
   m_caching = CACHESTATE_DONE;
@@ -1433,6 +1434,7 @@ void CVideoPlayer::Prepare()
   m_CurrentAudioID3.hint.Clear();
   m_SpeedState.Reset(DVD_NOPTS_VALUE);
   m_offset_pts = 0;
+  m_seekRecoverTime = DVD_NOPTS_VALUE;
   m_CurrentAudio.lastdts = DVD_NOPTS_VALUE;
   m_CurrentVideo.lastdts = DVD_NOPTS_VALUE;
 
@@ -1790,6 +1792,34 @@ void CVideoPlayer::Process()
       {
         CThread::Sleep(100ms);
         continue;
+      }
+
+      // A seek that landed somewhere unreadable is indistinguishable from the end of the
+      // stream: the flush that went with it left nothing behind, and the first read after it
+      // says end of file. libbluray leaves a disc there whenever a clip seek fails - it warns,
+      // moves the position anyway, and what it moved to cannot be read. Go back to where
+      // playback was instead of ending the title, and only once, so that a position which is
+      // genuinely the end still ends it.
+      if (m_seekRecoverTime != DVD_NOPTS_VALUE && m_pDemuxer && m_CurrentVideo.packets == 0 &&
+          m_CurrentAudio.packets == 0)
+      {
+        const double recover{m_seekRecoverTime};
+        m_seekRecoverTime = DVD_NOPTS_VALUE;
+
+        CLog::Log(LOGWARNING, "{} - nothing could be read where the seek landed, returning to "
+                              "{:f}",
+                  __FUNCTION__, recover);
+
+        double start{DVD_NOPTS_VALUE};
+        if (m_pDemuxer->SeekTime(recover, true, &start))
+        {
+          if (start == DVD_NOPTS_VALUE)
+            start = DVD_MSEC_TO_TIME(recover) - m_State.time_offset;
+
+          m_State.dts = start;
+          FlushBuffers(start, true, true);
+          continue;
+        }
       }
 
       if (!m_pInputStream->IsEOF())
@@ -3110,6 +3140,12 @@ void CVideoPlayer::HandleMessages()
       //! to nirvana
       if (m_pInputStream->GetIPosTime() == nullptr)
         time -= m_State.time_offset/1000l;
+
+      // Where playback is now, in the same terms as the seek itself, so that a seek landing
+      // somewhere that cannot be read can return to it - see Process().
+      m_seekRecoverTime = (m_clock.GetClock() + m_State.time_offset) / 1000l;
+      if (m_pInputStream->GetIPosTime() == nullptr)
+        m_seekRecoverTime -= m_State.time_offset / 1000l;
 
       CLog::Log(LOGDEBUG, "demuxer seek to: {:f}", time);
       if (m_pDemuxer && m_pDemuxer->SeekTime(time, msg.GetBackward(), &start))

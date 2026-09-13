@@ -621,6 +621,11 @@ protected:
     }
   } m_SpeedState;
 
+  /*! Where playback was when the last seek was asked for, or DVD_NOPTS_VALUE once it has
+      been used or there is nothing to go back to. A seek that lands somewhere unreadable
+      reads as the end of the stream, and this is what Process() returns to instead. */
+  double m_seekRecoverTime{DVD_NOPTS_VALUE};
+
   /*! What CheckContinuity() has taken off the demuxer's timestamps to keep the player
       clock monotonic. Read by the render thread (see GetSubtitlePlaneOffset), so atomic. */
   std::atomic<double> m_offset_pts{0.0};
