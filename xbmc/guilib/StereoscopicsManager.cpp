@@ -652,6 +652,14 @@ std::string CStereoscopicsManager::GetVideoStereoMode() const
   return playerMode;
 }
 
+bool CStereoscopicsManager::IsPlayerInMenu()
+{
+  const auto& components = CServiceBroker::GetAppComponents();
+  const auto appPlayer = components.GetComponent<CApplicationPlayer>();
+
+  return appPlayer && appPlayer->IsInMenu();
+}
+
 bool CStereoscopicsManager::IsVideoStereoscopic() const
 {
   std::string mode = GetVideoStereoMode();
@@ -699,7 +707,12 @@ void CStereoscopicsManager::UpdateStereoModeForStream()
   {
     // exit stereo mode if started item is not stereoscopic
     // and if user prefers to stop 3D playback when movie is finished
-    if (mode != RenderStereoMode::OFF &&
+    //
+    // Not for a disc menu. Its pages come and go as play items, only some of them 3D, and
+    // each arrives as a stream change of its own - so following them means reconfiguring the
+    // display both ways for every page, which one menu can do several times over while it
+    // loads. What the menu leads to decides the mode instead.
+    if (!IsPlayerInMenu() && mode != RenderStereoMode::OFF &&
         m_settings->GetBool(CSettings::SETTING_VIDEOPLAYER_QUITSTEREOMODEONSTOP))
       SetStereoMode(RenderStereoMode::OFF);
     return;
