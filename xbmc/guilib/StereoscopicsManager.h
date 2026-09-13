@@ -104,6 +104,9 @@ private:
   std::string GetVideoStereoMode() const;
   bool IsVideoStereoscopic() const;
 
+  //! \brief Whether what is playing is showing a disc menu.
+  static bool IsPlayerInMenu();
+
   void SetStereoModeByUser(const RenderStereoMode mode);
 
   /*! Whether the stereo mode of the stream being played has been settled - see
