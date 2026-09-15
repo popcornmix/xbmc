@@ -175,6 +175,8 @@ void CRenderer::Render(int idx, float depth)
     }
   }
 
+  m_lastDrawnPlaneOffset = m_subtitlePlaneOffset;
+
   ReleaseUnused();
 }
 
@@ -563,6 +565,12 @@ void CRenderer::PrepareOverlays(int idx)
 
   m_prevHadImageSpu = hasImageSpu;
   m_prevHadLibassImages = hasLibassImages;
+
+  // A title may vary the plane offset every frame, moving the subtitle in depth without
+  // touching its bitmap, which nothing else here would notice. Compared against what was
+  // drawn rather than what was last seen, so a skipped GUI walk keeps asking.
+  if ((hasImageSpu || hasLibassImages) && m_subtitlePlaneOffset != m_lastDrawnPlaneOffset)
+    doMarkDirty = true;
 
   if (doMarkDirty)
     MarkDirty();
