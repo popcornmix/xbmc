@@ -246,6 +246,10 @@ namespace OVERLAY {
     //! What the disc asks the subtitle plane to be shifted by, in the video's own pixels,
     //! or nothing where the title places its subtitles in depth no differently frame to frame.
     std::optional<int> m_subtitlePlaneOffset;
+
+    //! The offset the overlays on screen were last actually drawn with. Compared against
+    //! m_subtitlePlaneOffset to notice a depth change a redraw has yet to show.
+    std::optional<int> m_lastDrawnPlaneOffset;
     // Current subtitle position
     int m_subtitlePosition{0};
     // Current subtitle position from resolution info,

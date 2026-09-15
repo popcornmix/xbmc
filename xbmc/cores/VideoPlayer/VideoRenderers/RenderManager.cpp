@@ -354,9 +354,14 @@ void CRenderManager::FrameMove()
   m_playerPort->UpdateGuiRender(IsGuiLayer() || !m_pRenderer->VideoBypassesFramebuffer() ||
                                 firstFrame);
 
+  // Must be set before PrepareOverlays, which dirties on a change: the GUI walk-skip
+  // decision is taken after FrameMove and before anything renders.
+  m_overlays.SetSubtitlePlaneOffset(
+      m_playerPort->GetSubtitlePlaneOffset(m_Queue[m_presentsource].pts));
+
   // Run libass for the current PTS and cache the output for ConvertLibass
   // to use during the render pass. PrepareOverlays MarkDirty's on libass
-  // changes and on PGS/DVB/SPU arrival/disappearance.
+  // changes, on PGS/DVB/SPU arrival/disappearance and on a plane offset change.
   m_overlays.PrepareOverlays(m_presentsource);
 }
 
@@ -657,8 +662,6 @@ void CRenderManager::Render(bool clear, DWORD flags, DWORD alpha, bool gui)
     CRect src, dst, view;
     m_pRenderer->GetVideoRect(src, dst, view);
     m_overlays.SetVideoRect(src, dst, view);
-    m_overlays.SetSubtitlePlaneOffset(
-        m_playerPort->GetSubtitlePlaneOffset(m_Queue[m_presentsource].pts));
     m_overlays.Render(m_presentsource);
 
     if (m_renderDebug)
