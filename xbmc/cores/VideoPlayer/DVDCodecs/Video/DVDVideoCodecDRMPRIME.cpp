@@ -436,14 +436,6 @@ bool CDVDVideoCodecDRMPRIME::Open(CDVDStreamInfo& hints, CDVDCodecOptions& optio
   m_pCodecContext->time_base.den = DVD_TIME_BASE;
   m_pCodecContext->thread_count = CServiceBroker::GetCPUInfo()->GetCPUCount();
 
-  // Frame threading overlaps consecutive frames, which multiview coding does not
-  // allow: the dependent view of an access unit predicts from the base view of
-  // that same access unit, so the two cannot be decoded in parallel and the
-  // threads only add synchronisation. Measured on an H.264 MVC stream it is
-  // about a quarter slower than decoding the views with slice threading alone.
-  if (m_multiview)
-    m_pCodecContext->thread_type = FF_THREAD_SLICE;
-
   if (hints.extradata)
   {
     m_pCodecContext->extradata =
