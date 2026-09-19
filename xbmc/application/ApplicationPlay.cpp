@@ -160,10 +160,23 @@ void CApplicationPlay::GetOptionsAndUpdateItem()
       {
         // See if there is resume point in the database
         CBookmark bookmark;
+        std::string playlistPath;
         if (db.GetResumeBookMark(path, bookmark))
         {
           m_options.starttime = bookmark.timeInSeconds;
           m_options.state = bookmark.playerState;
+        }
+        else if (::UTILS::DISCS::IsBlurayDiscImage(m_item) &&
+                 db.GetDiscResumeBookMark(path, bookmark, playlistPath))
+        {
+          // A disc's resume point belongs to the playlist that was playing rather than to the
+          // disc, so resume that playlist. The point goes on the item as well as into the
+          // options: CDVDInputStreamBluray reads the playlist to resume out of the state the
+          // item carries.
+          m_options.starttime = bookmark.timeInSeconds;
+          m_options.state = bookmark.playerState;
+          m_item.GetVideoInfoTag()->SetResumePoint(bookmark);
+          m_item.SetDynPath(playlistPath);
         }
         else if (m_options.starttime == 0.0)
           GetEpisodeBookmark(m_item, m_options, db);
