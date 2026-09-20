@@ -380,6 +380,9 @@ bool CDVDVideoCodecDRMPRIME::Open(CDVDStreamInfo& hints, CDVDCodecOptions& optio
   m_pCodecContext->time_base.num = 1;
   m_pCodecContext->time_base.den = DVD_TIME_BASE;
   m_pCodecContext->thread_count = CServiceBroker::GetCPUInfo()->GetCPUCount();
+  // a hardware decoder can only size its frame pool if it is told how many frames the
+  // player holds on to; one more than the render queue covers the one in transit
+  m_pCodecContext->extra_hw_frames = GetAllowedReferences() + 1;
 
   if (hints.extradata)
   {
