@@ -14,6 +14,7 @@
 #include "jobs/Job.h"
 #include "threads/CriticalSection.h"
 
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <utility>
@@ -132,6 +133,16 @@ public:
    */
   void CleanupUnusedImages(bool immediately = false);
 
+  /*!
+   \brief Total GPU memory currently held by loaded large images, in bytes.
+   */
+  uint32_t GetMemoryUsage() const;
+
+  /*!
+   \brief Number of large images currently loaded.
+   */
+  size_t GetImageCount() const;
+
 private:
   class CLargeTexture
   {
@@ -149,6 +160,7 @@ private:
 
     const std::string& GetPath() const { return m_path; }
     const CTextureArray& GetTexture() const { return m_texture; }
+    uint32_t GetMemoryUsage() const;
     unsigned int GetTargetWidth() const { return m_targetWidth; }
     unsigned int GetTargetHeight() const { return m_targetHeight; }
     CAspectRatio::AspectRatio GetAspectRatio() const { return m_aspectRatio; }
@@ -176,6 +188,6 @@ private:
   typedef std::vector<CLargeTexture *>::iterator listIterator;
   typedef std::vector< std::pair<unsigned int, CLargeTexture *> >::iterator queueIterator;
 
-  CCriticalSection m_listSection;
+  mutable CCriticalSection m_listSection;
 };
 

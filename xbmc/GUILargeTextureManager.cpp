@@ -148,6 +148,17 @@ bool CGUILargeTextureManager::CLargeTexture::DeleteIfRequired(bool deleteImmedia
   return false;
 }
 
+uint32_t CGUILargeTextureManager::CLargeTexture::GetMemoryUsage() const
+{
+  uint32_t memUsage = 0;
+  for (const auto& texture : m_texture.m_textures)
+  {
+    if (texture)
+      memUsage += sizeof(CTexture) + (texture->GetPitch() * texture->GetRows());
+  }
+  return memUsage;
+}
+
 void CGUILargeTextureManager::CLargeTexture::SetTexture(std::unique_ptr<CTexture> texture)
 {
   assert(!m_texture.size());
@@ -176,6 +187,23 @@ void CGUILargeTextureManager::CleanupUnusedImages(bool immediately)
     else
       ++it;
   }
+}
+
+uint32_t CGUILargeTextureManager::GetMemoryUsage() const
+{
+  std::unique_lock lock(m_listSection);
+  uint32_t memUsage = 0;
+  for (const auto* image : m_allocated)
+  {
+    memUsage += image->GetMemoryUsage();
+  }
+  return memUsage;
+}
+
+size_t CGUILargeTextureManager::GetImageCount() const
+{
+  std::unique_lock lock(m_listSection);
+  return m_allocated.size();
 }
 
 // if available, increment reference count, and return the image.

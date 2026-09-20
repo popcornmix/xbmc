@@ -110,6 +110,9 @@ public:
   void Cleanup();
   void Dump() const;
   uint32_t GetMemoryUsage() const;
+  uint32_t GetUnusedMemoryUsage() const;
+  size_t GetTextureCount() const { return m_vecTextures.size(); }
+  size_t GetUnusedTextureCount() const { return m_unusedTextures.size(); }
   void Flush();
   std::string GetTexturePath(const std::string& textureName, bool directory = false);
   std::vector<std::string> GetBundledTexturesFromPath(const std::string& texturePath);
