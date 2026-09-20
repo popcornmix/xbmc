@@ -10,6 +10,7 @@
 
 #include "CompileInfo.h"
 #include "GUIInfoManager.h"
+#include "GUILargeTextureManager.h"
 #include "ServiceBroker.h"
 #include "addons/Skin.h"
 #include "commons/ilog.h"
@@ -20,6 +21,7 @@
 #include "guilib/GUIFontManager.h"
 #include "guilib/GUITextLayout.h"
 #include "guilib/GUIWindowManager.h"
+#include "guilib/TextureManager.h"
 #include "input/WindowTranslator.h"
 #include "settings/AdvancedSettings.h"
 #include "settings/SettingsComponent.h"
@@ -133,6 +135,17 @@ void CGUIWindowDebugInfo::Process(unsigned int currentTime, CDirtyRegionList &di
                                    .GetFPS(),
                                strCores, ucAppName, dCPU, profiling);
 #endif
+
+    const CGUITextureManager& textureManager = CServiceBroker::GetGUI()->GetTextureManager();
+    const CGUILargeTextureManager& largeTextureManager =
+        CServiceBroker::GetGUI()->GetLargeTextureManager();
+    info += StringUtils::Format("\nTEX: {} KB ({}) + {} KB ({}) - LARGE: {} KB ({})",
+                                textureManager.GetMemoryUsage() / 1024,
+                                textureManager.GetTextureCount(),
+                                textureManager.GetUnusedMemoryUsage() / 1024,
+                                textureManager.GetUnusedTextureCount(),
+                                largeTextureManager.GetMemoryUsage() / 1024,
+                                largeTextureManager.GetImageCount());
   }
 
   // render the skin debug info
