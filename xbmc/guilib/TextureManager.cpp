@@ -196,6 +196,7 @@ void CTextureMap::Flush()
 void CTextureMap::FreeTexture()
 {
   m_texture.Free();
+  m_memUsage = 0;
 }
 
 void CTextureMap::SetHeight(int height)
@@ -216,7 +217,7 @@ bool CTextureMap::IsEmpty() const
 void CTextureMap::Add(std::unique_ptr<CTexture> texture, int delay)
 {
   if (texture)
-    m_memUsage += sizeof(CTexture) + (texture->GetTextureWidth() * texture->GetTextureHeight() * 4);
+    m_memUsage += sizeof(CTexture) + (texture->GetPitch() * texture->GetRows());
 
   m_texture.Add(std::move(texture), delay);
 }
@@ -617,6 +618,16 @@ unsigned int CGUITextureManager::GetMemoryUsage() const
   for (int i = 0; i < (int)m_vecTextures.size(); ++i)
   {
     memUsage += m_vecTextures[i]->GetMemoryUsage();
+  }
+  return memUsage;
+}
+
+unsigned int CGUITextureManager::GetUnusedMemoryUsage() const
+{
+  unsigned int memUsage = 0;
+  for (const auto& texture : m_unusedTextures)
+  {
+    memUsage += texture.first->GetMemoryUsage();
   }
   return memUsage;
 }
