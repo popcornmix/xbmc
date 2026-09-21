@@ -17,6 +17,7 @@ using namespace KODI::WINDOWING::GBM;
 namespace
 {
 std::once_flag flag;
+constexpr size_t BUFFERS_HELD{2};
 }
 
 bool CGBMUtils::CreateDevice(int fd)
@@ -79,18 +80,16 @@ CGBMUtils::CGBMDevice::CGBMSurface::CGBMSurfaceBuffer& CGBMUtils::CGBMDevice::CG
 {
   m_buffers.emplace(std::make_unique<CGBMSurfaceBuffer>(m_surface));
 
-  if (!static_cast<bool>(gbm_surface_has_free_buffers(m_surface)))
-  {
-    /*
-     * We want to use call_once here because we want it to be logged the first time that
-     * we have to release buffers. This means that the maximum amount of buffers had been reached.
-     * For mesa this should be 4 buffers but it may vary across other implementations.
-     */
-    std::call_once(flag, [this]()
-                   { CLog::Log(LOGDEBUG, "CGBMUtils - using {} buffers", m_buffers.size()); });
-
+  /*
+   * Hold the buffer being scanned out and the one just submitted; anything older cannot
+   * still be in use. Releasing the rest keeps the implementation from having to allocate
+   * a deeper set of buffers than the flip needs.
+   */
+  while (m_buffers.size() > BUFFERS_HELD)
     m_buffers.pop();
-  }
+
+  std::call_once(flag, [this]()
+                 { CLog::Log(LOGDEBUG, "CGBMUtils - holding {} buffers", m_buffers.size()); });
 
   return *m_buffers.back();
 }
