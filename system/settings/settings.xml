@@ -989,7 +989,7 @@
         </setting>
         <setting id="videoplayer.queuedatasize" type="integer" label="37132" help="37133">
           <level>2</level>
-          <default>256</default> <!-- 256 MB -->
+          <default>64</default> <!-- 64 MB -->
           <constraints>
             <options>playerqueuedatasizes</options>
           </constraints>
