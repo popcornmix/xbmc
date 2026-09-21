@@ -2743,7 +2743,7 @@
         </setting>
         <setting id="filecache.memorysize" type="integer" label="37105" help="37106">
           <level>2</level>
-          <default>64</default> <!-- 64 MB -->
+          <default>32</default> <!-- 32 MB -->
           <dependencies>
             <dependency type="enable">
               <condition setting="filecache.buffermode" operator="!is">3</condition>
