@@ -2093,6 +2093,11 @@ CDemuxStream* CDVDDemuxFFmpeg::AddStream(int streamIdx)
 
           if (av_dict_get(pStream->metadata, "title", NULL, 0))
             st->m_description = av_dict_get(pStream->metadata, "title", NULL, 0)->value;
+
+          // matroska tags carry their language as a key suffix: "3d-plane-eng"
+          if (const AVDictionaryEntry* plane =
+                  av_dict_get(pStream->metadata, "3d-plane", nullptr, AV_DICT_IGNORE_SUFFIX))
+            st->m_offsetSequence = KODI::VIDEO::BLURAY::ParseOffsetSequenceTag(plane->value);
           break;
         }
       }
