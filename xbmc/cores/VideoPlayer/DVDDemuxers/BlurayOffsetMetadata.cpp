@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <array>
+#include <charconv>
 #include <cmath>
 #include <mutex>
 #include <ranges>
@@ -191,6 +192,19 @@ bool ParseOffsetMetadataAvcc(const uint8_t* data,
   }
 
   return false;
+}
+
+std::optional<unsigned int> ParseOffsetSequenceTag(std::string_view value)
+{
+  unsigned int sequence{0};
+  const auto [end, error] = std::from_chars(value.data(), value.data() + value.size(), sequence);
+  if (error != std::errc() || end != value.data() + value.size())
+    return std::nullopt;
+
+  if (sequence < MAX_OFFSET_SEQUENCES || sequence == NO_OFFSET_SEQUENCE)
+    return sequence;
+
+  return std::nullopt;
 }
 
 void COffsetMetadataStore::Add(double startPts, double frameDuration, OffsetMetadata&& metadata)

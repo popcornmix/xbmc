@@ -13,6 +13,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <optional>
+#include <string_view>
 #include <vector>
 
 namespace KODI::VIDEO::BLURAY
@@ -64,6 +66,10 @@ bool ParseOffsetMetadataAvcc(const uint8_t* data,
                              size_t size,
                              unsigned int nalLengthSize,
                              OffsetMetadata& metadata);
+
+//! \brief The offset sequence MakeMKV's "3d-plane" tag names for a subtitle stream: 0-31,
+//!        NO_OFFSET_SEQUENCE, or nothing when the value is neither.
+std::optional<unsigned int> ParseOffsetSequenceTag(std::string_view value);
 
 /*!
  * \brief The offset metadata of the GOPs around the current position.

@@ -4531,15 +4531,19 @@ void CVideoPlayer::UpdateSubtitleOffsetSequence(const CDemuxStream* stream)
     sequence = bluray->GetSubtitleOffsetSequence(static_cast<unsigned int>(stream->dvdNavId));
 #endif
 
-  // A remux has no playlist to say which sequence a PG stream follows, but it keeps the
-  // disc's stream order, and on the discs measured PG stream n follows sequence n. Only
-  // the main demuxer's PG streams count: an external subtitle file comes from another
-  // demuxer, and a muxed-in text track would shift the numbering
+  // MakeMKV copies the playlist's sequence into a "3d-plane" tag. Without one, guess that PG
+  // stream n follows sequence n, which many discs do not.
   if (!isBluray && stream && m_pDemuxer && stream->codec == AV_CODEC_ID_HDMV_PGS_SUBTITLE &&
       stream->demuxerId == m_pDemuxer->GetDemuxerId())
   {
     std::unique_lock lock(m_offsetMetadataSection);
-    if (m_offsetMetadata)
+    const auto* tagged = dynamic_cast<const CDemuxStreamSubtitleFFmpeg*>(stream);
+    if (m_offsetMetadata && tagged && tagged->m_offsetSequence)
+    {
+      if (*tagged->m_offsetSequence != KODI::VIDEO::BLURAY::NO_OFFSET_SEQUENCE)
+        sequence = static_cast<int>(*tagged->m_offsetSequence);
+    }
+    else if (m_offsetMetadata)
     {
       int index{0};
       for (const CDemuxStream* candidate : m_pDemuxer->GetStreams())
