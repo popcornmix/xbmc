@@ -14,6 +14,7 @@
 #include "threads/SystemClock.h"
 #include <map>
 #include <memory>
+#include <optional>
 #include <vector>
 
 extern "C" {
@@ -63,6 +64,8 @@ public:
   std::string GetStreamName() override;
 
   std::string m_description;
+  std::optional<unsigned int> m_offsetSequence;
+
 protected:
   CDVDDemuxFFmpeg* m_parent;
   AVStream* m_stream = nullptr;
