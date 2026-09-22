@@ -205,3 +205,22 @@ TEST(TestBlurayOffsetMetadata, StoreKeepsTheMostRecentBlocks)
   EXPECT_EQ(store.GetOffset(99 * FRAME, 0), 1 + 99 % 9);
   EXPECT_EQ(store.GetOffset(0.0, 0), 0);
 }
+
+TEST(TestBlurayOffsetMetadata, ReadsTheSequenceARemuxTagNames)
+{
+  EXPECT_EQ(ParseOffsetSequenceTag("0"), 0u);
+  EXPECT_EQ(ParseOffsetSequenceTag("9"), 9u);
+  EXPECT_EQ(ParseOffsetSequenceTag("31"), 31u);
+  EXPECT_EQ(ParseOffsetSequenceTag("255"), NO_OFFSET_SEQUENCE);
+}
+
+TEST(TestBlurayOffsetMetadata, RejectsATagThatNamesNoSequence)
+{
+  EXPECT_FALSE(ParseOffsetSequenceTag("32").has_value());
+  EXPECT_FALSE(ParseOffsetSequenceTag("254").has_value());
+  EXPECT_FALSE(ParseOffsetSequenceTag("-1").has_value());
+  EXPECT_FALSE(ParseOffsetSequenceTag("").has_value());
+  EXPECT_FALSE(ParseOffsetSequenceTag("2a").has_value());
+  EXPECT_FALSE(ParseOffsetSequenceTag(" 2").has_value());
+  EXPECT_FALSE(ParseOffsetSequenceTag("4294967296").has_value());
+}
