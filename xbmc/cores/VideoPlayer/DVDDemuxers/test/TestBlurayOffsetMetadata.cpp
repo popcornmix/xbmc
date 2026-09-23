@@ -177,6 +177,39 @@ TEST(TestBlurayOffsetMetadata, StoreFindsTheFrameAtATime)
   EXPECT_EQ(store.GetOffset(5000.0, 5), 0);
 }
 
+TEST(TestBlurayOffsetMetadata, StoreStartsAnOpenGopAtItsFirstShownFrame)
+{
+  OffsetMetadata metadata;
+  ASSERT_TRUE(Parse(AccessUnit({0x40}, 1, 3, {1, 2, 3}), metadata));
+
+  // Carried by the keyframe at 5000; a leading frame decoded after it is shown one frame earlier.
+  COffsetMetadataStore store;
+  store.Add(5000.0, FRAME, std::move(metadata));
+  store.NoteFrame(4000.0);
+
+  EXPECT_EQ(store.GetOffset(4000.0, 0), 1);
+  EXPECT_EQ(store.GetOffset(5000.0, 0), 2);
+  EXPECT_EQ(store.GetOffset(6000.0, 0), 3);
+
+  store.NoteFrame(6000.0);
+  EXPECT_EQ(store.GetOffset(4000.0, 0), 1);
+}
+
+TEST(TestBlurayOffsetMetadata, StoreIgnoresAFrameFarBeforeTheNewestBlock)
+{
+  OffsetMetadata metadata;
+  ASSERT_TRUE(Parse(AccessUnit({0x40}, 1, 2, {1, 2}), metadata));
+
+  COffsetMetadataStore store;
+  store.NoteFrame(0.0);
+  store.Add(50000.0, FRAME, std::move(metadata));
+
+  // Too far back for a leading frame: a loop or a timestamp jump.
+  store.NoteFrame(20000.0);
+  EXPECT_EQ(store.GetOffset(50000.0, 0), 1);
+  EXPECT_EQ(store.GetOffset(20000.0, 0), 0);
+}
+
 TEST(TestBlurayOffsetMetadata, StoreForgetsWhatItIsToldTo)
 {
   OffsetMetadata metadata;
