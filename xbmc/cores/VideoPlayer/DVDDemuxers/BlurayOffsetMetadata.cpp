@@ -219,6 +219,18 @@ void COffsetMetadataStore::Add(double startPts, double frameDuration, OffsetMeta
     m_entries.pop_front();
 }
 
+void COffsetMetadataStore::NoteFrame(double pts)
+{
+  std::unique_lock lock(m_section);
+
+  if (m_entries.empty())
+    return;
+
+  SEntry& newest{m_entries.back()};
+  if (pts < newest.startPts && newest.startPts - pts <= MAX_LEADING_FRAMES * newest.frameDuration)
+    newest.startPts = pts;
+}
+
 int COffsetMetadataStore::GetOffset(double pts, unsigned int sequence) const
 {
   std::unique_lock lock(m_section);

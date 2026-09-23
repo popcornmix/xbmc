@@ -2726,6 +2726,8 @@ void CDVDDemuxFFmpeg::ReadOffsetMetadata(const DemuxPacket& packet)
   if (!KODI::VIDEO::BLURAY::ParseOffsetMetadataAvcc(packet.pData, packet.iSize,
                                                     m_offsetNalLengthSize, metadata))
   {
+    m_offsetMetadata->NoteFrame(packet.pts);
+
     if (!m_loggedOffsetMetadata && !m_loggedOffsetMetadataMissing &&
         ++m_offsetAccessUnitsWithout == ACCESS_UNITS_BEFORE_GIVING_UP)
     {

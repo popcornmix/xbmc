@@ -88,6 +88,10 @@ public:
    */
   void Add(double startPts, double frameDuration, OffsetMetadata&& metadata);
 
+  //! \brief A later access unit of the newest block's GOP. Its metadata starts at the first
+  //!        frame shown, which in an open GOP is a leading frame decoded after the carrier.
+  void NoteFrame(double pts);
+
   //! \brief The offset a sequence asks for at \p pts, or 0 when nothing describes it.
   int GetOffset(double pts, unsigned int sequence) const;
 
@@ -96,6 +100,9 @@ public:
 private:
   //! Enough to cover the demux buffer several times over; a GOP is around a second.
   static constexpr size_t MAX_ENTRIES{32};
+
+  //! More than an open GOP's leading frames: a timestamp further back is a discontinuity.
+  static constexpr double MAX_LEADING_FRAMES{8.0};
 
   struct SEntry
   {
