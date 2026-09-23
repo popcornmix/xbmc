@@ -274,7 +274,10 @@ void CDVDDemuxBluray3D::ReadOffsetMetadata(const DemuxPacket& dependent, double 
 
   KODI::VIDEO::BLURAY::OffsetMetadata metadata;
   if (!KODI::VIDEO::BLURAY::ParseOffsetMetadata(dependent.pData, dependent.iSize, metadata))
+  {
+    m_bluray->GetOffsetMetadata()->NoteFrame(pts);
     return;
+  }
 
   if (!m_loggedOffsetMetadata)
   {
