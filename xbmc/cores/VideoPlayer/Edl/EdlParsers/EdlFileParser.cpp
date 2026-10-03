@@ -22,6 +22,8 @@ using namespace XFILE;
 
 std::string CEdlFileParser::GetEdlFilePath(const CFileItem& item) const
 {
+  if (item.HasProperty("edlpath"))
+    return item.GetProperty("edlpath").asString();
   return URIUtils::ReplaceExtension(item.GetDynPath(), ".edl");
 }
 
