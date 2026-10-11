@@ -459,7 +459,11 @@ const CTextureArray& CGUITextureManager::Load(const std::string& strTextureName,
   }
   else
   {
-    pTexture = CTexture::LoadFromFile(strPath);
+    // a GUI texture is never drawn larger than the screen, so decoding one at more than the
+    // GUI resolution only costs memory
+    const CGraphicContext& gfx = CServiceBroker::GetWinSystem()->GetGfxContext();
+    pTexture = CTexture::LoadFromFile(strPath, gfx.GetWidth(), gfx.GetHeight(),
+                                      CAspectRatio::KEEP);
     if (!pTexture)
       return emptyTexture;
     width = pTexture->GetWidth();
