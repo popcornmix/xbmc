@@ -25,6 +25,9 @@
 #include "cores/VideoPlayer/Process/gbm/ProcessInfoGBM.h"
 #include "cores/VideoPlayer/VideoRenderers/HwDecRender/RendererDRMPRIME.h"
 #include "cores/VideoPlayer/VideoRenderers/HwDecRender/RendererDRMPRIMEGLES.h"
+#ifdef HAVE_DVBRIDGE
+#include "cores/VideoPlayer/VideoRenderers/HwDecRender/RendererDRMPRIMEDV.h"
+#endif
 #include "cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.h"
 #include "cores/VideoPlayer/VideoRenderers/RenderFactory.h"
 #include "rendering/gles/GuiCompositeShaderGLES.h"
@@ -171,6 +174,9 @@ bool CWinSystemGbmGLESContext::InitWindowSystem()
     GBM::VAAPIRegister(m_vaapiProxy.get(), deepColor);
   }
 
+#ifdef HAVE_DVBRIDGE
+  CRendererDRMPRIMEDV::Register();
+#endif
   CRendererDRMPRIMEGLES::Register();
   CRendererDRMPRIME::Register();
   CDVDVideoCodecDRMPRIME::Register();

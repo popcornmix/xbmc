@@ -63,6 +63,10 @@ if("gbm" IN_LIST CORE_PLATFORM_NAME_LC OR "wayland" IN_LIST CORE_PLATFORM_NAME_L
     list(APPEND HEADERS RendererDRMPRIMEGLES.h
                         DRMPRIMECaptureGLES.h
                         DRMPRIMEEGL.h)
+    if(ENABLE_DVBRIDGE)
+      list(APPEND SOURCES RendererDRMPRIMEDV.cpp)
+      list(APPEND HEADERS RendererDRMPRIMEDV.h)
+    endif()
   endif()
 endif()
 
