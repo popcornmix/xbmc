@@ -1,6 +1,7 @@
 set(SOURCES DataCacheCore.cpp
             FFmpeg.cpp
-            VideoSettings.cpp)
+            VideoSettings.cpp
+            VideoSourceSideData.cpp)
 
 set(HEADERS DataCacheCore.h
             EdlEdit.h
@@ -9,6 +10,7 @@ set(HEADERS DataCacheCore.h
             IPlayer.h
             IPlayerCallback.h
             MenuType.h
-            VideoSettings.h)
+            VideoSettings.h
+            VideoSourceSideData.h)
 
 core_add_library(cores)

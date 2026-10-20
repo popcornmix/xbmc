@@ -15,6 +15,9 @@
 #include "utils/StringUtils.h"
 #include "utils/log.h"
 #include "windowing/GraphicContext.h"
+#ifdef HAVE_DVBRIDGE
+#include "utils/DVBridgeDiagnosticState.h"
+#endif
 
 #include "PlatformDefs.h"
 
@@ -527,6 +530,11 @@ bool CDRMUtils::OpenDrm(bool needConnector)
     drmVersionPtr version = drmGetVersion(m_fd);
     if (version)
     {
+#ifdef HAVE_DVBRIDGE
+      if (DVBRIDGE::DiagnosticsEnabled())
+        CLog::Log(LOGINFO, "DVBridge driver: name={} version={}.{}.{}", version->name,
+            version->version_major,version->version_minor,version->version_patchlevel);
+#endif
       if (strcmp(version->name, "amdgpu") == 0)
         m_drm_quirks |= QUIRK_NEEDSPRIMARY;
       drmFreeVersion(version);

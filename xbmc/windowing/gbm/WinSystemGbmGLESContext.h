@@ -87,6 +87,7 @@ private:
 #ifdef HAVE_DVBRIDGE
   std::unique_ptr<CDVBridgeGLES> m_dvBridge;
   CDVBridgeState m_dvState;
+  DVBRIDGE::DiagnosticFailures m_dvSetupFailures;
   bool m_dvFrame = false;
   bool m_dvOverlays = true;
 #endif

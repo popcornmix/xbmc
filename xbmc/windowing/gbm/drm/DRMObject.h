@@ -47,6 +47,14 @@ public:
   bool SetProperty(std::string_view name, uint64_t value);
   bool SupportsProperty(std::string_view name);
   std::optional<uint64_t> GetPropertyValue(std::string_view name) const;
+  // Read-only inventory status for diagnostics; never re-query DRM for a log.
+  bool HasPropertyInventory() const
+  {
+    if (!m_props || m_propsInfo.size() != m_props->count_props) return false;
+    for (const auto& property : m_propsInfo) if (!property) return false;
+    return true;
+  }
+  std::optional<int> PropertyInventoryError() const { return m_propertyInventoryError; }
   bool CachePropertyValue(uint32_t propertyId, uint64_t value);
   std::optional<bool> IsPropertyImmutable(std::string_view name) const;
   std::optional<std::pair<uint64_t, uint64_t>> GetRangePropertyLimits(std::string_view name) const;
@@ -69,6 +77,7 @@ protected:
   };
 
   std::vector<std::unique_ptr<drmModePropertyRes, DrmModePropertyResDeleter>> m_propsInfo;
+  std::optional<int> m_propertyInventoryError;
 
   int m_fd{-1};
 

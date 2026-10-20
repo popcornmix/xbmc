@@ -66,16 +66,29 @@ uint32_t CDRMObject::GetPropertyId(std::string_view name) const
 
 bool CDRMObject::GetProperties(uint32_t id, uint32_t type)
 {
-  m_props.reset(drmModeObjectGetProperties(m_fd, id, type));
+  auto* properties = drmModeObjectGetProperties(m_fd, id, type);
+  const int propertiesError = properties ? 0 : errno;
+  m_props.reset(properties);
   if (!m_props)
+  {
+    m_propertyInventoryError = propertiesError;
     return false;
+  }
+  m_propertyInventoryError.reset();
 
   m_id = id;
   m_type = type;
 
   for (uint32_t i = 0; i < m_props->count_props; i++)
-    m_propsInfo.emplace_back(std::unique_ptr<drmModePropertyRes, DrmModePropertyResDeleter>(
-        drmModeGetProperty(m_fd, m_props->props[i])));
+  {
+    std::unique_ptr<drmModePropertyRes, DrmModePropertyResDeleter> property(
+        drmModeGetProperty(m_fd, m_props->props[i]));
+    const int propertyError = property ? 0 : errno;
+    m_propsInfo.emplace_back(std::move(property));
+    // GetProperties' existing result is unchanged. Preserve only a known error
+    // from the exact failed query, not errno sampled during a later log.
+    if (!m_propsInfo.back()) m_propertyInventoryError = propertyError;
+  }
 
   return true;
 }

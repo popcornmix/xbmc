@@ -15,8 +15,15 @@
 #include "guilib/GUIWindowManager.h"
 #include "settings/Settings.h"
 #include "utils/log.h"
+#include "DVBridgeKernelLogReader.h"
+#include "jobs/JobManager.h"
+#include "utils/DVBridgeEdid.h"
+#ifdef HAVE_DVBRIDGE
+#include "cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h"
+#endif
 
 #include <chrono>
+#include <atomic>
 #include <algorithm>
 #include <errno.h>
 #include <string.h>
@@ -36,6 +43,74 @@ uint64_t DVNowMs()
   return std::chrono::duration_cast<std::chrono::milliseconds>(
       std::chrono::steady_clock::now().time_since_epoch()).count();
 }
+
+void CollectDVKernelLog()
+{
+  // Never perform kernel IO on Kodi's render thread, nor queue unbounded jobs.
+  static std::atomic<bool> pending{false};
+  auto jobs = CServiceBroker::GetJobManager();
+  if (!jobs || pending.exchange(true))
+    return;
+  jobs->Submit([] {
+    static DVBRIDGE::KernelLogReader reader;
+    // Up to three 50-ms batches, one pending job, one shared output budget.
+    // Preserve an explicit incomplete marker if even this bounded scan truncates.
+    for (unsigned pass = 0; pass < 3 && reader.Collect(); ++pass)
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    pending.store(false);
+  });
+}
+}
+
+void CDRMAtomic::ReportDVFailure(const char* stage, int error)
+{
+#ifdef HAVE_DVBRIDGE
+  if (m_dvRestoring)
+    DVBRIDGE::StreamTelemetry::NativeFailure(DVBRIDGE::OutputReason::RestoreFailed,
+        error,m_dvRetry.Count(),false);
+#endif
+  if (!DVBRIDGE::DiagnosticsEnabled() || !m_dvFailures.Record(DVNowMs(), stage, error))
+    return;
+  CLog::Log(LOGERROR,
+      "DVBridge output: stage={} errno={} failures={} activation_failures={} connector={} crtc={} mode={}x{} clock_khz={}",
+      stage, error, m_dvFailures.Count(), m_dvRetry.Count(),
+      m_connector ? m_connector->GetId() : 0, m_crtc ? m_crtc->GetId() : 0,
+      m_mode ? m_mode->hdisplay : 0, m_mode ? m_mode->vdisplay : 0,
+      m_mode ? m_mode->clock : 0);
+  // One bounded snapshot per connection identity. Never dump each frame's
+  // framebuffer or synchronization objects; they obscure the actual rejection.
+  const auto blobId = m_dvLinkKnown ? m_dvLinkBlob :
+      (m_connector ? m_connector->GetPropertyValue("EDID").value_or(0) : 0);
+  const auto connectorId = m_connector ? m_connector->GetId() : 0;
+  if (!m_dvSnapshot || m_dvSnapshotBlob != blobId || m_dvSnapshotConnector != connectorId)
+  {
+    m_dvSnapshot = true;
+    m_dvSnapshotBlob = blobId;
+    m_dvSnapshotConnector = connectorId;
+    std::vector<uint8_t> edid;
+    if (auto* blob = drmModeGetPropertyBlob(m_fd, blobId))
+    {
+      if (blob->length <= 32768 && blob->data)
+        edid.assign(static_cast<uint8_t*>(blob->data),
+                    static_cast<uint8_t*>(blob->data) + blob->length);
+      drmModeFreePropertyBlob(blob);
+    }
+    const auto caps = dvbridge_parse_edid(edid.data(), edid.size());
+    CLog::Log(LOGINFO, "DVBridge sink: edid_bytes={} status={} version={} legacy_vsif={} 2160p60={}",
+        edid.size(), dvbridge_edid_reason(caps.status), caps.version,
+        caps.legacy_vsif, caps.supports_2160p60);
+    constexpr char digits[] = "0123456789abcdef";
+    std::string hex;
+    for (size_t i = 0; i < std::min<size_t>(edid.size(), 1024); ++i)
+    {
+      hex += digits[edid[i] >> 4];
+      hex += digits[edid[i] & 15];
+    }
+    CLog::Log(LOGINFO, "DVBridge sink EDID (first 1024 bytes max): {}", hex);
+    if (m_req)
+      m_req->LogDVProperties();
+  }
+  CollectDVKernelLog();
 }
 
 void CDRMAtomic::RefreshDVLink()
@@ -62,9 +137,12 @@ void CDRMAtomic::RefreshDVLink()
 bool CDRMAtomic::DrmAtomicCommit(int fb_id, int flags, bool rendered, bool videoLayer, bool strict)
 {
   CDRMCrtc* oldCrtc = m_old_crtc;
-  const auto reject = [&](int error) {
+  const auto reject = [&](const char* stage, int error) {
     if (strict)
+    {
       if (m_dvActivating && !m_dvRestoring) m_dvRetry.Failed(error);
+      ReportDVFailure(stage, error);
+    }
     m_old_crtc = oldCrtc;
     FinishRequest(false);
     return false;
@@ -114,17 +192,19 @@ bool CDRMAtomic::DrmAtomicCommit(int fb_id, int flags, bool rendered, bool video
   if (flags & DRM_MODE_ATOMIC_ALLOW_MODESET)
   {
     if (!AddProperty(m_connector, "CRTC_ID", m_crtc->GetCrtcId()))
-      return reject(EINVAL);
+      return reject("connector-crtc", EINVAL);
 
     modeBlob = CDRMPropertyBlob(m_fd, m_mode, sizeof(*m_mode));
     if (!modeBlob.IsValid())
-      return reject(0);
+      return reject("mode-blob", 0);
 
     if (!AddProperty(m_crtc, "MODE_ID", modeBlob.Get()))
-      return reject(EINVAL);
+      return reject("mode-property", EINVAL);
+    if (DVBRIDGE::DiagnosticsEnabled())
+      m_req->signalMode = *m_mode;
 
     if (!AddProperty(m_crtc, "ACTIVE", m_active ? 1 : 0))
-      return reject(EINVAL);
+      return reject("active-property", EINVAL);
   }
 
   // In Direct-To-Plane (dual plane) mode m_gui_plane is the output
@@ -174,22 +254,23 @@ bool CDRMAtomic::DrmAtomicCommit(int fb_id, int flags, bool rendered, bool video
 
   if (strict && m_propertyFailure)
   {
-    return reject(EINVAL);
+    return reject("properties", EINVAL);
   }
 
   auto ret = drmModeAtomicCommit(m_fd, m_req->Get(), flags | DRM_MODE_ATOMIC_TEST_ONLY, nullptr);
   if (ret < 0)
   {
+    const int testError = errno;
     if (strict)
     {
-      const int error = errno;
-      CLog::LogF(LOGERROR, "transactional test commit rejected: {}", strerror(errno));
-      return reject(error);
+      return reject("atomic-test", testError);
     }
     CLog::LogF(LOGERROR,
                "test commit failed: ({}) - falling back to last successful atomic "
                "request",
-               strerror(errno));
+               strerror(testError));
+    if (DVBRIDGE::DiagnosticsEnabled() && m_dvFailures.Record(DVNowMs(), "native-atomic-test", testError))
+      CollectDVKernelLog();
 
     auto oldRequest = m_atomicRequestQueue.front().get();
     CDRMAtomicRequest::LogAtomicDiff(m_req, oldRequest);
@@ -204,8 +285,18 @@ bool CDRMAtomic::DrmAtomicCommit(int fb_id, int flags, bool rendered, bool video
   if (ret < 0)
   {
     const int error = errno;
-    CLog::LogF(LOGERROR, "atomic commit failed: {}", strerror(errno));
-    return reject(error);
+    if (!strict)
+      CLog::LogF(LOGERROR, "atomic commit failed: {}", strerror(errno));
+    if (!strict && DVBRIDGE::DiagnosticsEnabled() &&
+        m_dvFailures.Record(DVNowMs(), "native-atomic-commit", error))
+      CollectDVKernelLog();
+    return reject("atomic-commit", error);
+  }
+  if (strict)
+  {
+    if (DVBRIDGE::DiagnosticsEnabled() && m_dvFailures.Recovered(DVNowMs()))
+      CLog::Log(LOGINFO, "DVBridge output recovered: failures={} recoveries={}",
+          m_dvFailures.Count(), m_dvFailures.Recoveries());
   }
   FinishRequest(true);
   return true;
@@ -221,6 +312,10 @@ void CDRMAtomic::FinishRequest(bool accepted)
     // after Disable()). Without this, stale cached values cause
     // incorrect plane cleanup on subsequent video playback.
     m_req->CacheProperties();
+    if (m_req->signalMode)
+      m_committedMode = *m_req->signalMode;
+    if (m_signalDirty && DVBRIDGE::DiagnosticsEnabled())
+      ReportSignalState();
 
     if (m_atomicRequestQueue.size() > 1)
       m_atomicRequestQueue.pop_front();
@@ -237,6 +332,7 @@ void CDRMAtomic::FinishRequest(bool accepted)
   m_atomicRequestQueue.emplace_back(std::make_unique<CDRMAtomicRequest>());
   m_req = m_atomicRequestQueue.back().get();
   m_propertyFailure = false;
+  m_signalDirty = false;
 }
 
 bool CDRMAtomic::FlipPageTransactional(struct gbm_bo* bo, bool restore)
@@ -246,6 +342,7 @@ bool CDRMAtomic::FlipPageTransactional(struct gbm_bo* bo, bool restore)
   if (!bo)
   {
     if (m_dvActivating && !restore) m_dvRetry.Failed(EINVAL);
+    ReportDVFailure("missing-buffer", EINVAL);
     FinishRequest(false);
     return false;
   }
@@ -253,6 +350,7 @@ bool CDRMAtomic::FlipPageTransactional(struct gbm_bo* bo, bool restore)
   if (!fb)
   {
     if (m_dvActivating && !restore) m_dvRetry.Failed(EINVAL);
+    ReportDVFailure("framebuffer-import", 0);
     FinishRequest(false);
     return false;
   }
@@ -395,8 +493,48 @@ bool CDRMAtomic::SetActive(bool active)
 bool CDRMAtomic::AddProperty(CDRMObject* object, const char* name, uint64_t value)
 {
   const bool added = object && m_req && m_req->AddProperty(object, name, value);
+  if (added && DVBRIDGE::DiagnosticsEnabled() &&
+      (strcmp(name, "MODE_ID") == 0 || strcmp(name, "ACTIVE") == 0 ||
+       strcmp(name, "DVBRIDGE_DV_STANDARD_LAB") == 0 || strcmp(name, "HDR_OUTPUT_METADATA") == 0 ||
+       strcmp(name, "Colorspace") == 0 || strcmp(name, "max bpc") == 0 ||
+       strcmp(name, "Broadcast RGB") == 0))
+    m_signalDirty = true;
   m_propertyFailure |= !added;
   return added;
+}
+
+void CDRMAtomic::ReportSignalState()
+{
+  if (!m_connector || !m_crtc || !m_mode)
+    return;
+  // Cached values are updated only after an accepted real commit. No DRM query
+  // or per-frame log. max_bpc is a requested ceiling, not measured wire depth.
+  const auto get = [&](const char* name) { return m_connector->GetPropertyValue(name).value_or(0); };
+  const auto& mode = m_committedMode;
+  const std::array<uint64_t, 15> state{m_connector->GetId(), m_crtc->GetId(),
+      get("DVBRIDGE_DV_STANDARD_LAB"), get("HDR_OUTPUT_METADATA"), get("Colorspace"),
+      get("max bpc"), get("Broadcast RGB"), mode.hdisplay, mode.vdisplay, mode.clock,
+      mode.htotal, mode.vtotal, mode.flags, mode.vscan, m_crtc->GetPropertyValue("ACTIVE").value_or(0)};
+  if (m_signalKnown && state == m_signalState)
+    return;
+  m_signalKnown = true;
+  m_signalState = state;
+  const auto now = DVNowMs();
+  if (now - m_signalWindow >= 30000) { m_signalWindow = now; m_signalReports = 0; }
+  if (m_signalReports >= 8)
+  {
+    if (m_signalReports == 8)
+    {
+      ++m_signalReports;
+      CLog::Log(LOGWARNING, "DVBridge signal: further state changes suppressed for this 30-second window");
+    }
+    return;
+  }
+  ++m_signalReports;
+  CLog::Log(LOGINFO,
+      "DVBridge signal committed: connector={} crtc={} dv={} hdr_blob={} colorspace={} max_bpc={} rgb={} mode={}x{} clock_khz={} totals={}x{} flags={} vscan={} active={}",
+      state[0], state[1], state[2], state[3], state[4], state[5], state[6], state[7], state[8], state[9],
+      state[10], state[11], state[12], state[13], state[14]);
 }
 
 CDRMAtomic::CDRMAtomicRequest::CDRMAtomicRequest() : m_atomicRequest(drmModeAtomicAlloc())
@@ -463,6 +601,27 @@ void CDRMAtomic::CDRMAtomicRequest::LogAtomicRequest()
 {
   CLog::LogF(LOGDEBUG, "DRM Atomic Request:");
   LogAtomicRequest(LOGDEBUG, m_atomicRequestItems);
+}
+
+void CDRMAtomic::CDRMAtomicRequest::LogDVProperties()
+{
+  std::string message;
+  unsigned count = 0;
+  for (const auto& object : m_atomicRequestItems)
+    for (const auto& property : object.second)
+    {
+      const auto name = object.first->GetPropertyName(property.first);
+      if (name != "DVBRIDGE_DV_STANDARD_LAB" && name != "HDR_OUTPUT_METADATA" &&
+          name != "max bpc" && name != "Broadcast RGB" && name != "Colorspace" &&
+          name != "CRTC_ID" && name != "ACTIVE" && name != "VRR_ENABLED" &&
+          name != "CTM" && name != "GAMMA_LUT" && name != "DEGAMMA_LUT" &&
+          name != "rotation" && name != "alpha" && name != "COLOR_PIPELINE")
+        continue;
+      if (count++ < 48)
+        message += " " + std::to_string(object.first->GetId()) + ":" + name + "=" +
+                   std::to_string(property.second);
+    }
+  CLog::Log(LOGINFO, "DVBridge requested properties (48 max):{}", message);
 }
 
 void CDRMAtomic::CDRMAtomicRequest::LogAtomicRequest(

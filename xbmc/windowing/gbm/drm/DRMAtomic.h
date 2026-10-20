@@ -11,8 +11,10 @@
 #include "DRMUtils.h"
 #include "utils/log.h"
 #include "utils/DVBridgeOutputRetry.h"
+#include "utils/DVBridgeDiagnosticState.h"
 
 #include <cstdint>
+#include <array>
 #include <deque>
 #include <map>
 #include <memory>
@@ -58,6 +60,17 @@ private:
   bool m_dvLinkKnown{false};
   uint32_t m_dvLinkConnector{0}, m_dvLinkBlob{0}, m_dvLinkStatus{0};
   void RefreshDVLink();
+  void ReportDVFailure(const char* stage, int error);
+  void ReportSignalState();
+  bool m_signalDirty{false}, m_signalKnown{false};
+  std::array<uint64_t, 15> m_signalState{};
+  drmModeModeInfo m_committedMode{};
+  uint64_t m_signalWindow{0};
+  unsigned m_signalReports{0};
+  DVBRIDGE::DiagnosticFailures m_dvFailures;
+  bool m_dvSnapshot{false};
+  uint64_t m_dvSnapshotBlob{0};
+  uint32_t m_dvSnapshotConnector{0};
 
   bool m_need_modeset{true};
   bool m_active = true;
@@ -76,7 +89,9 @@ private:
 
     bool AddProperty(CDRMObject* object, const char* name, uint64_t value);
     void CacheProperties();
+    std::optional<drmModeModeInfo> signalMode;
     void LogAtomicRequest();
+    void LogDVProperties();
 
     static void LogAtomicDiff(CDRMAtomicRequest* current, CDRMAtomicRequest* old);
 
