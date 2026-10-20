@@ -138,4 +138,16 @@ inline bool EnhancedInfoEnabled()
   const auto settings = component ? component->GetSettings() : nullptr;
   return settings && settings->GetBool("dvbridge.enhancedinfo");
 }
+inline bool PlaybackMenuEnabled()
+{
+  const auto component = CServiceBroker::GetSettingsComponent();
+  const auto settings = component ? component->GetSettings() : nullptr;
+  return settings && settings->GetBool("dvbridge.playbackmenu");
+}
+inline bool AsyncPreparationEnabled()
+{
+  const auto component = CServiceBroker::GetSettingsComponent();
+  const auto settings = component ? component->GetSettings() : nullptr;
+  return settings && settings->GetBool("dvbridge.asyncpreparation");
+}
 } // namespace DVBRIDGE

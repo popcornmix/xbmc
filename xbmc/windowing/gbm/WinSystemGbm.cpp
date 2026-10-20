@@ -309,21 +309,48 @@ bool CWinSystemGbm::SetFullScreen(bool fullScreen, RESOLUTION_INFO& res, bool bl
 }
 
 #ifdef HAVE_DVBRIDGE
-bool CWinSystemGbm::SupportsNativeDVOutput() const
+bool CWinSystemGbm::SupportsDVOutputMode(bool requireCurrentMode) const
+{
+  if (!m_DRM) return false;
+  const auto usable = [](const drmModeModeInfo* mode) {
+    if (!mode || mode->hdisplay != 3840 || mode->vdisplay != 2160 ||
+        (mode->flags & (DRM_MODE_FLAG_INTERLACE | DRM_MODE_FLAG_DBLSCAN))) return false;
+    const double rate = mode->htotal && mode->vtotal ?
+        mode->clock * 1000.0 / mode->htotal / mode->vtotal : 0.0;
+    return CResolutionUtils::IsCB1RefreshRate(rate);
+  };
+  if (usable(m_DRM->GetSelectedMode())) return true;
+  if (requireCurrentMode) return false;
+  auto* connector = m_DRM->GetConnector();
+  if (!connector || !connector->IsConnected()) return false;
+  for (int i = 0; i < connector->GetModesCount(); ++i)
+    if (usable(connector->GetModeForIndex(i))) return true;
+  return false;
+}
+
+bool CWinSystemGbm::SupportsNativeDVOutput(bool requireCurrentMode) const
 {
   if (!m_info || !m_info->SupportsStandardDolbyVision() ||
       !std::dynamic_pointer_cast<CDRMAtomic>(m_DRM))
     return false;
-  const auto* mode = m_DRM->GetSelectedMode();
   auto* connector = m_DRM->GetConnector();
   return connector && connector->IsConnected() &&
-         connector->SupportsProperty("DVBRIDGE_DV_STANDARD_LAB") && mode &&
-         mode->hdisplay == 3840 && mode->vdisplay == 2160 &&
-         !(mode->flags & DRM_MODE_FLAG_INTERLACE);
+         connector->SupportsProperty("DVBRIDGE_DV_STANDARD_LAB") &&
+         SupportsDVOutputMode(requireCurrentMode);
 }
 
-bool CWinSystemGbm::FlipDVBridgePage(CDVBridgeState& state, bool restore)
+bool CWinSystemGbm::CompleteDVBridgePage(int timeoutMs)
 {
+  auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
+  if (!drm || !drm->HasPendingCB1Page()) return true;
+  if (!drm->CompleteCB1Page(timeoutMs)) return false;
+  m_GBM->GetDevice().GetSurface().CompleteTransactionalBuffer(true);
+  return true;
+}
+
+bool CWinSystemGbm::FlipDVBridgePage(CDVBridgeState& state, bool restore, bool async)
+{
+  if (!CompleteDVBridgePage()) return false;
   auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
   if (!drm || !m_GBM || !state.Captured())
     return false;
@@ -342,16 +369,13 @@ bool CWinSystemGbm::FlipDVBridgePage(CDVBridgeState& state, bool restore)
     {
       const double rate = mode->htotal && mode->vtotal
                               ? mode->clock * 1000.0 / mode->htotal / mode->vtotal : 0.0;
-      valid = false;
-      for (double supported : {24000.0 / 1001, 24.0, 25.0, 30000.0 / 1001,
-                               30.0, 50.0, 60000.0 / 1001, 60.0})
-        valid |= std::abs(rate - supported) < 0.012;
+      valid = CResolutionUtils::IsCB1RefreshRate(rate);
     }
   }
   if (valid)
     valid = state.Stage(*drm, restore);
-  const bool accepted = drm->FlipPageTransactional(valid ? bo : nullptr, restore);
-  surface.CompleteTransactionalBuffer(accepted);
+  const bool accepted = drm->FlipPageTransactional(valid ? bo : nullptr, restore, async);
+  if (!drm->HasPendingCB1Page()) surface.CompleteTransactionalBuffer(accepted);
   if (accepted && restore)
   {
     surface.EndTransactionalMode();

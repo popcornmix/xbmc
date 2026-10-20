@@ -118,6 +118,7 @@ public:
 class CResolutionUtils
 {
 public:
+  static bool IsCB1RefreshRate(double refresh);
   static RESOLUTION ChooseBestResolution(float fps, int width, int height, bool is3D,
                                         bool allowNativeProgressiveRates = false);
   static bool HasWhitelist();

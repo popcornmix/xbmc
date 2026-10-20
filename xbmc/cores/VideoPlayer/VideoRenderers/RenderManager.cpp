@@ -30,6 +30,7 @@
 
 #include <memory>
 #include <mutex>
+#include <optional>
 #ifdef CB1_HAS_HDR10_AI
 #include "guilib/GUIComponent.h"
 #include "guilib/GUIWindowManager.h"
@@ -48,6 +49,7 @@ void CRenderManager::CClockSync::Reset()
   m_errCount = 0;
   m_syncOffset = 0;
   m_enabled = false;
+  m_cb1Phase = false;
 }
 
 CRenderManager::CRenderManager(CDVDClock &clock, IRenderMsg *player) :
@@ -329,19 +331,30 @@ bool CRenderManager::PrepareHDR10AILookahead()
     const auto successor = std::next(queue.begin());
     const auto& head = m_Queue[queue.front()];
     double cutoff = head.pts;
+    double playing = m_dvdClock.GetClock();
+    bool cb1Async = false;
+#ifdef HAVE_DVBRIDGE
+    if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(CServiceBroker::GetWinSystem()))
+    {
+      cb1Async = window->CB1AsyncPlayback() && !m_dvdClock.IsPaused() &&
+          m_dvdClock.GetClockSpeed() == 1.0;
+      if (cb1Async)
+        if (const auto age = window->CB1PresentationAge()) playing -= *age;
+    }
+#endif
     if (std::isfinite(refresh) && refresh > 0)
     {
       const double end = successor != queue.end() ? m_Queue[*successor].pts :
           head.pts + std::max(0.0,head.duration);
-      // Native selection cutoff includes the display-clock synchronization lead.
-      const double tolerance = m_lateframes <= 6 ? 0.98 : 0.0;
-      const double lead = m_clockSync.m_enabled ? refresh / 2 - m_clockSync.m_syncOffset : 0;
+      // Match source selection; native playback retains its synchronization lead.
+      const double tolerance = cb1Async ? 1.0 : (m_lateframes <= 6 ? 0.98 : 0.0);
+      const double lead = !cb1Async && m_clockSync.m_enabled ? refresh / 2 - m_clockSync.m_syncOffset : 0;
       cutoff = end + tolerance * refresh - lead;
     }
     const double remaining = std::max(0.0,
-        cutoff - m_dvdClock.GetClock() - m_displayLatency);
+        cutoff - playing - (cb1Async ? std::min(0.0, m_displayLatency) : m_displayLatency));
     const double speed = m_dvdClock.GetClockSpeed();
-    // Charge starvation only after the native presentation cutoff.
+    // Charge starvation only after the admitted presentation cutoff.
     const double delay = std::isfinite(speed) && speed > 0 ?
         remaining / speed : 0;
     deadline = DVBRIDGE::DiagnosticNowMs() + static_cast<uint64_t>(std::ceil(delay / 1000.0));
@@ -363,7 +376,7 @@ bool CRenderManager::GetHDR10AIStartTime(double& pts)
   std::unique_lock lock(m_presentlock);
   if (!m_pRenderer || !m_pRenderer->HDR10AIQueueEligible() ||
       !m_aiQueueReady || m_aiStartPts == DVD_NOPTS_VALUE ||
-      (m_aiFullscreenRequested && !m_aiGuiReady))
+      (m_pRenderer->HDR10AILookahead() && m_aiFullscreenRequested && !m_aiGuiReady))
     return false;
   pts = m_aiStartPts;
   return true;
@@ -398,6 +411,11 @@ void CRenderManager::EndHDR10AIQueue()
 
 void CRenderManager::ResetHDR10AIQueue()
 {
+  if (m_clockSync.m_cb1Phase)
+  {
+    m_clockSync.Reset();
+    m_dvdClock.SetVsyncAdjust(0);
+  }
   m_aiStartPts = DVD_NOPTS_VALUE;
   m_aiEnd = false;
   m_aiQueueReady = true;
@@ -429,6 +447,17 @@ void CRenderManager::FrameMove()
   }
   {
     std::unique_lock lock2(m_presentlock);
+#ifdef HAVE_DVBRIDGE
+    if (m_cb1PresentPending)
+    {
+      auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(CServiceBroker::GetWinSystem());
+      if (!window || !window->CB1FramePending())
+      {
+        m_cb1PresentPending = false;
+        m_presentstep = m_queued.empty() ? PRESENT_IDLE : PRESENT_READY;
+      }
+    }
+#endif
 #ifdef CB1_HAS_HDR10_AI
     if (m_aiStartPts == DVD_NOPTS_VALUE ||
         (m_pRenderer->HDR10AILookahead() && m_dvdClock.IsPaused()) ||
@@ -441,6 +470,9 @@ void CRenderManager::FrameMove()
 #endif
 
     if (m_queued.empty()
+#ifdef HAVE_DVBRIDGE
+        && !m_cb1PresentPending
+#endif
 #ifdef CB1_HAS_HDR10_AI
         && !(m_presentstep == PRESENT_FRAME && m_pRenderer->HDR10AIFramePending())
 #endif
@@ -453,7 +485,11 @@ void CRenderManager::FrameMove()
       m_presentTimer.Set(1000ms);
     }
 
-    if (m_presentstep == PRESENT_READY)
+    if (m_presentstep == PRESENT_READY
+#ifdef HAVE_DVBRIDGE
+        && !m_cb1PresentPending
+#endif
+        )
       PrepareNextRender();
 
     if (m_presentstep == PRESENT_FLIP)
@@ -524,6 +560,9 @@ void CRenderManager::PreInit()
   m_QueueSize   = 2;
   m_QueueSkip   = 0;
   m_presentstep = PRESENT_IDLE;
+#ifdef HAVE_DVBRIDGE
+  m_cb1PresentPending = false;
+#endif
   m_bRenderGUI = true;
 
   m_initEvent.Set();
@@ -598,6 +637,9 @@ bool CRenderManager::Flush(bool wait, bool saveBuffers)
         m_presentsource = 0;
         m_presentsourcePast = -1;
         m_presentstep = PRESENT_IDLE;
+#ifdef HAVE_DVBRIDGE
+        m_cb1PresentPending = false;
+#endif
         for (int i = 1; i < m_QueueSize; i++)
           m_free.push_back(i);
       }
@@ -744,7 +786,7 @@ RESOLUTION CRenderManager::GetResolution()
   if (m_renderState == STATE_UNCONFIGURED)
     return res;
 
-  if (CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(CSettings::SETTING_VIDEOPLAYER_ADJUSTREFRESHRATE) != ADJUST_REFRESHRATE_OFF)
+  if (m_nativeDVRate || CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(CSettings::SETTING_VIDEOPLAYER_ADJUSTREFRESHRATE) != ADJUST_REFRESHRATE_OFF)
   {
     res = CResolutionUtils::ChooseBestResolution(m_fps, m_picture.iWidth, m_picture.iHeight,
                                                  !m_picture.stereoMode.empty(), m_nativeDVRate);
@@ -847,6 +889,14 @@ void CRenderManager::Render(bool clear, DWORD flags, DWORD alpha, bool gui)
 
   {
     std::unique_lock lock(m_presentlock);
+#ifdef HAVE_DVBRIDGE
+    if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(CServiceBroker::GetWinSystem());
+        window && window->CB1FramePending())
+    {
+      m_cb1PresentPending = true;
+      return;
+    }
+#endif
 #ifdef CB1_HAS_HDR10_AI
     // A GUI-only pass cannot complete the selected AI video picture.
     if ((!presented && m_pRenderer->HDR10AILookahead()) ||
@@ -970,11 +1020,16 @@ void CRenderManager::UpdateResolution()
   {
     if (CServiceBroker::GetWinSystem()->GetGfxContext().IsFullScreenVideo() && CServiceBroker::GetWinSystem()->GetGfxContext().IsFullScreenRoot())
     {
-      if (CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(CSettings::SETTING_VIDEOPLAYER_ADJUSTREFRESHRATE) != ADJUST_REFRESHRATE_OFF && m_fps > 0.0f)
+      if ((m_nativeDVRate || CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(CSettings::SETTING_VIDEOPLAYER_ADJUSTREFRESHRATE) != ADJUST_REFRESHRATE_OFF) && m_fps > 0.0f)
       {
         RESOLUTION res = CResolutionUtils::ChooseBestResolution(
             m_fps, m_picture.iWidth, m_picture.iHeight, !m_picture.stereoMode.empty(), m_nativeDVRate);
         CServiceBroker::GetWinSystem()->GetGfxContext().SetVideoResolution(res, false);
+#ifdef HAVE_DVBRIDGE
+        if (m_nativeDVRate)
+          if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(CServiceBroker::GetWinSystem()))
+            m_nativeDVRate = window->CompleteDVModeSwitch(m_picture);
+#endif
         UpdateLatencyTweak();
         if (m_pRenderer)
           m_pRenderer->Update();
@@ -1257,19 +1312,52 @@ void CRenderManager::PrepareNextRender()
   const double nextFramePts =
       m_dvdClock.GetClockSpeed() < 0 ? renderPts : m_Queue[m_queued.front()].pts;
 
+  bool cb1Async = false;
+  std::optional<double> completionAge;
+#ifdef HAVE_DVBRIDGE
+  if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(CServiceBroker::GetWinSystem()))
+  {
+    cb1Async = window->CB1AsyncPlayback();
+    if (cb1Async && !isPaused && m_dvdClock.GetClockSpeed() == 1.0)
+      completionAge = window->CB1PresentationAge();
+  }
+#endif
+
+  const bool physicalPhase = cb1Async && m_clockSync.m_enabled && !isPaused &&
+      m_dvdClock.GetClockSpeed() == 1.0;
+  if (m_clockSync.m_cb1Phase != physicalPhase)
+  {
+    m_clockSync.m_error = 0;
+    m_clockSync.m_errCount = 0;
+    m_clockSync.m_syncOffset = 0;
+    m_clockSync.m_cb1Phase = physicalPhase;
+    m_dvdClock.SetVsyncAdjust(0);
+  }
+
   if (m_clockSync.m_enabled)
   {
-    double err = fmod(renderPts - nextFramePts, frametime);
-    m_clockSync.m_error += err;
-    m_clockSync.m_errCount ++;
-    if (m_clockSync.m_errCount > 30)
+    // Calibrate once per physical segment; missing anchors never contribute CPU phase.
+    if (!physicalPhase || (completionAge && m_clockSync.m_errCount <= 30))
     {
-      const double average = m_clockSync.m_error / m_clockSync.m_errCount;
-      m_clockSync.m_syncOffset = average;
-      m_clockSync.m_error = 0;
-      m_clockSync.m_errCount = 0;
+      double err = fmod(renderPts - nextFramePts - completionAge.value_or(0.0), frametime);
+      if (physicalPhase)
+      {
+        const double center = m_clockSync.m_errCount ?
+            m_clockSync.m_error / m_clockSync.m_errCount : m_clockSync.m_syncOffset;
+        err = center + std::remainder(err - center, frametime);
+      }
+      m_clockSync.m_error += err;
+      m_clockSync.m_errCount ++;
+      if (m_clockSync.m_errCount > 30)
+      {
+        const double mean = m_clockSync.m_error / m_clockSync.m_errCount;
+        const double average = physicalPhase ? std::remainder(mean, frametime) : mean;
+        m_clockSync.m_syncOffset = average;
+        m_clockSync.m_error = 0;
+        m_clockSync.m_errCount = physicalPhase ? 31 : 0;
 
-      m_dvdClock.SetVsyncAdjust(-average);
+        m_dvdClock.SetVsyncAdjust(-average);
+      }
     }
     if (!isPaused)
       renderPts += frametime / 2 - m_clockSync.m_syncOffset;
@@ -1285,6 +1373,11 @@ void CRenderManager::PrepareNextRender()
               frameOnScreen, renderPts, nextFramePts, (renderPts - nextFramePts),
               renderPts >= nextFramePts, m_forceNext);
 
+  const bool prepareAhead = cb1Async && !isPaused && m_dvdClock.GetClockSpeed() == 1.0 &&
+      m_Queue[m_presentsource].presentmethod == PRESENT_METHOD_SINGLE &&
+      m_Queue[m_presentsource].presentfield == FS_NONE &&
+      m_Queue[m_queued.front()].presentmethod == PRESENT_METHOD_SINGLE &&
+      m_Queue[m_queued.front()].presentfield == FS_NONE;
   bool combined = false;
   if (m_presentsourcePast >= 0)
   {
@@ -1299,14 +1392,20 @@ void CRenderManager::PrepareNextRender()
     auto iter = m_queued.begin();
     int idx = *iter;
     ++iter;
+    // Future display preparation and CPU scheduling phase are not presentation lateness.
+    double latePts = cb1Async && !isPaused ?
+        frameOnScreen + std::min(0.0, m_displayLatency) :
+        renderPts;
+    latePts -= completionAge.value_or(0.0);
     while (iter != m_queued.end())
     {
       // the slot for rendering in time is [pts .. (pts +  x * frametime)]
       // renderer/drivers have internal queues, being slightly late here does not mean that
       // we are really late. The likelihood that we recover decreases the greater m_lateframes
       // get. Skipping a frame is easier than having decoder dropping one (lateframes > 10)
-      double x = (m_lateframes <= 6) ? 0.98 : 0;
-      if (renderPts < m_Queue[*iter].pts + x * frametime)
+      // One-ahead scanout admits one full refresh, including clock phase jitter.
+      double x = cb1Async ? 1.0 : (m_lateframes <= 6 ? 0.98 : 0);
+      if (latePts < m_Queue[*iter].pts + x * frametime)
         break;
       idx = *iter;
       ++iter;
@@ -1324,7 +1423,11 @@ void CRenderManager::PrepareNextRender()
       m_queued.pop_front();
     }
 
-    const int lateframes = static_cast<int>((renderPts - m_Queue[idx].pts) *
+    // Account only for delay beyond the admitted CB1 one-refresh window.
+    const double lateness = cb1Async ?
+        std::max(0.0, latePts - m_Queue[idx].pts - frametime) :
+        renderPts - m_Queue[idx].pts;
+    const int lateframes = static_cast<int>(lateness *
                                             static_cast<double>(m_fps / DVD_TIME_BASE));
     if (lateframes)
       m_lateframes += lateframes;
@@ -1340,7 +1443,8 @@ void CRenderManager::PrepareNextRender()
 
     m_playerPort->UpdateRenderBuffers(m_queued.size(), m_discard.size(), m_free.size());
   }
-  else if (!combined && renderPts > (nextFramePts - frametime))
+  // A submitted progressive CB1 picture no longer needs native blend-frame waiting.
+  else if ((!combined || prepareAhead) && renderPts > (nextFramePts - frametime))
   {
     m_lateframes = 0;
     m_presentstep = PRESENT_FLIP;

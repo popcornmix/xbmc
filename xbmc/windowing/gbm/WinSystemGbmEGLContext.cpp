@@ -7,6 +7,9 @@
  */
 
 #include "WinSystemGbmEGLContext.h"
+#ifdef HAVE_DVBRIDGE
+#include "drm/DRMAtomic.h"
+#endif
 
 #include "OptionalsReg.h"
 #include "cores/VideoPlayer/DVDCodecs/DVDFactoryCodec.h"
@@ -201,6 +204,18 @@ CWinSystemGbmEGLContext::~CWinSystemGbmEGLContext()
     resources.vaapi = std::shared_ptr<CVaapiProxy>(std::move(m_vaapiProxy));
     resources.fence = std::shared_ptr<KODI::UTILS::EGL::CEGLFence>(std::move(m_eglFence));
     resources.properties = std::move(m_nativeDVProperties);
+    if (auto drm = std::dynamic_pointer_cast<CDRMAtomic>(
+            std::static_pointer_cast<CDRMUtils>(resources.drm));
+        drm && drm->HasPendingCB1Page())
+    {
+      auto* gbm = static_cast<CGBMUtils*>(resources.gbm.get());
+      resources.completeDisplay = [drm,gbm] {
+        if (!drm->HasPendingCB1Page()) return true;
+        if (!drm->CompleteCB1Page()) return false;
+        gbm->GetDevice().GetSurface().CompleteTransactionalBuffer(true);
+        return true;
+      };
+    }
     const auto egl = m_eglContext.RetainForRetirement();
     CDVWindowRetirement::Keep(std::move(m_nativeDVRetirement),egl,std::move(resources));
   }

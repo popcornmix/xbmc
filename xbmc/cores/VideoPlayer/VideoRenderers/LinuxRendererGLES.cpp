@@ -477,6 +477,12 @@ bool CLinuxRendererGLES::Flush(bool saveBuffers)
   // references alone so the renderer can keep presenting the last frame.
   if (!saveBuffers)
   {
+#ifdef HAVE_DVBRIDGE
+    if (m_dvRequested)
+      if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(
+              CServiceBroker::GetWinSystem()))
+        window->DiscardDVBridgeFrame();
+#endif
     for (int i = 0; i < m_NumYUVBuffers; i++)
     {
       DeleteTexture(i);
@@ -1135,15 +1141,17 @@ void CLinuxRendererGLES::UnInit()
 
   glFinish();
 
+  bool outputStopped = false;
 #ifdef HAVE_DVBRIDGE
   if (m_dvRequested)
   {
     auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(
         CServiceBroker::GetWinSystem());
-    if (window && !window->EndDVBridge())
+    if (window)
     {
-      CLog::Log(LOGERROR, "DVBridge: cannot restore output during renderer teardown");
-      return;
+      outputStopped = true;
+      if (!window->StopDVBridgePlayback())
+        CLog::Log(LOGDEBUG, "DVBridge: output cleanup deferred until scanout retires");
     }
     m_dvRequested = false;
   }
@@ -1158,11 +1166,14 @@ void CLinuxRendererGLES::UnInit()
   if (m_bConfigured)
   {
     m_hdrFboActive = false;
-    CServiceBroker::GetWinSystem()->SetGuiCompositing(false);
-    CServiceBroker::GetWinSystem()->SetHDR(nullptr);
+    if (!outputStopped)
+    {
+      CServiceBroker::GetWinSystem()->SetGuiCompositing(false);
+      CServiceBroker::GetWinSystem()->SetHDR(nullptr);
+      CServiceBroker::GetWinSystem()->SetColorimetry(nullptr);
+      CServiceBroker::GetWinSystem()->SetVideoOutput(nullptr);
+    }
     m_passthroughHDR = false;
-    CServiceBroker::GetWinSystem()->SetColorimetry(nullptr);
-    CServiceBroker::GetWinSystem()->SetVideoOutput(nullptr);
   }
 
   // cleanup framebuffer object if it was in use

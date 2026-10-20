@@ -16,6 +16,8 @@
 #include "utils/log.h"
 #include "windowing/GraphicContext.h"
 #ifdef HAVE_DVBRIDGE
+#include "DVBridgeDisplayRoute.h"
+#include "DVBridgeKernelLogReader.h"
 #include "utils/DVBridgeDiagnosticState.h"
 #endif
 
@@ -26,6 +28,28 @@ using namespace KODI::WINDOWING::GBM;
 namespace
 {
 const std::string SETTING_VIDEOSCREEN_LIMITGUISIZE = "videoscreen.limitguisize";
+
+#ifdef HAVE_DVBRIDGE
+void ReportDisplayRoute(int fd, CDRMConnector* connector)
+{
+  if (!DVBRIDGE::DiagnosticsEnabled() || !connector)
+    return;
+  char* device = drmGetDeviceNameFromFd2(fd);
+  const std::string card = device ? std::filesystem::path(device).filename().string() : "unknown";
+  free(device);
+  const auto snapshot = DVBRIDGE::ReadDisplayRoute("/sys", card, connector->GetName(),
+      connector->GetType(), connector->GetId()) +
+      " edid_blob=" + std::to_string(connector->GetPropertyValue("EDID").value_or(0));
+  static std::mutex mutex;
+  static DVBRIDGE::DisplayRouteChanges changes;
+  std::lock_guard<std::mutex> lock(mutex);
+  if (changes.Report(DVBRIDGE::DiagnosticNowMs(), snapshot))
+  {
+    CLog::Log(LOGINFO, "DVBridge route: {}", snapshot);
+    DVBRIDGE::CollectKernelLog();
+  }
+}
+#endif
 
 void DrmFbDestroyCallback(gbm_bo* bo, void* data)
 {
@@ -55,6 +79,9 @@ bool CDRMUtils::SetMode(const RESOLUTION_INFO& res)
   if (!m_connector->CheckConnector())
     return false;
 
+#ifdef HAVE_DVBRIDGE
+  ReportDisplayRoute(m_fd, m_connector);
+#endif
   m_mode = m_connector->GetModeForIndex(std::atoi(res.strId.c_str()));
   m_width = res.iWidth;
   m_height = res.iHeight;
@@ -544,6 +571,18 @@ bool CDRMUtils::OpenDrm(bool needConnector)
     }
 
     PrintDrmDeviceInfo(device);
+#ifdef HAVE_DVBRIDGE
+    // Already-enumerated selected GPU, not a second scan. Keep its PCI identity
+    // visible without global debug mode even if sysfs is inaccessible.
+    if (DVBRIDGE::DiagnosticsEnabled() && device->bustype == DRM_BUS_PCI &&
+        device->businfo.pci && device->deviceinfo.pci)
+      CLog::Log(LOGINFO,
+          "DVBridge GPU: node={} pci={:04x}:{:02x}:{:02x}.{} vendor={:04x} device={:04x} subvendor={:04x} subdevice={:04x}",
+          device->nodes[DRM_NODE_PRIMARY], device->businfo.pci->domain,
+          device->businfo.pci->bus, device->businfo.pci->dev, device->businfo.pci->func,
+          device->deviceinfo.pci->vendor_id, device->deviceinfo.pci->device_id,
+          device->deviceinfo.pci->subvendor_id, device->deviceinfo.pci->subdevice_id);
+#endif
 
     const char* renderPath = drmGetRenderDeviceNameFromFd(m_fd);
 
@@ -739,6 +778,9 @@ bool CDRMUtils::FindConnector()
   CLog::LogF(LOGINFO, "Using connector: {}", connector->get()->GetName());
 
   m_connector = connector->get();
+#ifdef HAVE_DVBRIDGE
+  ReportDisplayRoute(m_fd, m_connector);
+#endif
   return true;
 }
 

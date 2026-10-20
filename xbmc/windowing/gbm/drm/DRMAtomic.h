@@ -34,6 +34,7 @@ public:
   void FlipPage(struct gbm_bo* bo, bool rendered, bool videoLayer, bool async) override;
 #ifdef HAVE_DVBRIDGE
   bool LastPageAccepted() const { return m_lastPageAccepted; }
+  bool IsSelectedModeCommitted() const;
 #endif
   bool SetVideoMode(const RESOLUTION_INFO& res, struct gbm_bo* bo) override;
   bool SetActive(bool active) override;
@@ -41,10 +42,19 @@ public:
   void DestroyDrm() override;
   bool SupportsFencing() override { return true; }
   bool AddProperty(CDRMObject* object, const char* name, uint64_t value);
-  // Blocking commit: rejected properties must not be paired with a new framebuffer.
-  bool FlipPageTransactional(struct gbm_bo* bo, bool restore = false);
+  bool FlipPageTransactional(struct gbm_bo* bo, bool restore = false, bool async = false);
+  bool HasPendingCB1Page() const { return m_cb1Pending; }
+  bool CompleteCB1Page(int timeoutMs = 0);
+  uint64_t CB1PresentationTime() const { return m_cb1CompletedNs; }
+  uint64_t CB1PreviousPresentationTime() const { return m_cb1PreviousCompletedNs; }
   void ResetDVActivation() { m_dvRetry.Reset(); }
   void SetDVActivationPending(bool pending) { m_dvActivating = pending; }
+  bool CanAsyncDVBridge() const
+  {
+    auto* plane = m_gui_plane ? m_gui_plane : m_video_plane;
+    return !m_need_modeset && !m_dvActivating && plane && m_crtc &&
+        plane->SupportsProperty("IN_FENCE_FD") && m_crtc->SupportsProperty("OUT_FENCE_PTR");
+  }
   void FailDVActivation(int error) { m_dvRetry.Failed(error); }
   bool CanRetryDVActivation(bool restored) const
   { return m_dvRetry.CanRetry(m_dvRetry.Error(), restored); }
@@ -76,6 +86,11 @@ private:
   uint32_t m_dvSnapshotConnector{0};
 
   bool m_need_modeset{true};
+  bool m_cb1Pending{}, m_cb1Uncertain{};
+  int m_cb1OutFence{-1};
+  uint64_t m_cb1CompletedNs{};
+  uint64_t m_cb1PreviousCompletedNs{};
+  void ResetCB1PresentationTime() { m_cb1CompletedNs = m_cb1PreviousCompletedNs = 0; }
 #ifdef HAVE_DVBRIDGE
   bool m_lastPageAccepted{};
 #endif

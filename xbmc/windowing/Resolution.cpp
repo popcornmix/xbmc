@@ -20,6 +20,7 @@
 #include "windowing/WinSystem.h"
 
 #include <cstdlib>
+#include <cmath>
 #include <limits>
 
 namespace
@@ -66,11 +67,46 @@ float RESOLUTION_INFO::DisplayRatio() const
   return iWidth * fPixelRatio / iHeight;
 }
 
+bool CResolutionUtils::IsCB1RefreshRate(double refresh)
+{
+  for (double supported : {24000.0 / 1001, 24.0, 25.0, 30000.0 / 1001,
+                           30.0, 50.0, 60000.0 / 1001, 60.0})
+    if (std::abs(refresh - supported) < 0.012) return true;
+  return false;
+}
+
 RESOLUTION CResolutionUtils::ChooseBestResolution(float fps, int width, int height, bool is3D,
                                                  bool allowNativeProgressiveRates)
 {
   RESOLUTION res = CServiceBroker::GetWinSystem()->GetGfxContext().GetVideoResolution();
   float weight = 0.0f;
+
+  // CB1 transport requires progressive 2160p, independent of GUI/source size
+  // and the ordinary playback whitelist or refresh override.
+  if (allowNativeProgressiveRates && !is3D && fps > 0.0f)
+  {
+    std::vector<RESOLUTION> modes;
+    CServiceBroker::GetWinSystem()->GetGfxContext().GetAllowedResolutions(modes);
+    float bestWeight = std::numeric_limits<float>::max();
+    float bestRefresh = std::numeric_limits<float>::max();
+    for (const auto mode : modes)
+    {
+      const auto info = CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo(mode);
+      if (mode == RES_WINDOW || info.iScreenWidth != 3840 || info.iScreenHeight != 2160 ||
+          (info.dwFlags & (D3DPRESENTFLAG_INTERLACED | D3DPRESENTFLAG_MODE3DSBS | D3DPRESENTFLAG_MODE3DTB)) ||
+          !IsCB1RefreshRate(info.fRefreshRate))
+        continue;
+      const float candidate = RefreshWeight(info.fRefreshRate, fps);
+      if (candidate < bestWeight ||
+          (MathUtils::FloatEquals(candidate, bestWeight, 0.0001f) && info.fRefreshRate < bestRefresh))
+      {
+        res = mode;
+        bestWeight = candidate;
+        bestRefresh = info.fRefreshRate;
+      }
+    }
+    return res;
+  }
 
   if (!FindResolutionFromOverride(fps, width, is3D, res, weight, false)) //find a refreshrate from overrides
   {

@@ -15,6 +15,7 @@ uniform sampler2D u_lutDegamma; // sRGB -> linear LUT (IEC 61966-2-1)
 uniform sampler2D u_lutTF;      // linear -> PQ LUT (1024 entries, sdrPeak baked in)
 uniform float u_ootfGamma;      // HLG: OOTF gamma (1.2 for BT.2100 1000-nit ref)
                                 // PQ: 0.0 (use LUT path instead)
+uniform bool u_inputPQ;         // CB1 subtitle layer already contains BT.2020 PQ.
 
 // BT.709 -> BT.2020 color space conversion matrix (applied in linear light)
 const mat3 bt709_to_bt2020 = mat3(
@@ -32,6 +33,12 @@ void main()
   // and avoids the tone-map math, BO read and BO write for those pixels.
   if (gui.a == 0.0)
     discard;
+
+  if (u_inputPQ)
+  {
+    gl_FragColor = gui;
+    return;
+  }
 
   // sRGB -> linear via LUT (IEC 61966-2-1 EOTF, replaces inline pow)
   vec3 linear = vec3(

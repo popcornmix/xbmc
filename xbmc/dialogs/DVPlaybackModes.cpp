@@ -28,7 +28,7 @@ CDVPlaybackModes& CDVPlaybackModes::GetInstance()
 
 bool CDVPlaybackModes::MenuEnabled()
 {
-  return DVBRIDGE::EnhancedInfoEnabled();
+  return DVBRIDGE::PlaybackMenuEnabled();
 }
 
 bool CDVPlaybackModes::ConfigureProfile()

@@ -24,6 +24,9 @@
 #include "utils/MathUtils.h"
 #include "utils/log.h"
 #include "windowing/WinSystem.h"
+#ifdef HAVE_DVBRIDGE
+#include "windowing/gbm/WinSystemGbmGLESContext.h"
+#endif
 
 #include <cmath>
 
@@ -33,6 +36,15 @@
 #define USE_PREMULTIPLIED_ALPHA 1
 
 using namespace OVERLAY;
+
+static void RecordSubtitleBounds(const CRect& rect, unsigned texture)
+{
+#ifdef HAVE_DVBRIDGE
+  if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(
+          CServiceBroker::GetWinSystem()))
+    window->RecordDVSubtitle(rect, texture);
+#endif
+}
 
 static void LoadTexture(GLenum target,
                         GLsizei width,
@@ -181,7 +193,13 @@ COverlayTextureGLES::COverlayTextureGLES(const CDVDOverlayImage& o, CRect& rSour
     //! @todo Move this into the overlay shader once limited-range and
     //! full-range GUI shader variants are kept compiled in parallel and
     //! selectable per draw; then this draw selects the limited variant.
-    if (m_isHDROverlay && CServiceBroker::GetWinSystem()->IsHdrComposite() &&
+    bool cb1PQ = false;
+#ifdef HAVE_DVBRIDGE
+    if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(
+            CServiceBroker::GetWinSystem()))
+      cb1PQ = window->HasDVBridgeScreenshot();
+#endif
+    if (m_isHDROverlay && !cb1PQ && CServiceBroker::GetWinSystem()->IsHdrComposite() &&
         CServiceBroker::GetWinSystem()->UseLimitedColor())
     {
       for (uint32_t& px : rgba)
@@ -388,6 +406,28 @@ void COverlayGlyphGLES::Render(SRenderState& state)
   if (m_texture == 0 || m_vertexCount == 0)
     return;
 
+  // ASS's nominal extent is the whole screen. Use its actual glyph quads.
+  CRect bounds;
+  bool first = true;
+  for (const auto& vertex : m_vertex)
+  {
+    const float x = state.x + state.width * vertex.x;
+    const float y = state.y + state.height * vertex.y;
+    if (first)
+    {
+      bounds = CRect(x, y, x, y);
+      first = false;
+    }
+    else
+    {
+      bounds.x1 = std::min(bounds.x1, x);
+      bounds.y1 = std::min(bounds.y1, y);
+      bounds.x2 = std::max(bounds.x2, x);
+      bounds.y2 = std::max(bounds.y2, y);
+    }
+  }
+  RecordSubtitleBounds(bounds, m_texture);
+
   glEnable(GL_BLEND);
 
   glBindTexture(GL_TEXTURE_2D, m_texture);
@@ -493,6 +533,7 @@ void COverlayTextureGLES::Render(SRenderState& state)
   CRenderSystemGLES* renderSystem =
       dynamic_cast<CRenderSystemGLES*>(CServiceBroker::GetRenderSystem());
   renderSystem->EnableGUIShader(ShaderMethodGLES::SM_TEXTURE_NOBLEND);
+  RecordSubtitleBounds(rd, m_texture);
   GLint posLoc = renderSystem->GUIShaderGetPos();
   GLint tex0Loc = renderSystem->GUIShaderGetCoord0();
   GLint depthLoc = renderSystem->GUIShaderGetDepth();

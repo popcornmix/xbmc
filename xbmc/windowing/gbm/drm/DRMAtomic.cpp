@@ -16,14 +16,12 @@
 #include "settings/Settings.h"
 #include "utils/log.h"
 #include "DVBridgeKernelLogReader.h"
-#include "jobs/JobManager.h"
 #include "utils/DVBridgeEdid.h"
 #ifdef HAVE_DVBRIDGE
 #include "cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h"
 #endif
 
 #include <chrono>
-#include <atomic>
 #include <algorithm>
 #include <errno.h>
 #include <string.h>
@@ -32,6 +30,9 @@
 #include <drm_fourcc.h>
 #include <drm_mode.h>
 #include <fcntl.h>
+#include <linux/sync_file.h>
+#include <poll.h>
+#include <sys/ioctl.h>
 #include <unistd.h>
 
 using namespace KODI::WINDOWING::GBM;
@@ -46,19 +47,7 @@ uint64_t DVNowMs()
 
 void CollectDVKernelLog()
 {
-  // Never perform kernel IO on Kodi's render thread, nor queue unbounded jobs.
-  static std::atomic<bool> pending{false};
-  auto jobs = CServiceBroker::GetJobManager();
-  if (!jobs || pending.exchange(true))
-    return;
-  jobs->Submit([] {
-    static DVBRIDGE::KernelLogReader reader;
-    // Up to three 50-ms batches, one pending job, one shared output budget.
-    // Preserve an explicit incomplete marker if even this bounded scan truncates.
-    for (unsigned pass = 0; pass < 3 && reader.Collect(); ++pass)
-      std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    pending.store(false);
-  });
+  DVBRIDGE::CollectKernelLog();
 }
 }
 
@@ -200,8 +189,9 @@ bool CDRMAtomic::DrmAtomicCommit(int fb_id, int flags, bool rendered, bool video
 
     if (!AddProperty(m_crtc, "MODE_ID", modeBlob.Get()))
       return reject("mode-property", EINVAL);
-    if (DVBRIDGE::DiagnosticsEnabled())
-      m_req->signalMode = *m_mode;
+    // Follow the request actually accepted, including ordinary old-mode fallback.
+    // Transport admission consumes this receipt even when diagnostics are disabled.
+    m_req->signalMode = *m_mode;
 
     if (!AddProperty(m_crtc, "ACTIVE", m_active ? 1 : 0))
       return reject("active-property", EINVAL);
@@ -335,12 +325,65 @@ void CDRMAtomic::FinishRequest(bool accepted)
   m_signalDirty = false;
 }
 
-bool CDRMAtomic::FlipPageTransactional(struct gbm_bo* bo, bool restore)
+#ifdef HAVE_DVBRIDGE
+bool CDRMAtomic::IsSelectedModeCommitted() const
 {
+  return m_mode && m_committedMode.clock == m_mode->clock &&
+      m_committedMode.hdisplay == m_mode->hdisplay &&
+      m_committedMode.hsync_start == m_mode->hsync_start &&
+      m_committedMode.hsync_end == m_mode->hsync_end &&
+      m_committedMode.htotal == m_mode->htotal && m_committedMode.hskew == m_mode->hskew &&
+      m_committedMode.vdisplay == m_mode->vdisplay &&
+      m_committedMode.vsync_start == m_mode->vsync_start &&
+      m_committedMode.vsync_end == m_mode->vsync_end &&
+      m_committedMode.vtotal == m_mode->vtotal && m_committedMode.vscan == m_mode->vscan &&
+      m_committedMode.vrefresh == m_mode->vrefresh && m_committedMode.flags == m_mode->flags;
+}
+#endif
+
+bool CDRMAtomic::CompleteCB1Page(int timeoutMs)
+{
+  if (!m_cb1Pending) return true;
+  if (m_cb1Uncertain) return false;
+  pollfd fence{m_cb1OutFence, POLLIN, 0};
+  const int ready = poll(&fence, 1, timeoutMs);
+  if (!ready || (ready < 0 && errno == EINTR)) return false;
+  sync_file_info info{};
+  if (ready < 0 || !(fence.revents & POLLIN) ||
+      ioctl(m_cb1OutFence, SYNC_IOC_FILE_INFO, &info) < 0 || info.status <= 0)
+  {
+    m_cb1Uncertain = true;
+    ResetCB1PresentationTime();
+    ReportDVFailure("display-fence", EIO);
+    return false;
+  }
+  const uint64_t previous = m_cb1CompletedNs;
+  ResetCB1PresentationTime();
+  if (info.num_fences == 1)
+  {
+    sync_fence_info detail{};
+    info.sync_fence_info = reinterpret_cast<uintptr_t>(&detail);
+    if (ioctl(m_cb1OutFence, SYNC_IOC_FILE_INFO, &info) == 0 &&
+        info.num_fences == 1 && detail.status > 0 && detail.timestamp_ns > previous)
+    {
+      m_cb1CompletedNs = detail.timestamp_ns;
+      m_cb1PreviousCompletedNs = previous;
+    }
+  }
+  close(m_cb1OutFence);
+  m_cb1OutFence = -1;
+  m_cb1Pending = false;
+  return true;
+}
+
+bool CDRMAtomic::FlipPageTransactional(struct gbm_bo* bo, bool restore, bool async)
+{
+  if (m_cb1Pending) return false;
   // The window owns the bounded retry decision after coherent restoration.
   m_dvRestoring = restore;
   if (!bo)
   {
+    ResetCB1PresentationTime();
     if (m_dvActivating && !restore) m_dvRetry.Failed(EINVAL);
     ReportDVFailure("missing-buffer", EINVAL);
     FinishRequest(false);
@@ -349,20 +392,42 @@ bool CDRMAtomic::FlipPageTransactional(struct gbm_bo* bo, bool restore)
   const uint32_t fb = DrmOpaqueFbGetFromBo(bo);
   if (!fb)
   {
+    ResetCB1PresentationTime();
     if (m_dvActivating && !restore) m_dvRetry.Failed(EINVAL);
     ReportDVFailure("framebuffer-import", 0);
     FinishRequest(false);
     return false;
   }
-  const int flags = DRM_MODE_ATOMIC_ALLOW_MODESET;
+  // Stable scanout keeps the accepted mode. Transitions still validate it fully.
+  const bool asynchronous = async && !restore && CanAsyncDVBridge() && m_inFenceFd >= 0;
+  const int flags = (m_need_modeset || m_dvActivating || restore)
+                        ? DRM_MODE_ATOMIC_ALLOW_MODESET :
+                            asynchronous ? DRM_MODE_ATOMIC_NONBLOCK : 0;
   const bool accepted = DrmAtomicCommit(fb, flags, true, false, true);
+  if (!accepted || !asynchronous) ResetCB1PresentationTime();
   if (accepted)
+  {
     m_need_modeset = false;
+    if (asynchronous)
+    {
+      m_cb1Pending = true;
+      m_cb1OutFence = TakeOutFenceFd();
+      m_cb1Uncertain = m_cb1OutFence < 0;
+      if (m_cb1Uncertain) ResetCB1PresentationTime();
+      if (m_cb1Uncertain) ReportDVFailure("missing-display-fence", EIO);
+    }
+  }
+  else if (asynchronous)
+  {
+    const int fd = TakeOutFenceFd();
+    if (fd >= 0) close(fd);
+  }
   return accepted;
 }
 
 void CDRMAtomic::FlipPage(struct gbm_bo* bo, bool rendered, bool videoLayer, bool async)
 {
+  ResetCB1PresentationTime();
 #ifdef HAVE_DVBRIDGE
   m_lastPageAccepted=false;
 #endif
@@ -444,6 +509,7 @@ bool CDRMAtomic::InitDrm()
 
 void CDRMAtomic::DestroyDrm()
 {
+  ResetCB1PresentationTime();
   CDRMUtils::DestroyDrm();
 }
 
@@ -484,6 +550,7 @@ bool CDRMAtomic::SupportsAtomicModesetting()
 
 bool CDRMAtomic::SetVideoMode(const RESOLUTION_INFO& res, struct gbm_bo* bo)
 {
+  ResetCB1PresentationTime();
   m_need_modeset = true;
 
   return true;
@@ -491,6 +558,7 @@ bool CDRMAtomic::SetVideoMode(const RESOLUTION_INFO& res, struct gbm_bo* bo)
 
 bool CDRMAtomic::SetActive(bool active)
 {
+  ResetCB1PresentationTime();
   m_need_modeset = true;
   m_active = active;
 

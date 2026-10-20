@@ -48,6 +48,10 @@ public:
   bool InitWindowSystem() override;
   bool SetFullScreen(bool fullScreen, RESOLUTION_INFO& res, bool blankOtherDisplays) override;
   void PresentRender(bool rendered, bool videoLayer) override;
+#ifdef HAVE_DVBRIDGE
+  bool BeginRender() override;
+  float GetDisplayLatency() override;
+#endif
 
   // GUI compositing for HDR
   bool SetGuiCompositing(int colorTransfer) override;
@@ -59,14 +63,16 @@ public:
   static bool DVBridgeRequested(const VideoPicture* picture);
   bool CreateNewWindow(const std::string& name, bool fullScreen, RESOLUTION_INFO& res) override;
   void RefreshDVOutputCapabilities();
-  DVBRIDGE::OutputCapabilities GetDVOutputCapabilities(const VideoPicture* picture) const;
+  DVBRIDGE::OutputCapabilities GetDVOutputCapabilities(const VideoPicture* picture,
+      bool allowModeSwitch = false) const;
   bool CanRetainDVSource() const;
+  bool CompleteDVModeSwitch(const VideoPicture& picture);
   void ObserveDVImport(DVBRIDGE::SourceBinding binding, dvbridge_geometry geometry, bool usable);
   DVBRIDGE::OutputSelection SelectedDVOutput(const VideoPicture* picture) const;
   DVBRIDGE::OutputReason ConsumeDVPlaybackFailure(DVBRIDGE::SourceBinding binding);
   bool HasPendingDVBridgeRestore() const
   {
-    return m_failedHDR10SetupRestore || m_hdrDeepColorPrevious || m_hdrConversion ||
+    return m_dvStopPending || m_failedHDR10SetupRestore || m_hdrDeepColorPrevious || m_hdrConversion ||
         m_dvState.Captured();
   }
   bool BeginDVBridge();
@@ -81,8 +87,18 @@ public:
 #endif
   bool RestoreFailedHDR10Setup();
   bool ConfigureHDR10Conversion(const VideoPicture& picture);
-  bool SupportsHDR10Conversion();
+  bool SupportsHDR10Conversion(bool requireCurrentMode = true);
   void SetDVBridgeOverlays(bool visible) { m_dvOverlays = visible; }
+  bool CB1FramePending() const { return m_cb1FramePending; }
+  bool CB1AsyncPlayback() const
+  {
+    return CB1AsyncAvailable() && m_dvBridge->AsyncPreparationActive();
+  }
+  std::optional<double> CB1PresentationAge() const;
+  void RecordDVSubtitle(const CRect& rect, unsigned texture);
+  bool BeginDVPQSubtitle();
+  void EndDVPQSubtitle();
+  bool DVPQSubtitlesReady() const { return m_dvPQSubtitleDraws != 0; }
   bool HasDVBridgeScreenshot() const { return m_dvState.Captured() || m_hdrConversion; }
   unsigned int GetDVBridgeScreenshotFramebuffer()
   {
@@ -93,6 +109,8 @@ public:
                        const CDVMetadataBuffer& metadata,
                        dvbridge_geometry geometry);
   bool EndDVBridge();
+  void DiscardDVBridgeFrame();
+  bool StopDVBridgePlayback();
   bool SetVideoOutput(const VideoPicture* picture) override;
   bool DestroyWindowSystem() override;
   bool DestroyWindow() override;
@@ -121,12 +139,14 @@ private:
   std::unique_ptr<CGuiCompositeShaderGLES> m_compositeShader;
 #ifdef HAVE_DVBRIDGE
   DVBRIDGE::OutputCapabilities GetDVOutputCapabilities(const VideoPicture* picture,
-      const DVBRIDGE::OutputPreferences& preferences) const;
+      const DVBRIDGE::OutputPreferences& preferences, bool allowModeSwitch = false) const;
   DVBRIDGE::OutputSelection SelectedDVOutput(const VideoPicture* picture,
       const DVBRIDGE::OutputPreferences& preferences, DVBRIDGE::OutputCapabilities& capabilities) const;
   std::unique_ptr<CDVBridgeGLES> m_dvBridge;
   std::shared_ptr<CDVBridgeGLES::Context> m_dvContext;
   bool RetireDVContext();
+  bool CB1AsyncAvailable() const;
+  bool CreateCB1GPUFence(const CDVBridgeGLES::Submission& submission);
   bool m_dvShutdownFence{};
   bool m_dvRejectedSurface{}, m_dvRollbackFailed{};
   bool PollRejectedDVSurface();
@@ -150,6 +170,7 @@ private:
   bool m_aiReady{}, m_aiFallback{}, m_aiActive{};
 #endif
   DVBRIDGE::OutputCapabilities m_dvCapabilities;
+  bool m_dvAvailableNativeDV{}, m_dvAvailableHDR10{};
   DVBRIDGE::SourceBinding m_dvImportBinding{};
   dvbridge_geometry m_dvImportGeometry{};
   bool m_dvImportUsable{};
@@ -163,12 +184,23 @@ private:
   CDVBridgeState m_dvState;
   DVBRIDGE::DiagnosticFailures m_dvSetupFailures;
   bool m_dvFrame = false;
+  bool m_cb1FramePending{};
+  bool m_dvEndPending{};
+  bool m_dvStopPending{};
   bool m_hdrConversion = false;
   std::optional<dvbridge_hdr10_session> m_hdr10Session;
   uint64_t m_hdr10SessionStream{};
   std::optional<uint64_t> m_hdrDeepColorPrevious;
   bool m_failedHDR10SetupRestore = false;
   bool m_dvOverlays = true;
+  CRect m_dvSubtitleBounds;
+  unsigned m_dvSubtitleDraws{};
+  uint64_t m_dvSubtitleContent{};
+  CFrameBufferObject m_dvPQSubtitleFbo;
+  int m_dvPQSubtitleWidth{}, m_dvPQSubtitleHeight{}, m_dvPQPreviousFbo{};
+  unsigned m_dvPQSubtitleDraws{};
+  bool m_dvPQSubtitleCleared{}, m_dvPQSubtitleRendering{};
+  bool m_dvNativeGui{};
 #endif
 };
 

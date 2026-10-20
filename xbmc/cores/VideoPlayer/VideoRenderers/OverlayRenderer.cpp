@@ -25,6 +25,9 @@
 #include "settings/SettingsComponent.h"
 #include "windowing/GraphicContext.h"
 #include "windowing/WinSystem.h"
+#ifdef HAVE_DVBRIDGE
+#include "windowing/gbm/WinSystemGbmGLESContext.h"
+#endif
 
 #include <algorithm>
 #include <mutex>
@@ -172,6 +175,14 @@ void CRenderer::Render(int idx, float depth)
 
       if (!(hdrComposite && o->m_isHDROverlay))
         Render(o.get());
+#ifdef HAVE_DVBRIDGE
+      else if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(
+                   CServiceBroker::GetWinSystem()); window && window->BeginDVPQSubtitle())
+      {
+        Render(o.get());
+        window->EndDVPQSubtitle();
+      }
+#endif
     }
   }
 
@@ -184,6 +195,12 @@ void CRenderer::RenderHDROverlays(int idx)
 {
   if (!CServiceBroker::GetWinSystem()->IsHdrComposite())
     return;
+#ifdef HAVE_DVBRIDGE
+  if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(
+          CServiceBroker::GetWinSystem()); window && window->HasDVBridgeScreenshot() &&
+      window->DVPQSubtitlesReady())
+    return;
+#endif
 
   std::unique_lock lock(m_section);
 

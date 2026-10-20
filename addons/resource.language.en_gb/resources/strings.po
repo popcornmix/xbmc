@@ -25933,7 +25933,7 @@ msgstr ""
 
 #: system/settings/settings.xml
 msgctxt "#40817"
-msgid "Press O for player information, again for playback modes, again to close. Disable to restore Kodi's original panel and hide playback modes."
+msgid "Use enhanced player information when pressing O. Disable to use Kodi's original information panel."
 msgstr ""
 
 #: addons/skin.estuary/xml/IncludesDVProcessInfo.xml
@@ -26084,15 +26084,23 @@ msgid "Set peak and gamut before choosing Expert or Enhanced. Standard and Basic
 msgstr ""
 
 msgctxt "#40855"
-msgid "Playback mode menu"
+msgid "Quick rendering switch"
 msgstr ""
 
 msgctxt "#40856"
-msgid "Choose a playback mode during the video. Requires enhanced player information."
+msgid "Press O after player information to choose a rendering mode, then press O again to return to video. Disable to skip this menu."
 msgstr ""
 
 msgctxt "#40857"
 msgid "Show playback mode at start"
+msgstr ""
+
+msgctxt "#40900"
+msgid "Asynchronous frame preparation"
+msgstr ""
+
+msgctxt "#40901"
+msgid "Prepare at most one next CB1 frame while the current frame is presented. Native and fallback playback stay unchanged. Applies to the next video."
 msgstr ""
 
 msgctxt "#40858"

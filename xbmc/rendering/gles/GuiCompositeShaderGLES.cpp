@@ -63,6 +63,7 @@ void CGuiCompositeShaderGLES::OnCompiledAndLinked()
   m_hLutTF = glGetUniformLocation(ProgramHandle(), "u_lutTF");
   m_hProj = glGetUniformLocation(ProgramHandle(), "u_proj");
   m_hOotfGamma = glGetUniformLocation(ProgramHandle(), "u_ootfGamma");
+  m_hInputPQ = glGetUniformLocation(ProgramHandle(), "u_inputPQ");
   glUseProgram(ProgramHandle());
   glUniform1i(m_hSamp, 0);
   glUniform1i(m_hLutDegamma, 1);
@@ -76,6 +77,7 @@ bool CGuiCompositeShaderGLES::OnEnabled()
     glUniformMatrix4fv(m_hProj, 1, GL_FALSE, m_proj);
 
   glUniform1f(m_hOotfGamma, m_ootfGamma);
+  glUniform1i(m_hInputPQ, m_inputPQ);
 
   glActiveTexture(GL_TEXTURE1);
   glBindTexture(GL_TEXTURE_2D, m_lutDegammaTexId);

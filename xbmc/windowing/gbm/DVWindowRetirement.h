@@ -3,6 +3,7 @@
 
 #include "cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h"
 #include "utils/EGLUtils.h"
+#include <functional>
 #include <memory>
 
 namespace KODI::WINDOWING::GBM
@@ -15,6 +16,7 @@ public:
   struct Resources
   {
     std::shared_ptr<void> gbm, drm, vaapi, fence, properties;
+    std::function<bool()> completeDisplay;
   };
   static bool Occupied() { return m_retained != nullptr; }
   static bool Keep(std::shared_ptr<CDVBridgeGLES::Context> context,
@@ -31,6 +33,7 @@ public:
     if (!Occupied()) return true;
     auto& held = *m_retained;
     if (held.m_quarantined) return false;
+    if (held.m_resources.completeDisplay && !held.m_resources.completeDisplay()) return false;
     const auto display = eglGetCurrentDisplay();
     const auto context = eglGetCurrentContext();
     const auto draw = eglGetCurrentSurface(EGL_DRAW);

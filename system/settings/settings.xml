@@ -79,12 +79,22 @@
           <default>true</default>
           <control type="toggle" />
         </setting>
+        <setting id="dvbridge.playbackmenu" type="boolean" label="40855" help="40856">
+          <requirement>HAVE_DVBRIDGE</requirement>
+          <level>0</level>
+          <default>true</default>
+          <control type="toggle" />
+        </setting>
         <setting id="dvbridge.configureprofile" type="action" label="40853" help="40854">
           <requirement>HAVE_DVBRIDGE</requirement><level>0</level>
           <control type="button" format="action" />
         </setting>
         <setting id="dvbridge.startupmode" type="boolean" label="40857" help="40858">
           <requirement>HAVE_DVBRIDGE</requirement><level>0</level><default>false</default>
+          <control type="toggle" />
+        </setting>
+        <setting id="dvbridge.asyncpreparation" type="boolean" label="40900" help="40901">
+          <requirement>HAVE_DVBRIDGE</requirement><level>2</level><default>true</default>
           <control type="toggle" />
         </setting>
       </group>

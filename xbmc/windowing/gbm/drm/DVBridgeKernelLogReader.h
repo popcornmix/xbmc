@@ -3,18 +3,23 @@
 
 #include "utils/DVBridgeKernelLog.h"
 #include "utils/log.h"
+#include "ServiceBroker.h"
+#include "jobs/JobManager.h"
 
 #include <array>
+#include <atomic>
 #include <cerrno>
 #include <chrono>
 #include <mutex>
+#include <thread>
 #include <fcntl.h>
 #include <time.h>
 #include <unistd.h>
 
 namespace DVBRIDGE
 {
-// Used only by a Kodi background job after a rate-limited DV output failure.
+// Used only by a Kodi background job after a rate-limited DV output failure
+// or selected-route change/initialization.
 // Read-only, nonblocking and bounded. No external process, new service or GPU work.
 class KernelLogReader
 {
@@ -30,13 +35,15 @@ public:
   bool Collect()
   {
     std::lock_guard<std::mutex> lock(m_mutex);
+    m_filter.BeginCollection();
     if (m_fd < 0)
     {
       m_fd = open("/dev/kmsg", O_RDONLY | O_NONBLOCK | O_CLOEXEC);
       if (m_fd < 0)
       {
+        const int error = errno;
         if (!m_warned)
-          CLog::Log(LOGWARNING, "DVBridge kernel: cannot read /dev/kmsg errno={}; kernel reason unavailable", errno);
+          CLog::Log(LOGWARNING, "DVBridge kernel coverage: complete=false reason=open-error error={} interval=unavailable", error);
         m_warned = true;
         return false;
       }
@@ -44,8 +51,9 @@ public:
     timespec now{};
     if (clock_gettime(CLOCK_MONOTONIC, &now) != 0)
     {
+      const int error = errno;
       if (!m_warned)
-        CLog::Log(LOGWARNING, "DVBridge kernel: monotonic clock unavailable; evidence incomplete");
+        CLog::Log(LOGWARNING, "DVBridge kernel coverage: complete=false reason=clock-error error={} interval=unavailable", error);
       m_warned = true;
       return false;
     }
@@ -59,8 +67,10 @@ public:
       m_copied = 0;
       m_notices = 0;
     }
-    unsigned int suppressed = 0, overruns = 0;
-    bool incomplete = true;
+    unsigned int suppressed = 0, overruns = 0, matched = 0;
+    bool continuation = true, complete = false;
+    int error = 0;
+    const char* reason = "scan-limit";
     for (unsigned int records = 0; records < 4096; ++records)
     {
       if (std::chrono::steady_clock::now() >= deadline)
@@ -68,33 +78,38 @@ public:
       const auto count = read(m_fd, buffer.data(), buffer.size());
       if (count < 0)
       {
-        if (errno == EPIPE) { ++overruns; continue; }
-        if (errno == EINTR) continue;
-        if (errno != EAGAIN && !m_warned)
-        {
-          CLog::Log(LOGWARNING, "DVBridge kernel: read failed errno={}; kernel reason unavailable", errno);
-          m_warned = true;
-        }
-        incomplete = false;
+        const int readError = errno;
+        if (readError == EPIPE) { ++overruns; continue; }
+        if (readError == EINTR) continue;
+        complete = readError == EAGAIN;
+        reason = complete ? "cursor-drained" : "read-error";
+        error = complete ? 0 : readError;
+        continuation = false;
         break;
       }
-      if (!count) { incomplete = false; break; }
+      if (!count) { complete = true; continuation = false; reason = "cursor-eof"; break; }
       const auto message = m_filter.Accept({buffer.data(), static_cast<size_t>(count)}, nowUs);
       if (!message)
         continue;
+      ++matched;
       if (m_copied < 8)
       {
-        CLog::Log(LOGERROR, "DVBridge kernel: {}", *message);
+        const auto level = message->find(" route_evidence=kernel-unscoped ") != std::string::npos
+                               ? LOGINFO : LOGERROR;
+        CLog::Log(level, "DVBridge kernel: {}", *message);
         ++m_copied;
       }
       else
         ++suppressed;
     }
-    if ((suppressed || overruns || incomplete || m_filter.Incomplete()) && m_notices++ < 2)
+    complete = complete && !overruns && !suppressed && !m_filter.Incomplete();
+    if (m_notices++ < 2)
       CLog::Log(LOGWARNING,
-          "DVBridge kernel: evidence incomplete={} ring_overruns={} suppressed={} (bounded collection)",
-          incomplete || m_filter.Incomplete(), overruns, suppressed);
-    return incomplete;
+          "DVBridge kernel coverage: complete={} reason={} error={} requested_from_boot_us={} to_boot_us={} matched={} ring_overruns={} suppressed={} filter_incomplete={} coverage_scope=retained-cursor history_before_cursor=unknown route_evidence_may_precede_interval=true",
+          complete, reason, error ? std::to_string(error) : "unavailable",
+          nowUs > 60000000 ? nowUs - 60000000 : 0, nowUs, matched, overruns, suppressed,
+          m_filter.Incomplete());
+    return continuation;
   }
 
 private:
@@ -105,4 +120,28 @@ private:
   uint64_t m_window{0};
   unsigned m_copied{0}, m_notices{0};
 };
+
+// One cursor/job/output budget shared by route initialization and failures.
+// Keep all kmsg IO off Kodi's render thread, with the existing batch limits.
+inline void CollectKernelLog()
+{
+  static std::atomic<bool> pending{false};
+  auto jobs = CServiceBroker::GetJobManager();
+  if (!jobs || pending.exchange(true))
+    return;
+  try
+  {
+    jobs->Submit([] {
+      try
+      {
+        static KernelLogReader reader;
+        for (unsigned pass = 0; pass < 3 && reader.Collect(); ++pass)
+          std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      }
+      catch (...) {}
+      pending.store(false);
+    });
+  }
+  catch (...) { pending.store(false); }
+}
 }

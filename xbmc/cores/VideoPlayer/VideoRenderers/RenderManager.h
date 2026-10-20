@@ -253,6 +253,9 @@ protected:
   int m_lateframes = -1;
   double m_presentpts = 0.0;
   EPRESENTSTEP m_presentstep = PRESENT_IDLE;
+#ifdef HAVE_DVBRIDGE
+  bool m_cb1PresentPending{};
+#endif
   XbmcThreads::EndTime<> m_presentTimer;
   bool m_forceNext = false;
   int m_presentsource = 0;
@@ -270,6 +273,7 @@ protected:
     int m_errCount;
     double m_syncOffset;
     bool m_enabled;
+    bool m_cb1Phase{false};
   };
   CClockSync m_clockSync;
 };
