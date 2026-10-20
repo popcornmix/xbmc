@@ -14,6 +14,9 @@
 #include "windowing/linux/WinSystemEGL.h"
 
 #include <memory>
+#ifdef HAVE_DVBRIDGE
+#include "DVWindowRetirement.h"
+#endif
 
 namespace KODI
 {
@@ -27,7 +30,7 @@ class CVaapiProxy;
 class CWinSystemGbmEGLContext : public KODI::WINDOWING::LINUX::CWinSystemEGL, public CWinSystemGbm
 {
 public:
-  ~CWinSystemGbmEGLContext() override = default;
+  ~CWinSystemGbmEGLContext() override;
 
   bool DestroyWindowSystem() override;
   bool CreateNewWindow(const std::string& name, bool fullScreen, RESOLUTION_INFO& res) override;
@@ -59,8 +62,22 @@ protected:
   bool ChooseEGLConfig(EGLint renderableType, int bitDepth = 8);
   virtual bool CreateContext() = 0;
   virtual int VideoOutputBitDepth(const VideoPicture* picture) const;
+  // Opt-in only for DV frame transactions. Ordinary output keeps native semantics.
+  void UseDVOutputSurfaceTransaction(bool enabled) { m_dvOutputSurface = enabled; }
+  bool CompleteDVOutputSurface(bool submitted);
+  virtual bool RejectDVOutputSurface() { return CompleteDVOutputSurface(false); }
+  bool HasPendingDVOutputSurface() const { return m_dvSurfacePending; }
 
   EGLint m_renderableType{0};
+  bool m_dvOutputSurface{}, m_dvSurfacePending{};
+  CDRMPlane* m_priorOutputPlane{};
+  uint32_t m_priorOutputFormat{};
+  uint64_t m_priorOutputModifier{};
+  bool m_priorOutputVideo{};
+#ifdef HAVE_DVBRIDGE
+  std::shared_ptr<CDVBridgeGLES::Context> m_nativeDVRetirement;
+  std::shared_ptr<void> m_nativeDVProperties;
+#endif
 
   std::unique_ptr<KODI::UTILS::EGL::CEGLFence> m_eglFence;
 

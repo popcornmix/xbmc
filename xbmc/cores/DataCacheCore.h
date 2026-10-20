@@ -9,12 +9,16 @@
 #pragma once
 
 #include "EdlEdit.h"
+#include "VideoProcessingInfo.h"
 #include "threads/CriticalSection.h"
 
 #include <atomic>
 #include <chrono>
 #include <string>
+#include <memory>
 #include <vector>
+
+class VideoSourceSideData;
 
 class CDataCacheCore
 {
@@ -28,6 +32,12 @@ public:
   void SignalVideoInfoChange();
   void SignalAudioInfoChange();
   void SignalSubtitleInfoChange();
+  uint64_t ResetVideoProcessingInfo();
+  uint64_t GetVideoProcessingGeneration();
+  bool SetVideoProcessingInfo(uint64_t generation, const VideoProcessingInfo& info);
+  VideoProcessingInfo GetVideoProcessingInfo();
+  bool SetVideoSourceSideData(uint64_t generation, std::shared_ptr<const VideoSourceSideData> source);
+  std::string GetVideoSourceSideData();
 
   // player video info
   void SetVideoDecoderName(std::string name, bool isHw);
@@ -228,6 +238,9 @@ protected:
   std::atomic_bool m_hasAVInfoChanges = false;
 
   CCriticalSection m_videoPlayerSection;
+  VideoProcessingInfo m_videoProcessingInfo;
+  std::shared_ptr<const VideoSourceSideData> m_videoSourceSideData;
+  uint64_t m_videoProcessingGeneration{};
   struct SPlayerVideoInfo
   {
     std::string decoderName;

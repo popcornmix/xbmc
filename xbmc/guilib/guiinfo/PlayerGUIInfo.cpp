@@ -26,6 +26,7 @@
 #include "guilib/guiinfo/GUIInfo.h"
 #include "guilib/guiinfo/GUIInfoHelper.h"
 #include "guilib/guiinfo/GUIInfoLabels.h"
+#include "guilib/guiinfo/VideoProcessingInfoGUI.h"
 #include "resources/LocalizeStrings.h"
 #include "resources/ResourcesComponent.h"
 #include "utils/StringUtils.h"
@@ -167,6 +168,16 @@ bool CPlayerGUIInfo::GetLabel(std::string& value,
                               const CGUIInfo& info,
                               std::string* fallback) const
 {
+  const auto processingId=static_cast<uint32_t>(info.GetInfo());
+  if (processingId == PLAYER_PROCESS_VIDEOSIDEDATA)
+  {
+    value = CServiceBroker::GetDataCacheCore().GetVideoSourceSideData();
+    return true;
+  }
+  if (processingId >= PLAYER_PROCESS_VIDEOOUTPUTHDRTYPE &&
+      processingId <= PLAYER_PROCESS_VIDEOOUTPUTBITS)
+    return VideoProcessingInfoGUI::GetLabel(processingId,
+        CServiceBroker::GetDataCacheCore().GetVideoProcessingInfo(), value);
   switch (info.GetInfo())
   {
     ///////////////////////////////////////////////////////////////////////////////////////////////

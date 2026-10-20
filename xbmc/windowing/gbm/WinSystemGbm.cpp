@@ -739,6 +739,34 @@ bool CWinSystemGbm::SetHDR(const VideoPicture* videoPicture)
   return m_hdrBlob.IsValid();
 }
 
+#ifdef HAVE_DVBRIDGE
+bool CWinSystemGbm::StageOrdinaryHDR10Recovery()
+{
+  auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
+  auto* connector = drm ? drm->GetConnector() : nullptr;
+  if (!connector)
+    return false;
+  if (connector->SupportsProperty("HDR_OUTPUT_METADATA") &&
+      !drm->AddProperty(connector, "HDR_OUTPUT_METADATA", 0))
+    return false;
+  if (connector->SupportsProperty("Colorspace"))
+  {
+    const auto value = connector->GetPropertyEnumValue("Colorspace", "Default");
+    if (!value || !drm->AddProperty(connector, "Colorspace", *value))
+      return false;
+  }
+  drm->SetActive(true);
+  return true;
+}
+
+void CWinSystemGbm::CompleteOrdinaryHDR10Recovery()
+{
+  m_hdrBlob.Reset();
+  m_eotf = KODI::UTILS::Eotf::TRADITIONAL_SDR;
+  m_colorimetry = KODI::UTILS::Colorimetry::DEFAULT;
+}
+#endif
+
 bool CWinSystemGbm::IsHDRDisplay()
 {
   auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);

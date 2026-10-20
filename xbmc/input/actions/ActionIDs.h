@@ -464,6 +464,7 @@ constexpr const int ACTION_PLAYER_DECREASE_TEMPO = 267;
 
 //! Open the dialog window to select a video stream
 constexpr const int ACTION_DIALOG_SELECT_VIDEO = 270;
+constexpr const int ACTION_PLAYBACK_MODE_MENU = 273;
 
 //! Open the dialog window to select a audio stream
 constexpr const int ACTION_DIALOG_SELECT_AUDIO = 271;

@@ -212,6 +212,9 @@ void CVideoLayerBridgeDRMPRIME::Configure(CVideoBufferDRMPRIME* buffer)
 
 void CVideoLayerBridgeDRMPRIME::SetVideoPlane(CVideoBufferDRMPRIME* buffer, const CRect& destRect)
 {
+#ifdef HAVE_DVBRIDGE
+  m_planePrepared=false;
+#endif
   auto plane = m_DRM->GetVideoPlane();
   if (!plane)
     return;
@@ -219,20 +222,27 @@ void CVideoLayerBridgeDRMPRIME::SetVideoPlane(CVideoBufferDRMPRIME* buffer, cons
   if (!PrepareBuffer(buffer))
     return;
 
-  m_DRM->AddProperty(plane, "FB_ID", m_fb_id);
-  m_DRM->AddProperty(plane, "CRTC_ID", m_DRM->GetCrtc()->GetCrtcId());
-  m_DRM->AddProperty(plane, "SRC_X", 0);
-  m_DRM->AddProperty(plane, "SRC_Y", 0);
-  m_DRM->AddProperty(plane, "SRC_W", buffer->GetWidth() << 16);
-  m_DRM->AddProperty(plane, "SRC_H", buffer->GetHeight() << 16);
-  m_DRM->AddProperty(plane, "CRTC_X", static_cast<int32_t>(destRect.x1) & ~1);
-  m_DRM->AddProperty(plane, "CRTC_Y", static_cast<int32_t>(destRect.y1) & ~1);
-  m_DRM->AddProperty(plane, "CRTC_W", (static_cast<uint32_t>(destRect.Width()) + 1) & ~1);
-  m_DRM->AddProperty(plane, "CRTC_H", (static_cast<uint32_t>(destRect.Height()) + 1) & ~1);
+  bool prepared=m_DRM->AddProperty(plane, "FB_ID", m_fb_id);
+  prepared &= m_DRM->AddProperty(plane, "CRTC_ID", m_DRM->GetCrtc()->GetCrtcId());
+  prepared &= m_DRM->AddProperty(plane, "SRC_X", 0);
+  prepared &= m_DRM->AddProperty(plane, "SRC_Y", 0);
+  prepared &= m_DRM->AddProperty(plane, "SRC_W", buffer->GetWidth() << 16);
+  prepared &= m_DRM->AddProperty(plane, "SRC_H", buffer->GetHeight() << 16);
+  prepared &= m_DRM->AddProperty(plane, "CRTC_X", static_cast<int32_t>(destRect.x1) & ~1);
+  prepared &= m_DRM->AddProperty(plane, "CRTC_Y", static_cast<int32_t>(destRect.y1) & ~1);
+  prepared &= m_DRM->AddProperty(plane, "CRTC_W", (static_cast<uint32_t>(destRect.Width()) + 1) & ~1);
+  prepared &= m_DRM->AddProperty(plane, "CRTC_H", (static_cast<uint32_t>(destRect.Height()) + 1) & ~1);
+  (void)prepared;
+#ifdef HAVE_DVBRIDGE
+  m_planePrepared=prepared;
+#endif
 }
 
 void CVideoLayerBridgeDRMPRIME::UpdateVideoPlane()
 {
+#ifdef HAVE_DVBRIDGE
+  m_planePrepared=false;
+#endif
   if (!m_buffer || !m_fb_id)
     return;
 
@@ -240,6 +250,17 @@ void CVideoLayerBridgeDRMPRIME::UpdateVideoPlane()
   if (!plane)
     return;
 
-  m_DRM->AddProperty(plane, "FB_ID", m_fb_id);
-  m_DRM->AddProperty(plane, "CRTC_ID", m_DRM->GetCrtc()->GetCrtcId());
+  bool prepared=m_DRM->AddProperty(plane, "FB_ID", m_fb_id);
+  prepared &= m_DRM->AddProperty(plane, "CRTC_ID", m_DRM->GetCrtc()->GetCrtcId());
+  (void)prepared;
+#ifdef HAVE_DVBRIDGE
+  m_planePrepared=prepared;
+#endif
 }
+
+#ifdef HAVE_DVBRIDGE
+uint64_t CVideoLayerBridgeDRMPRIME::PreparedPlaybackGeneration() const
+{
+  return m_planePrepared && m_buffer ? m_buffer->PlaybackGeneration() : 0;
+}
+#endif

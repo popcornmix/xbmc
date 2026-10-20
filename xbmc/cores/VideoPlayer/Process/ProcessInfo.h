@@ -15,11 +15,14 @@
 
 #include <atomic>
 #include <list>
+#include <memory>
 #include <map>
 #include <string>
 
 class CProcessInfo;
 class CDataCacheCore;
+struct VideoProcessingInfo;
+class VideoSourceSideData;
 
 using CreateProcessControl = CProcessInfo* (*)();
 
@@ -33,6 +36,8 @@ public:
 
   // player video
   void ResetVideoCodecInfo();
+  bool SetVideoProcessingInfo(uint64_t generation, const VideoProcessingInfo& info);
+  bool SetVideoSourceSideData(uint64_t generation, std::shared_ptr<const VideoSourceSideData> source);
   void SetVideoDecoderName(const std::string &name, bool isHw);
   std::string GetVideoDecoderName();
   bool IsVideoHwDecoder();

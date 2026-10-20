@@ -91,6 +91,10 @@ protected:
   void OnLostDevice();
   void OnResetDisplay();
 
+#ifdef HAVE_DVBRIDGE
+  bool StageOrdinaryHDR10Recovery();
+  void CompleteOrdinaryHDR10Recovery();
+#endif
   std::unique_ptr<CVideoSync> GetVideoSync(CVideoReferenceClock* clock) override;
 
   std::shared_ptr<CDRMUtils> m_DRM;

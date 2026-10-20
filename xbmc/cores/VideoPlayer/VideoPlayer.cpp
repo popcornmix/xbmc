@@ -8,6 +8,12 @@
 
 #include "VideoPlayer.h"
 #ifdef HAVE_DVBRIDGE
+#include "cores/VideoPlayer/DVDCodecs/Video/DVPlaybackNotification.h"
+#endif
+#ifdef HAVE_DVBRIDGE
+#include "DVDCodecs/Video/DVOutputSettings.h"
+#endif
+#ifdef HAVE_DVBRIDGE
 #include "cores/VideoPlayer/DVDCodecs/Video/DVPlaybackPolicy.h"
 #endif
 
@@ -861,6 +867,9 @@ bool CVideoPlayer::OpenFile(const CFileItem& file, const CPlayerOptions &options
 
   m_item = file;
   m_playerOptions = options;
+#ifdef HAVE_DVBRIDGE
+  DVBRIDGE::PlaybackNotification::StartVideo();
+#endif
 
   m_processInfo->SetPlayTimes(0,0,0,0);
   m_bAbortRequest = false;
@@ -878,6 +887,9 @@ bool CVideoPlayer::OpenFile(const CFileItem& file, const CPlayerOptions &options
 
 bool CVideoPlayer::CloseFile(bool reopen)
 {
+#ifdef HAVE_DVBRIDGE
+  DVBRIDGE::PlaybackNotification::StopVideo();
+#endif
   CLog::Log(LOGINFO, "CVideoPlayer::CloseFile()");
 
   // set the abort request so that other threads can finish up
@@ -1440,6 +1452,9 @@ void CVideoPlayer::CheckBetterStream(CCurrentStream& current, CDemuxStream* stre
 
 void CVideoPlayer::Prepare()
 {
+#ifdef HAVE_DVBRIDGE
+  DVBRIDGE::SelectOutputSettings();
+#endif
   CFFmpegLog::SetLogLevel(1);
   SetPlaySpeed(DVD_PLAYSPEED_NORMAL);
   m_processInfo->SetSpeed(1.0);
@@ -2160,6 +2175,15 @@ bool CVideoPlayer::ShouldDeferSync(bool ready, std::chrono::steady_clock::time_p
 
 void CVideoPlayer::HandlePlaySpeed()
 {
+#ifdef CB1_HAS_HDR10_AI
+  // Use native buffering while a new AI output is primed.
+  if (!m_renderManager.PrepareHDR10AIStartup(m_playerOptions.fullscreen && !m_State.streamsReady))
+  {
+    if (m_State.streamsReady && m_caching == CACHESTATE_DONE)
+      SetCaching(CACHESTATE_INIT);
+    return;
+  }
+#endif
   const bool isInMenu = IsInMenuInternal();
   const bool tolerateStall =
       isInMenu || (m_CurrentVideo.hint.flags & StreamFlags::FLAG_STILL_IMAGES);
@@ -3031,6 +3055,9 @@ void CVideoPlayer::OnExit()
   });
 
   // destroy objects
+#ifdef HAVE_DVBRIDGE
+  DVBRIDGE::PlaybackNotification::StopVideo();
+#endif
   m_renderManager.Flush(false, false);
   m_pDemuxer.reset();
   m_pSubtitleDemuxer.reset();
@@ -3104,6 +3131,9 @@ void CVideoPlayer::HandleMessages()
 
       FlushBuffers(DVD_NOPTS_VALUE, true, true);
       m_renderManager.Flush(false, false);
+#ifdef HAVE_DVBRIDGE
+      DVBRIDGE::PlaybackNotification::StartVideo();
+#endif
       m_pDemuxer.reset();
       m_pSubtitleDemuxer.reset();
       m_subtitleDemuxerMap.clear();
@@ -3632,6 +3662,10 @@ void CVideoPlayer::HandleMessages()
     {
       CLog::Log(LOGDEBUG, "CVideoPlayer - CDVDMsg::PLAYER_ABORT");
       m_bAbortRequest = true;
+#ifdef HAVE_DVBRIDGE
+      if (const auto error = std::dynamic_pointer_cast<CDVDMsgBool>(pMsg); error && error->m_value)
+        m_error = true;
+#endif
     }
     else if (pMsg->IsType(CDVDMsg::PLAYER_SET_UPDATE_STREAM_DETAILS))
       m_updateStreamDetails = true;
@@ -4475,10 +4509,7 @@ bool CVideoPlayer::OpenVideoStream(CDVDStreamInfo& hint, bool reset)
                                                    (double)DVD_TIME_BASE * hint.fpsscale /
                                                    (hint.fpsrate * (hint.interlaced ? 2 : 1)));
 
-      bool nativeDV = false;
-#ifdef HAVE_DVBRIDGE
-      nativeDV = DVBRIDGE::WantsNativeOutput(hint);
-#endif
+      const bool nativeDV = WantsNativePresentation(hint);
       VideoModeChange change;
       change.res = CResolutionUtils::ChooseBestResolution(static_cast<float>(framerate),
                                                           hint.width, hint.height,

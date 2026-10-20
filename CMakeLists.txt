@@ -6,6 +6,7 @@ endif()
 project(kodi LANGUAGES CXX C ASM)
 
 option(ENABLE_DVBRIDGE "Build experimental native DV bridge (requires patched dependencies)" OFF)
+option(CB1_ENABLE_HDR10_AI "Build matched native HDR10 AI circuits" OFF)
 set(DVBRIDGE_SOURCE_DIR "" CACHE PATH "DVBridge common source directory")
 if(NOT EXISTS "${DVBRIDGE_SOURCE_DIR}/dvbridge_metadata_bounds.h")
   message(FATAL_ERROR "DVBRIDGE_SOURCE_DIR must provide the shared metadata validation headers")
@@ -13,6 +14,10 @@ endif()
 if(ENABLE_DVBRIDGE)
   # Headers change class layout: every translation unit must use the same ABI.
   add_compile_definitions(HAVE_DVBRIDGE=1)
+  if(CB1_ENABLE_HDR10_AI)
+    add_compile_definitions(CB1_HAS_HDR10_AI=1)
+    include_directories("${DVBRIDGE_SOURCE_DIR}")
+  endif()
 endif()
 
 if(POLICY CMP0069)

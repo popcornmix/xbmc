@@ -1273,4 +1273,62 @@
 			</control>
 		</control>
 	</include>
+  <include name="CB1PlaybackModeLayout">
+    <control type="group" id="9100">
+      <right>40</right><bottom>40</bottom><width>660</width><height>412</height>
+      <control type="image" id="9101">
+        <left>0</left><top>0</top><width>660</width><height>412</height>
+        <texture colordiffuse="dialog_tint">colors/white.png</texture>
+      </control>
+      <control type="label" id="1">
+        <left>20</left><top>12</top><width>620</width><height>40</height><font>font12</font><scroll>true</scroll>
+      </control>
+      <control type="label" id="2"><visible>false</visible></control>
+      <control type="list" id="3">
+        <left>20</left><top>64</top><width>620</width><height>300</height>
+        <orientation>vertical</orientation><scrolltime>150</scrolltime>
+        <onup>3</onup><ondown>3</ondown><onleft>3</onleft><onright>3</onright>
+        <include>CB1PlaybackModeRows</include>
+      </control>
+      <control type="list" id="6">
+        <left>20</left><top>64</top><width>620</width><height>300</height>
+        <orientation>vertical</orientation><scrolltime>150</scrolltime>
+        <onup>6</onup><ondown>6</ondown><onleft>6</onleft><onright>6</onright>
+        <include>CB1PlaybackModeRows</include>
+      </control>
+      <control type="textbox" id="9102">
+        <left>20</left><top>370</top><width>620</width><height>38</height>
+        <font>font10</font><textcolor>grey</textcolor>
+        <label>$INFO[Container(6).ListItem.Label2]</label><autoscroll>false</autoscroll>
+      </control>
+    </control>
+  </include>
+  <include name="CB1PlaybackModeRows">
+    <itemlayout width="620" height="50">
+      <control type="image">
+        <left>10</left><top>14</top><width>22</width><height>22</height>
+        <texture>icons/menumarks/tick.png</texture><visible>ListItem.IsSelected</visible>
+      </control>
+      <control type="label">
+        <left>42</left><top>5</top><width>566</width><height>40</height>
+        <font>font12</font><label>$INFO[ListItem.Label]</label>
+        <textcolor>$VAR[CB1PlaybackModeTextColor]</textcolor><wrapmultiline>false</wrapmultiline><scroll>true</scroll>
+      </control>
+    </itemlayout>
+    <focusedlayout width="620" height="50">
+      <control type="image">
+        <left>0</left><top>1</top><width>620</width><height>48</height>
+        <texture colordiffuse="button_focus">lists/focus.png</texture>
+      </control>
+      <control type="image">
+        <left>10</left><top>14</top><width>22</width><height>22</height>
+        <texture>icons/menumarks/tick.png</texture><visible>ListItem.IsSelected</visible>
+      </control>
+      <control type="label">
+        <left>42</left><top>5</top><width>566</width><height>40</height>
+        <font>font12</font><label>$INFO[ListItem.Label]</label>
+        <textcolor>$VAR[CB1PlaybackModeTextColor]</textcolor><wrapmultiline>false</wrapmultiline><scroll>true</scroll>
+      </control>
+    </focusedlayout>
+  </include>
 </includes>

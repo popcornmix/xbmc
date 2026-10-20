@@ -302,7 +302,7 @@ void CRenderer::Render(COverlay* o)
 bool CRenderer::HasVisibleOverlay(int idx) const
 {
   std::unique_lock lock(m_section);
-  if (idx < 0 || idx >= NUM_BUFFERS)
+  if (idx < 0 || idx >= MAX_RENDER_BUFFERS)
     return false;
 
   for (const auto& e : m_buffers[idx])
@@ -470,7 +470,7 @@ void CRenderer::CreateSubtitlesStyle()
 void CRenderer::PrepareOverlays(int idx)
 {
   std::unique_lock lock(m_section);
-  if (idx < 0 || idx >= NUM_BUFFERS)
+  if (idx < 0 || idx >= MAX_RENDER_BUFFERS)
     return;
 
   UpdateSubtitleStyle();

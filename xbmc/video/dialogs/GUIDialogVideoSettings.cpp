@@ -14,6 +14,9 @@
 #include "application/ApplicationComponents.h"
 #include "application/ApplicationPlayer.h"
 #include "dialogs/GUIDialogYesNo.h"
+#ifdef HAVE_DVBRIDGE
+#include "dialogs/DVPlaybackModes.h"
+#endif
 #include "guilib/GUIComponent.h"
 #include "guilib/GUIWindowManager.h"
 #include "profiles/ProfileManager.h"
@@ -216,6 +219,14 @@ void CGUIDialogVideoSettings::OnSettingAction(const std::shared_ptr<const CSetti
   CGUIDialogSettingsManualBase::OnSettingChanged(setting);
 
   const std::string &settingId = setting->GetId();
+#ifdef HAVE_DVBRIDGE
+  if (settingId=="dvbridge.playbackchoice")
+  {
+    CDVPlaybackModes::ShowMenu();
+    return;
+  }
+  else
+#endif
   if (settingId == SETTING_VIDEO_CALIBRATION)
   {
     const std::shared_ptr<CProfileManager> profileManager = CServiceBroker::GetSettingsComponent()->GetProfileManager();
@@ -464,6 +475,10 @@ void CGUIDialogVideoSettings::InitializeSettings()
   AddToggle(groupStereoscopic, SETTING_VIDEO_STEREOSCOPICINVERT, 36536, SettingLevel::Basic, videoSettings.m_StereoInvert);
 
   // general settings
+#ifdef HAVE_DVBRIDGE
+  if (CDVPlaybackModes::MenuEnabled())
+    AddButton(groupSaveAsDefault,"dvbridge.playbackchoice",40855,SettingLevel::Basic);
+#endif
   AddButton(groupSaveAsDefault, SETTING_VIDEO_MAKE_DEFAULT, 12376, SettingLevel::Basic);
   AddButton(groupSaveAsDefault, SETTING_VIDEO_CALIBRATION, 214, SettingLevel::Basic);
 }

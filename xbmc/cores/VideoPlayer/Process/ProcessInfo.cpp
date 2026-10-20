@@ -85,6 +85,7 @@ void CProcessInfo::ResetVideoCodecInfo()
 
   if (m_dataCache)
   {
+    m_dataCache->ResetVideoProcessingInfo();
     m_dataCache->SetVideoDecoderName(m_videoDecoderName, m_videoIsHWDecoder);
     m_dataCache->SetVideoDeintMethod(m_videoDeintMethod);
     m_dataCache->SetVideoPixelFormat(m_videoPixelFormat);
@@ -108,6 +109,17 @@ void CProcessInfo::SetVideoDecoderName(const std::string &name, bool isHw)
 
   if (m_dataCache)
     m_dataCache->SetVideoDecoderName(m_videoDecoderName, m_videoIsHWDecoder);
+}
+
+bool CProcessInfo::SetVideoProcessingInfo(uint64_t generation, const VideoProcessingInfo& info)
+{
+  return m_dataCache && m_dataCache->SetVideoProcessingInfo(generation, info);
+}
+
+bool CProcessInfo::SetVideoSourceSideData(
+    uint64_t generation, std::shared_ptr<const VideoSourceSideData> source)
+{
+  return m_dataCache && m_dataCache->SetVideoSourceSideData(generation, std::move(source));
 }
 
 std::string CProcessInfo::GetVideoDecoderName()

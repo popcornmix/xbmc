@@ -26,6 +26,13 @@
 #include "utils/FontUtils.h"
 #include "utils/StringUtils.h"
 #include "windowing/WinSystem.h"
+#ifdef HAVE_DVBRIDGE
+#include "cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h"
+#include "cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h"
+#include "resources/LocalizeStrings.h"
+#include "resources/ResourcesComponent.h"
+#include "windowing/gbm/WinSystemGbmGLESContext.h"
+#endif
 
 namespace
 {
@@ -367,6 +374,12 @@ void CSettingConditions::Initialize()
 #ifdef HAVE_GBM
   m_simpleConditions.emplace("have_gbm");
 #endif
+#ifdef HAVE_DVBRIDGE
+  m_simpleConditions.emplace("have_dvbridge");
+#endif
+#ifdef CB1_HAS_HDR10_AI
+  m_simpleConditions.emplace("have_cb1_hdr10_ai");
+#endif
 #ifdef HAS_GL
   m_simpleConditions.emplace("has_gl");
 #endif
@@ -490,6 +503,62 @@ void CSettingConditions::Initialize()
   m_complexConditions.try_emplace("lt", LessThan);
   m_complexConditions.try_emplace("lte", LessThanOrEqual);
 }
+
+#ifdef HAVE_DVBRIDGE
+void CSettingConditions::DVOutputOptions(const std::shared_ptr<const CSetting>& setting,
+                                         std::vector<IntegerSettingOption>& list)
+{
+  // Availability never substitutes or saves a different requested preference.
+  const auto preferences=DVBRIDGE::FrameOutputSettings();
+  const auto data=DVBRIDGE::StreamTelemetry::Read();
+  auto caps=data.transaction.capabilities;
+  if (!caps.sourceKnown && !data.transaction.identity.Valid())
+  {
+    auto* window=dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(CServiceBroker::GetWinSystem());
+    caps=window ? window->GetDVOutputCapabilities(nullptr) : DVBRIDGE::OutputCapabilities{};
+  }
+  const auto& localizer=CServiceBroker::GetResourcesComponent().GetLocalizeStrings();
+  const bool method=setting->GetId()=="dvbridge.hdr10method";
+  const bool menu=setting->GetId()=="dvbridge.playbackchoice";
+  const bool hdr10Menu=setting->GetId()=="dvbridge.hdr10playbackchoice";
+  const bool hdr10Source=hdr10Menu || setting->GetId()=="dvbridge.hdr10source";
+  const auto& processing=hdr10Source && !caps.sourceKnown ? caps.hdr10Processing : caps.processing;
+  constexpr int menuModes[]{1,4,4,0,2,3};
+#ifdef CB1_HAS_HDR10_AI
+  constexpr int hdr10MenuModes[]{1,4,4,0};
+#else
+  constexpr int hdr10MenuModes[]{0};
+#endif
+  for(auto& option : list)
+  {
+    const int mode=hdr10Menu ? (option.value>=0 && option.value<int(std::size(hdr10MenuModes)) ? hdr10MenuModes[option.value] : 0) :
+        hdr10Source ? (option.value==1 ? 1 : option.value==2 ? 4 : 0) :
+        menu ? (option.value>=0 && option.value<6 ? menuModes[option.value] : 0) :
+        method ? (option.value==0 ? 2 : option.value==1 ? 3 : 0) :
+        (option.value==0 ? 1 : option.value==1 ? 2 : option.value==3 ? 4 : 0);
+    auto reason=DVBRIDGE::OutputReason::None;
+    if (mode)
+    {
+      const bool dv=mode==1 || mode==4;
+      if (!(dv ? caps.nativeDV : caps.hdr10))
+        reason=dv ? DVBRIDGE::OutputReason::NoDVTransport : DVBRIDGE::OutputReason::NoHDR10Transport;
+      else if (!caps.processingKnown) reason=DVBRIDGE::OutputReason::NoGPUProcessing;
+      else if (caps.sourceKnown && !(hdr10Source ? (caps.isHDR10 && !caps.isDV) : caps.isDV))
+        reason=DVBRIDGE::OutputReason::SourceIneligible;
+      else if (!processing[mode].usable)
+        reason=processing[mode].reason==DVBRIDGE::OutputReason::None ?
+            DVBRIDGE::OutputReason::NoGPUProcessing : processing[mode].reason;
+      else if (mode>=3 && !preferences.ProfileValid())
+        reason=DVBRIDGE::OutputReason::TVProfileRequired;
+    }
+    const int reasonId=CDVPlaybackInfo::ReasonLabel(reason);
+    if (reasonId) option.label+=" / "+localizer.Get(40851);
+    option.label2=reasonId ? localizer.Get(reasonId) :
+        mode==3 ? localizer.Get(40864) : "";
+    option.properties.emplace_back("disabled",reasonId!=0);
+  }
+}
+#endif
 
 void CSettingConditions::Deinitialize()
 {

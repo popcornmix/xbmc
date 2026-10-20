@@ -9,6 +9,9 @@
 #include "RendererDRMPRIME.h"
 
 #include "ServiceBroker.h"
+#ifdef HAVE_DVBRIDGE
+#include "cores/VideoPlayer/DVDCodecs/Video/DVPlaybackNotification.h"
+#endif
 #include "cores/VideoPlayer/Buffers/VideoBufferDRMPRIME.h"
 #include "cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.h"
 #include "cores/VideoPlayer/VideoRenderers/HwDecRender/DRMPRIMECaptureGLES.h"
@@ -242,6 +245,9 @@ void CRendererDRMPRIME::RenderUpdate(
   if (m_iLastRenderBuffer == index && m_videoLayerBridge)
   {
     m_videoLayerBridge->UpdateVideoPlane();
+#ifdef HAVE_DVBRIDGE
+    DVBRIDGE::PlaybackNotification::RenderedOrdinary(m_videoLayerBridge->PreparedPlaybackGeneration());
+#endif
     return;
   }
 
@@ -264,6 +270,9 @@ void CRendererDRMPRIME::RenderUpdate(
     m_videoLayerBridge->Configure(buffer);
 
   m_videoLayerBridge->SetVideoPlane(buffer, m_planeDestRect);
+#ifdef HAVE_DVBRIDGE
+  DVBRIDGE::PlaybackNotification::RenderedOrdinary(m_videoLayerBridge->PreparedPlaybackGeneration());
+#endif
 
   m_iLastRenderBuffer = index;
 }

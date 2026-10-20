@@ -39,6 +39,9 @@ public:
   virtual void Configure(CVideoBufferDRMPRIME* buffer);
   virtual void SetVideoPlane(CVideoBufferDRMPRIME* buffer, const CRect& destRect);
   virtual void UpdateVideoPlane();
+#ifdef HAVE_DVBRIDGE
+  uint64_t PreparedPlaybackGeneration() const;
+#endif
 
 protected:
   std::shared_ptr<KODI::WINDOWING::GBM::CDRMAtomic> m_DRM;
@@ -57,4 +60,7 @@ private:
   CVideoBufferDRMPRIME* m_prev_buffer = nullptr;
   uint32_t m_fb_id{0};
   uint32_t m_prev_fb_id{0};
+#ifdef HAVE_DVBRIDGE
+  bool m_planePrepared{};
+#endif
 };

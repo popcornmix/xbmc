@@ -30,6 +30,11 @@
 
 #include <memory>
 #include <mutex>
+#ifdef CB1_HAS_HDR10_AI
+#include "guilib/GUIComponent.h"
+#include "guilib/GUIWindowManager.h"
+#include "guilib/WindowIDs.h"
+#endif
 #ifdef HAVE_DVBRIDGE
 #include "cores/VideoPlayer/DVDCodecs/Video/DVPlaybackPolicy.h"
 #include "windowing/gbm/WinSystemGbmGLESContext.h"
@@ -226,6 +231,9 @@ bool CRenderManager::Configure()
     m_playerPort->UpdateVideoRender(m_pRenderer->VideoBypassesFramebuffer());
 
     m_queued.clear();
+#ifdef CB1_HAS_HDR10_AI
+    ResetHDR10AIQueue();
+#endif
     m_discard.clear();
     m_free.clear();
     m_presentsource = 0;
@@ -300,6 +308,103 @@ bool CRenderManager::IsPresenting()
     return false;
 }
 
+#ifdef CB1_HAS_HDR10_AI
+bool CRenderManager::PrepareHDR10AILookahead()
+{
+  if (!m_pRenderer || !m_pRenderer->HDR10AIQueueEligible())
+    return m_aiQueueReady = true;
+  auto queue = m_queued;
+  const bool paused = m_pRenderer->HDR10AILookahead() && m_showVideo &&
+      m_aiStartPts != DVD_NOPTS_VALUE && m_dvdClock.IsPaused();
+  const bool pending = m_presentstep == PRESENT_FRAME && m_pRenderer->HDR10AIFramePending();
+  const bool selected = m_presentstep == PRESENT_FLIP && m_pRenderer->HDR10AILookahead();
+  if (paused || pending || selected) queue.push_front(m_presentsource);
+  if (queue.empty()) return false;
+  uint64_t deadline = 0;
+  if (m_pRenderer->HDR10AILookahead() && m_aiStartPts != DVD_NOPTS_VALUE)
+  {
+    UpdateDisplayLatency();
+    const double refresh =
+        DVD_TIME_BASE / CServiceBroker::GetWinSystem()->GetGfxContext().GetFPS();
+    const auto successor = std::next(queue.begin());
+    const auto& head = m_Queue[queue.front()];
+    double cutoff = head.pts;
+    if (std::isfinite(refresh) && refresh > 0)
+    {
+      const double end = successor != queue.end() ? m_Queue[*successor].pts :
+          head.pts + std::max(0.0,head.duration);
+      // Native selection cutoff includes the display-clock synchronization lead.
+      const double tolerance = m_lateframes <= 6 ? 0.98 : 0.0;
+      const double lead = m_clockSync.m_enabled ? refresh / 2 - m_clockSync.m_syncOffset : 0;
+      cutoff = end + tolerance * refresh - lead;
+    }
+    const double remaining = std::max(0.0,
+        cutoff - m_dvdClock.GetClock() - m_displayLatency);
+    const double speed = m_dvdClock.GetClockSpeed();
+    // Charge starvation only after the native presentation cutoff.
+    const double delay = std::isfinite(speed) && speed > 0 ?
+        remaining / speed : 0;
+    deadline = DVBRIDGE::DiagnosticNowMs() + static_cast<uint64_t>(std::ceil(delay / 1000.0));
+  }
+  m_aiQueueReady = m_pRenderer->PrepareHDR10AIQueue(queue,m_aiEnd,paused,deadline);
+  if (m_aiQueueReady && m_aiStartPts == DVD_NOPTS_VALUE)
+    m_aiStartPts = m_Queue[queue.front()].pts + m_Queue[queue.front()].duration;
+  return m_aiQueueReady;
+}
+
+bool CRenderManager::HDR10AILookahead()
+{
+  std::unique_lock lock(m_presentlock);
+  return m_pRenderer && m_pRenderer->HDR10AILookahead();
+}
+
+bool CRenderManager::GetHDR10AIStartTime(double& pts)
+{
+  std::unique_lock lock(m_presentlock);
+  if (!m_pRenderer || !m_pRenderer->HDR10AIQueueEligible() ||
+      !m_aiQueueReady || m_aiStartPts == DVD_NOPTS_VALUE ||
+      (m_aiFullscreenRequested && !m_aiGuiReady))
+    return false;
+  pts = m_aiStartPts;
+  return true;
+}
+
+bool CRenderManager::PrepareHDR10AIStartup(bool fullscreen)
+{
+  std::unique_lock lock(m_presentlock);
+  if (!m_pRenderer || !m_pRenderer->HDR10AILookahead()) return true;
+  if (!m_aiFullscreenRequested)
+  {
+    m_aiFullscreenRequested = true;
+    m_aiFullscreenWanted = fullscreen;
+    if (m_aiFullscreenWanted)
+      CServiceBroker::GetAppMessenger()->PostMsg(TMSG_SWITCHTOFULLSCREEN);
+  }
+  return m_aiGuiReady;
+}
+
+bool CRenderManager::HDR10AIPriming()
+{
+  std::unique_lock lock(m_presentlock);
+  return m_pRenderer && m_pRenderer->HDR10AILookahead() &&
+      m_aiFullscreenRequested && !m_aiGuiReady;
+}
+
+void CRenderManager::EndHDR10AIQueue()
+{
+  std::unique_lock lock(m_presentlock);
+  m_aiEnd = true;
+}
+
+void CRenderManager::ResetHDR10AIQueue()
+{
+  m_aiStartPts = DVD_NOPTS_VALUE;
+  m_aiEnd = false;
+  m_aiQueueReady = true;
+  m_aiFullscreenRequested = m_aiGuiReady = m_aiFullscreenWanted = false;
+}
+#endif
+
 void CRenderManager::FrameMove()
 {
   bool firstFrame = false;
@@ -324,8 +429,22 @@ void CRenderManager::FrameMove()
   }
   {
     std::unique_lock lock2(m_presentlock);
+#ifdef CB1_HAS_HDR10_AI
+    if (m_aiStartPts == DVD_NOPTS_VALUE ||
+        (m_pRenderer->HDR10AILookahead() && m_dvdClock.IsPaused()) ||
+        (m_presentstep == PRESENT_FRAME && m_pRenderer->HDR10AIFramePending()))
+      PrepareHDR10AILookahead();
+    if (m_aiFullscreenRequested && m_aiQueueReady && !m_bTriggerUpdateResolution &&
+        m_pRenderer->HDR10AIFrameCommitted() && (!m_aiFullscreenWanted ||
+        CServiceBroker::GetGUI()->GetWindowManager().IsWindowActive(WINDOW_FULLSCREEN_VIDEO)))
+      m_aiGuiReady = true;
+#endif
 
-    if (m_queued.empty())
+    if (m_queued.empty()
+#ifdef CB1_HAS_HDR10_AI
+        && !(m_presentstep == PRESENT_FRAME && m_pRenderer->HDR10AIFramePending())
+#endif
+        )
     {
       m_presentstep = PRESENT_IDLE;
     }
@@ -339,6 +458,10 @@ void CRenderManager::FrameMove()
 
     if (m_presentstep == PRESENT_FLIP)
     {
+#ifdef CB1_HAS_HDR10_AI
+      // Prepare metadata for the native selection, not the queue head it skipped.
+      if (m_pRenderer->HDR10AILookahead()) PrepareHDR10AILookahead();
+#endif
       m_presentstep = PRESENT_FRAME;
       m_presentevent.notifyAll();
     }
@@ -463,6 +586,9 @@ bool CRenderManager::Flush(bool wait, bool saveBuffers)
     {
       m_overlays.Flush();
       m_debugRenderer.Flush();
+#ifdef CB1_HAS_HDR10_AI
+      ResetHDR10AIQueue();
+#endif
 
       if (!m_pRenderer->Flush(saveBuffers))
       {
@@ -721,6 +847,11 @@ void CRenderManager::Render(bool clear, DWORD flags, DWORD alpha, bool gui)
 
   {
     std::unique_lock lock(m_presentlock);
+#ifdef CB1_HAS_HDR10_AI
+    // A GUI-only pass cannot complete the selected AI video picture.
+    if ((!presented && m_pRenderer->HDR10AILookahead()) ||
+        m_pRenderer->HDR10AIFramePending()) return;
+#endif
 
     if (m_presentstep == PRESENT_FRAME)
     {
@@ -809,6 +940,15 @@ void CRenderManager::PresentBlend(bool clear, DWORD flags, DWORD alpha)
     m_pRenderer->RenderUpdate(m_presentsource, m_presentsourcePast, clear, flags | RENDER_FLAG_TOP | RENDER_FLAG_NOOSD, alpha);
     m_pRenderer->RenderUpdate(m_presentsource, m_presentsourcePast, false, flags | RENDER_FLAG_BOT, alpha / 2);
   }
+}
+
+void CRenderManager::UpdateDisplayLatency()
+{
+  m_displayLatency = DVD_MSEC_TO_TIME(
+      m_latencyTweak +
+      static_cast<double>(CServiceBroker::GetWinSystem()->GetGfxContext().GetDisplayLatency()) -
+      m_videoDelay -
+      static_cast<double>(CServiceBroker::GetWinSystem()->GetFrameLatencyAdjustment()));
 }
 
 void CRenderManager::UpdateLatencyTweak()
@@ -954,6 +1094,10 @@ bool CRenderManager::AddVideoPicture(const VideoPicture& picture, volatile std::
   m.presentfield = displayField;
   m.presentmethod = presentmethod;
   m.pts = picture.pts;
+#ifdef CB1_HAS_HDR10_AI
+  m.duration = picture.iDuration;
+  if (m_pRenderer->HDR10AILookahead()) wait = false;
+#endif
   m_queued.push_back(m_free.front());
   m_free.pop_front();
   m_playerPort->UpdateRenderBuffers(m_queued.size(), m_discard.size(), m_free.size());
@@ -1066,6 +1210,12 @@ int CRenderManager::WaitForBuffer(volatile std::atomic_bool& bStop,
 
 void CRenderManager::PrepareNextRender()
 {
+#ifdef CB1_HAS_HDR10_AI
+  if (!m_aiQueueReady && m_aiStartPts == DVD_NOPTS_VALUE) return;
+  const bool priming = m_pRenderer && m_pRenderer->HDR10AILookahead() &&
+      (!m_showVideo || (m_aiFullscreenRequested && !m_aiGuiReady));
+  if (priming && m_aiGuiReady) return;
+#endif
   if (m_queued.empty())
   {
     CLog::Log(LOGERROR, "CRenderManager::PrepareNextRender - asked to prepare with nothing available");
@@ -1074,19 +1224,23 @@ void CRenderManager::PrepareNextRender()
     return;
   }
 
-  if (!m_showVideo && !m_forceNext)
+  if (!m_showVideo && !m_forceNext
+#ifdef CB1_HAS_HDR10_AI
+      && !priming
+#endif
+      )
     return;
 
-  const double frameOnScreen = m_dvdClock.GetClock();
+  const double frameOnScreen =
+#ifdef CB1_HAS_HDR10_AI
+      priming ? m_Queue[m_queued.front()].pts :
+#endif
+      m_dvdClock.GetClock();
   const double frametime =
       1.0 / static_cast<double>(CServiceBroker::GetWinSystem()->GetGfxContext().GetFPS()) *
       DVD_TIME_BASE;
 
-  m_displayLatency = DVD_MSEC_TO_TIME(
-      m_latencyTweak +
-      static_cast<double>(CServiceBroker::GetWinSystem()->GetGfxContext().GetDisplayLatency()) -
-      m_videoDelay -
-      static_cast<double>(CServiceBroker::GetWinSystem()->GetFrameLatencyAdjustment()));
+  UpdateDisplayLatency();
 
   // While the clock is paused, frameOnScreen does not advance, so adding the display
   // latency would pick a frame ahead of the one actually shown. That only holds for
@@ -1201,6 +1355,9 @@ void CRenderManager::PrepareNextRender()
 void CRenderManager::DiscardBuffer()
 {
   std::unique_lock lock2(m_presentlock);
+#ifdef CB1_HAS_HDR10_AI
+  ResetHDR10AIQueue();
+#endif
 
   while(!m_queued.empty())
   {

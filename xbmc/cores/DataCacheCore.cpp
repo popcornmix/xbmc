@@ -7,6 +7,7 @@
  */
 
 #include "DataCacheCore.h"
+#include "VideoSourceSideData.h"
 
 #include "ServiceBroker.h"
 #include "cores/EdlEdit.h"
@@ -37,6 +38,10 @@ void CDataCacheCore::Reset()
   {
     std::unique_lock lock(m_videoPlayerSection);
     m_playerVideoInfo = {};
+    m_videoProcessingInfo = {};
+    m_videoSourceSideData.reset();
+    ++m_videoProcessingGeneration;
+    m_videoProcessingInfo.informationGeneration=m_videoProcessingGeneration;
   }
   m_hasAVInfoChanges = false;
   {
@@ -56,6 +61,70 @@ void CDataCacheCore::ResetAudioCache()
     std::unique_lock lock(m_audioPlayerSection);
     m_playerAudioInfo = {};
   }
+}
+
+uint64_t CDataCacheCore::ResetVideoProcessingInfo()
+{
+  std::unique_lock lock(m_videoPlayerSection);
+  m_videoProcessingInfo = {};
+  m_videoSourceSideData.reset();
+  m_hasAVInfoChanges = true;
+  m_videoProcessingInfo.informationGeneration=++m_videoProcessingGeneration;
+  return m_videoProcessingGeneration;
+}
+
+uint64_t CDataCacheCore::GetVideoProcessingGeneration()
+{
+  std::unique_lock lock(m_videoPlayerSection);
+  return m_videoProcessingGeneration;
+}
+
+bool CDataCacheCore::SetVideoProcessingInfo(uint64_t generation, const VideoProcessingInfo& info)
+{
+  std::unique_lock lock(m_videoPlayerSection);
+  if (generation != m_videoProcessingGeneration || info.informationGeneration != generation)
+    return false;
+  const auto& previous = m_videoProcessingInfo.output;
+  if (previous.stream && info.output.stream == previous.stream &&
+      (info.output.revision < previous.revision ||
+       (info.output.revision == previous.revision && info.output.picture < previous.picture)))
+    return false;
+  m_videoProcessingInfo = info;
+  m_hasAVInfoChanges = true;
+  return true;
+}
+
+VideoProcessingInfo CDataCacheCore::GetVideoProcessingInfo()
+{
+  std::unique_lock lock(m_videoPlayerSection);
+  return m_videoProcessingInfo;
+}
+
+bool CDataCacheCore::SetVideoSourceSideData(
+    uint64_t generation, std::shared_ptr<const VideoSourceSideData> source)
+{
+  std::unique_lock lock(m_videoPlayerSection);
+  if (!source || !generation || generation != m_videoProcessingGeneration ||
+      source->Generation() != generation || !source->Serial() ||
+      (m_videoSourceSideData && source->Serial() < m_videoSourceSideData->Serial()))
+    return false;
+  m_videoSourceSideData = std::move(source);
+  return true;
+}
+
+std::string CDataCacheCore::GetVideoSourceSideData()
+{
+  std::shared_ptr<const VideoSourceSideData> source;
+  {
+    std::unique_lock lock(m_videoPlayerSection);
+    source = m_videoSourceSideData;
+  }
+  if (!source) return {};
+  const auto& json = source->JSON(); // do not hold the presentation/cache lock while encoding
+  std::unique_lock lock(m_videoPlayerSection);
+  if (source != m_videoSourceSideData || source->Generation() != m_videoProcessingGeneration)
+    return {};
+  return json;
 }
 
 bool CDataCacheCore::HasAVInfoChanges()

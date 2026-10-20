@@ -132,15 +132,18 @@ uint32_t CDRMUtils::DrmOpaqueFbGetFromBo(struct gbm_bo* bo)
   auto* fb = DrmFbGetFromBo(bo);
   if (!fb)
     return 0;
-  if (fb->format == DRM_FORMAT_XRGB8888)
+  if (fb->format == DRM_FORMAT_XRGB8888 || fb->format == DRM_FORMAT_XRGB2101010)
     return fb->fb_id;
-  if (fb->format != DRM_FORMAT_ARGB8888)
+  if (fb->format != DRM_FORMAT_ARGB8888 && fb->format != DRM_FORMAT_ARGB2101010)
     return 0;
   if (fb->opaque_fb_id)
     return fb->opaque_fb_id;
 
   // A separate opaque view preserves the ordinary GUI framebuffer and owns no
-  // extra pixel storage. Never let scanout alpha blend a packed DV transport.
+  // extra pixel storage. Packed DV and reconstructed HDR10 are final images;
+  // neither must be blended again by the scanout plane.
+  const uint32_t opaqueFormat = fb->format == DRM_FORMAT_ARGB2101010
+                                    ? DRM_FORMAT_XRGB2101010 : DRM_FORMAT_XRGB8888;
   uint32_t handles[4]{}, strides[4]{}, offsets[4]{};
   uint64_t modifiers[4]{};
 #if defined(HAS_GBM_MODIFIERS)
@@ -162,7 +165,7 @@ uint32_t CDRMUtils::DrmOpaqueFbGetFromBo(struct gbm_bo* bo)
                                  modifiers[0] != DRM_FORMAT_MOD_INVALID
                              ? DRM_MODE_FB_MODIFIERS : 0;
   const int result = drmModeAddFB2WithModifiers(
-      m_fd, gbm_bo_get_width(bo), gbm_bo_get_height(bo), DRM_FORMAT_XRGB8888,
+      m_fd, gbm_bo_get_width(bo), gbm_bo_get_height(bo), opaqueFormat,
       handles, strides, offsets, modifiers, &fb->opaque_fb_id, flags);
   if (result != 0)
   {

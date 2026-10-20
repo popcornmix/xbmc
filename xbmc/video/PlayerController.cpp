@@ -14,6 +14,9 @@
 #include "cores/IPlayer.h"
 #include "dialogs/GUIDialogKaiToast.h"
 #include "dialogs/GUIDialogSelect.h"
+#ifdef HAVE_DVBRIDGE
+#include "dialogs/DVPlaybackModes.h"
+#endif
 #include "dialogs/GUIDialogSlider.h"
 #include "guilib/GUIComponent.h"
 #include "guilib/GUISliderControl.h"
@@ -69,6 +72,10 @@ bool CPlayerController::OnAction(const CAction &action)
   {
     switch (action.GetID())
     {
+#ifdef HAVE_DVBRIDGE
+      case ACTION_PLAYBACK_MODE_MENU:
+        return CDVPlaybackModes::ShowMenu();
+#endif
       case ACTION_SHOW_SUBTITLES:
       {
         //! @todo combine processing of ACTION_SHOW_SUBTITLES with ACTION_NEXT_SUBTITLE and the other stream actions

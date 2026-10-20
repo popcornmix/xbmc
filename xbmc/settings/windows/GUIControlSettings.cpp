@@ -35,6 +35,9 @@
 #include "settings/MediaSourceSettings.h"
 #include "settings/SettingAddon.h"
 #include "settings/SettingControl.h"
+#ifdef HAVE_DVBRIDGE
+#include "settings/SettingConditions.h"
+#endif
 #include "settings/SettingDateTime.h"
 #include "settings/SettingPath.h"
 #include "settings/SettingUtils.h"
@@ -175,6 +178,11 @@ bool GetIntegerOptions(const SettingConstPtr& setting,
     }
   }
 
+#ifdef HAVE_DVBRIDGE
+  if (setting->GetId()=="dvbridge.outputmode" || setting->GetId()=="dvbridge.hdr10method" ||
+      setting->GetId()=="dvbridge.hdr10source")
+    CSettingConditions::DVOutputOptions(setting,options);
+#endif
   switch (pSettingInt->GetOptionsSort())
   {
     case SettingOptionsSort::Ascending:

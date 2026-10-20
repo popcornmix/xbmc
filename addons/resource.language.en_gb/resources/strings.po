@@ -25895,3 +25895,258 @@ msgstr ""
 msgctxt "#40804"
 msgid "{0:.1f} dB"
 msgstr ""
+
+#: system/settings/settings.xml
+msgctxt "#40810"
+msgid "Dolby Vision"
+msgstr ""
+
+#: system/settings/settings.xml
+msgctxt "#40811"
+msgid "Dolby Vision output"
+msgstr ""
+
+#: system/settings/settings.xml
+msgctxt "#40812"
+msgid "DV Standard (TV-Led)"
+msgstr ""
+
+#: system/settings/settings.xml
+msgctxt "#40813"
+msgid "HDR10 conversion"
+msgstr ""
+
+#: system/settings/settings.xml
+msgctxt "#40814"
+msgid "DV Disabled (native Kodi)"
+msgstr ""
+
+#: system/settings/settings.xml
+msgctxt "#40815"
+msgid "Choose TV-Led Dolby Vision, HDR10 conversion or standard Kodi playback. Supported changes apply at a video frame boundary."
+msgstr ""
+
+#: system/settings/settings.xml
+msgctxt "#40816"
+msgid "Enhanced player information"
+msgstr ""
+
+#: system/settings/settings.xml
+msgctxt "#40817"
+msgid "Press O for player information, again for playback modes, again to close. Disable to restore Kodi's original panel and hide playback modes."
+msgstr ""
+
+#: addons/skin.estuary/xml/IncludesDVProcessInfo.xml
+msgctxt "#40818"
+msgid "Player information"
+msgstr ""
+
+#: system/settings/settings.xml
+msgctxt "#40819"
+msgid "DV Enhanced"
+msgstr ""
+
+msgctxt "#40820"
+msgid "HDR10 conversion method"
+msgstr ""
+
+msgctxt "#40821"
+msgid "Basic uses source metadata. Expert requires a TV profile. Unsupported output uses a visible compatibility fallback."
+msgstr ""
+
+msgctxt "#40822"
+msgid "HDR10 Reference Basic"
+msgstr ""
+
+msgctxt "#40823"
+msgid "HDR10 Reference Expert"
+msgstr ""
+
+msgctxt "#40825"
+msgid "Enhancement preset"
+msgstr ""
+
+msgctxt "#40826"
+msgid "Dolby Vision Enhanced preset. Changing this preset does not change the HDMI output format."
+msgstr ""
+
+msgctxt "#40827"
+msgid "Natural"
+msgstr ""
+
+msgctxt "#40828"
+msgid "Signature"
+msgstr ""
+
+msgctxt "#40829"
+msgid "TV peak luminance (nits)"
+msgstr ""
+
+msgctxt "#40830"
+msgid "Enter a known TV peak, 1 to 10000 nits. This is a processing reference, not measured TV light. Disable TV dynamic tone mapping for HDR10 Expert."
+msgstr ""
+
+msgctxt "#40831"
+msgid "TV panel type"
+msgstr ""
+
+msgctxt "#40832"
+msgid "Select the TV panel type for the shared manual profile. Unset leaves the profile incomplete."
+msgstr ""
+
+msgctxt "#40833"
+msgid "Unset"
+msgstr ""
+
+msgctxt "#40834"
+msgid "OLED"
+msgstr ""
+
+msgctxt "#40835"
+msgid "LCD"
+msgstr ""
+
+msgctxt "#40836"
+msgid "TV color gamut"
+msgstr ""
+
+msgctxt "#40837"
+msgid "Use P3-D65 for most HDR TVs; choose a known alternative when appropriate. This selects gamut, not a separate whitepoint or measured calibration."
+msgstr ""
+
+msgctxt "#40838"
+msgid "BT709"
+msgstr ""
+
+msgctxt "#40839"
+msgid "P3-D65"
+msgstr ""
+
+msgctxt "#40840"
+msgid "BT2020"
+msgstr ""
+
+msgctxt "#40841"
+msgid "Dolby Vision output not supported"
+msgstr ""
+
+msgctxt "#40842"
+msgid "HDR10 output not supported"
+msgstr ""
+
+msgctxt "#40843"
+msgid "GPU processing unavailable"
+msgstr ""
+
+msgctxt "#40844"
+msgid "Source cannot use this processing mode"
+msgstr ""
+
+msgctxt "#40845"
+msgid "Enter the TV peak, panel and gamut first"
+msgstr ""
+
+msgctxt "#40846"
+msgid "Output activation failed"
+msgstr ""
+
+msgctxt "#40847"
+msgid "Display restoration failed"
+msgstr ""
+
+msgctxt "#40848"
+msgid "Driver-validated link minimum"
+msgstr ""
+
+msgctxt "#40849"
+msgid "Output availability"
+msgstr ""
+
+msgctxt "#40850"
+msgid "Atomic output result"
+msgstr ""
+
+msgctxt "#40851"
+msgid "Unavailable"
+msgstr ""
+
+#. Driver-validated minimum link precision, not a measured link depth
+msgctxt "#40852"
+msgid "{}-bit minimum"
+msgstr ""
+
+msgctxt "#40853"
+msgid "Configure TV profile"
+msgstr ""
+
+msgctxt "#40854"
+msgid "Set peak and gamut before choosing Expert or Enhanced. Standard and Basic do not need a TV profile."
+msgstr ""
+
+msgctxt "#40855"
+msgid "Playback mode menu"
+msgstr ""
+
+msgctxt "#40856"
+msgid "Choose a playback mode during the video. Requires enhanced player information."
+msgstr ""
+
+msgctxt "#40857"
+msgid "Show playback mode at start"
+msgstr ""
+
+msgctxt "#40858"
+msgid "Show the accepted playback mode once when a video starts."
+msgstr ""
+
+msgctxt "#40861"
+msgid "DV Enhanced - Natural"
+msgstr ""
+
+msgctxt "#40862"
+msgid "DV Enhanced - Signature"
+msgstr ""
+
+msgctxt "#40863"
+msgid "Playback mode"
+msgstr ""
+
+msgctxt "#40864"
+msgid "Disable TV dynamic tone mapping"
+msgstr ""
+
+msgctxt "#40865"
+msgid "HDR10 playback"
+msgstr ""
+
+msgctxt "#40866"
+msgid "HDR10 Native"
+msgstr ""
+
+msgctxt "#40867"
+msgid "DV Reference (AI)"
+msgstr ""
+
+msgctxt "#40868"
+msgid "DV Enhanced (AI)"
+msgstr ""
+
+msgctxt "#40870"
+msgid "AI-assisted HDR10 to Dolby Vision conversion. Reference preserves grading. Enhanced requires a TV profile."
+msgstr ""
+
+msgctxt "#40871"
+msgid "DV Enhanced (AI) - Natural"
+msgstr ""
+
+msgctxt "#40872"
+msgid "DV Enhanced (AI) - Signature"
+msgstr ""
+
+msgctxt "#40875"
+msgid "HDR10 conversion unavailable. Using native HDR10."
+msgstr ""
+
+msgctxt "#40876"
+msgid "Playback modes | Source: {0}"
+msgstr ""

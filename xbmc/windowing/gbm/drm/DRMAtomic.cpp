@@ -363,6 +363,9 @@ bool CDRMAtomic::FlipPageTransactional(struct gbm_bo* bo, bool restore)
 
 void CDRMAtomic::FlipPage(struct gbm_bo* bo, bool rendered, bool videoLayer, bool async)
 {
+#ifdef HAVE_DVBRIDGE
+  m_lastPageAccepted=false;
+#endif
   struct drm_fb* drm_fb = nullptr;
   uint32_t flags = 0;
 
@@ -386,7 +389,11 @@ void CDRMAtomic::FlipPage(struct gbm_bo* bo, bool rendered, bool videoLayer, boo
     CLog::LogF(LOGDEBUG, "Execute modeset at next commit");
   }
 
+#ifdef HAVE_DVBRIDGE
+  m_lastPageAccepted=DrmAtomicCommit(!drm_fb ? 0 : drm_fb->fb_id, flags, rendered, videoLayer);
+#else
   DrmAtomicCommit(!drm_fb ? 0 : drm_fb->fb_id, flags, rendered, videoLayer);
+#endif
 }
 
 bool CDRMAtomic::InitDrm()

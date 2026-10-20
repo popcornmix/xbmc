@@ -70,3 +70,6 @@ if("webos" IN_LIST CORE_PLATFORM_NAME_LC)
 endif()
 
 core_add_library(VideoPlayer)
+if(ENABLE_DVBRIDGE)
+  target_link_libraries(${CORE_LIBRARY} PRIVATE dvbridge_core)
+endif()

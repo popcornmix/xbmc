@@ -10,6 +10,9 @@
 
 #include "VaapiEGL.h"
 #include "cores/VideoPlayer/VideoRenderers/LinuxRendererGLES.h"
+#ifdef HAVE_DVBRIDGE
+#include "cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h"
+#endif
 
 #include <array>
 #include <memory>
@@ -43,6 +46,16 @@ public:
 
   // Player functions
   bool ConfigChanged(const VideoPicture &picture) override;
+#ifdef CB1_HAS_HDR10_AI
+  CRenderInfo GetRenderInfo() override;
+  bool HDR10AIQueueEligible() const override { return m_aiBuffers > NUM_BUFFERS; }
+  bool HDR10AILookahead() const override;
+  bool HDR10AIFrameCommitted() const override;
+  bool PrepareHDR10AIQueue(const std::deque<int>& queue, bool end, bool paused,
+      uint64_t presentationDeadline = 0) override;
+  unsigned m_aiBuffers{6};
+  bool m_aiLookahead{};
+#endif
   void ReleaseBuffer(int idx) override;
   bool NeedBuffer(int idx) override;
 
@@ -51,6 +64,7 @@ protected:
   bool RenderHook(int idx) override;
 #ifdef HAVE_DVBRIDGE
   bool RenderDVBridge(int idx) override;
+  bool BuildDVBridgeLayer(int idx, CDVBridgeGLES::Layer& layer);
 #endif
   void AfterRenderHook(int idx) override;
 
@@ -62,13 +76,13 @@ protected:
   EShaderFormat GetShaderFormat() override;
 
   bool m_isVAAPIBuffer = true;
-  bool m_nv12Allocated[NUM_BUFFERS]{};
+  bool m_nv12Allocated[MAX_RENDER_BUFFERS]{};
   // VA fourcc of the surfaces being received (NV12 / P010 / P012 / P016 /
   // YUY2 / Y210 / Y212 / Y216). Captured at Configure and read by
   // GetShaderFormat to pick the matching sampling path.
   std::int32_t m_vaapiFourcc{};
   VAAPI::CVaapiTexturePool m_texturePool;
-  VAAPI::CVaapiTexture* m_vaapiTextures[NUM_BUFFERS]{};
-  std::array<std::unique_ptr<KODI::UTILS::EGL::CEGLFence>, NUM_BUFFERS> m_fences;
+  VAAPI::CVaapiTexture* m_vaapiTextures[MAX_RENDER_BUFFERS]{};
+  std::array<std::unique_ptr<KODI::UTILS::EGL::CEGLFence>, MAX_RENDER_BUFFERS> m_fences;
   static VAAPI::IVaapiWinSystem *m_pWinSystem;
 };

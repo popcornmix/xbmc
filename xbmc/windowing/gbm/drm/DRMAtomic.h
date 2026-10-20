@@ -32,6 +32,9 @@ public:
   CDRMAtomic() = default;
   ~CDRMAtomic() override = default;
   void FlipPage(struct gbm_bo* bo, bool rendered, bool videoLayer, bool async) override;
+#ifdef HAVE_DVBRIDGE
+  bool LastPageAccepted() const { return m_lastPageAccepted; }
+#endif
   bool SetVideoMode(const RESOLUTION_INFO& res, struct gbm_bo* bo) override;
   bool SetActive(bool active) override;
   bool InitDrm() override;
@@ -73,6 +76,9 @@ private:
   uint32_t m_dvSnapshotConnector{0};
 
   bool m_need_modeset{true};
+#ifdef HAVE_DVBRIDGE
+  bool m_lastPageAccepted{};
+#endif
   bool m_active = true;
   bool m_propertyFailure = false;
   bool m_dvRestoring = false;

@@ -106,6 +106,14 @@ public:
   bool AddVideoPicture(const VideoPicture& picture, volatile std::atomic_bool& bStop, EINTERLACEMETHOD deintMethod, bool wait);
   void AddOverlay(std::shared_ptr<CDVDOverlay> o, double pts);
   void ShowVideo(bool enable);
+#ifdef CB1_HAS_HDR10_AI
+  bool HDR10AILookahead();
+  bool GetHDR10AIStartTime(double& pts);
+  bool PrepareHDR10AIStartup(bool fullscreen);
+  bool HDR10AIPriming();
+  void EndHDR10AIQueue();
+  void ResetHDR10AIQueue();
+#endif
 
   /*!
    * \brief True if any subtitle/overlay is visible on the current presented
@@ -149,6 +157,13 @@ protected:
   void PresentBlend(bool clear, DWORD flags, DWORD alpha);
 
   void PrepareNextRender();
+  void UpdateDisplayLatency();
+#ifdef CB1_HAS_HDR10_AI
+  bool PrepareHDR10AILookahead();
+  bool m_aiQueueReady{true},m_aiEnd{};
+  bool m_aiFullscreenRequested{},m_aiGuiReady{},m_aiFullscreenWanted{};
+  double m_aiStartPts{DVD_NOPTS_VALUE};
+#endif
   bool IsPresenting();
   bool IsGuiLayer();
 
@@ -207,7 +222,7 @@ protected:
   /// Display latency tweak value from AdvancedSettings for the current refresh rate
   /// in milliseconds
   double m_latencyTweak = 0.0;
-  /// Display latency updated in PrepareNextRender in DVD clock units, includes m_latencyTweak
+  /// Native display latency in DVD clock units, includes m_latencyTweak.
   double m_displayLatency = 0.0;
   std::atomic_int m_videoDelay = {};
 
@@ -217,9 +232,12 @@ protected:
   struct SPresent
   {
     double         pts;
+#ifdef CB1_HAS_HDR10_AI
+    double duration{};
+#endif
     EFIELDSYNC     presentfield;
     EPRESENTMETHOD presentmethod;
-  } m_Queue[NUM_BUFFERS]{};
+  } m_Queue[MAX_RENDER_BUFFERS]{};
 
   std::deque<int> m_free;
   std::deque<int> m_queued;

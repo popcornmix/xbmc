@@ -7,6 +7,9 @@
  */
 
 #include "Settings.h"
+#ifdef HAVE_DVBRIDGE
+#include "dialogs/DVPlaybackModes.h"
+#endif
 
 #include "Autorun.h"
 #include "GUIPassword.h"
@@ -582,6 +585,9 @@ void CSettings::UninitializeISubSettings()
 
 void CSettings::InitializeISettingCallbacks()
 {
+#ifdef HAVE_DVBRIDGE
+  GetSettingsManager()->RegisterCallback(&CDVPlaybackModes::GetInstance(),{"dvbridge.configureprofile"});
+#endif
   // register any ISettingCallback implementations
   GetSettingsManager()->RegisterCallback(
       &CMediaSettings::GetInstance(),
@@ -644,6 +650,9 @@ void CSettings::InitializeISettingCallbacks()
 
 void CSettings::UninitializeISettingCallbacks()
 {
+#ifdef HAVE_DVBRIDGE
+  GetSettingsManager()->UnregisterCallback(&CDVPlaybackModes::GetInstance());
+#endif
   GetSettingsManager()->UnregisterCallback(&CMediaSettings::GetInstance());
   GetSettingsManager()->UnregisterCallback(&CDisplaySettings::GetInstance());
   GetSettingsManager()->UnregisterCallback(&g_charsetConverter);

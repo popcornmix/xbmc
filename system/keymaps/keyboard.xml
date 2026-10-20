@@ -727,6 +727,11 @@
       <backspace mod="longpress">ActivateWindow(Home)</backspace>
     </keyboard>
   </MovieInformation>
+  <SelectDialog>
+    <keyboard>
+      <o>PlayerProcessInfo</o>
+    </keyboard>
+  </SelectDialog>
   <PictureInfo>
     <keyboard>
       <period>NextPicture</period>

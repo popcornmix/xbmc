@@ -58,6 +58,7 @@ constexpr auto ActionMappings = make_map<ActionName, ActionID>({
     {"browsesubtitle", ACTION_BROWSE_SUBTITLE},
     {"cyclesubtitle", ACTION_CYCLE_SUBTITLE},
     {"dialogselectvideo", ACTION_DIALOG_SELECT_VIDEO},
+    {"playbackmodemenu", ACTION_PLAYBACK_MODE_MENU},
     {"dialogselectaudio", ACTION_DIALOG_SELECT_AUDIO},
     {"dialogselectsubtitle", ACTION_DIALOG_SELECT_SUBTITLE},
     {"playerdebug", ACTION_PLAYER_DEBUG},

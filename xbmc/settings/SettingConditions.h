@@ -9,6 +9,7 @@
 #pragma once
 
 #include "settings/lib/SettingConditions.h"
+#include "settings/lib/SettingDefinitions.h"
 
 #include <set>
 #include <string>
@@ -21,6 +22,10 @@ class CSettingConditions
 public:
   static void Initialize();
   static void Deinitialize();
+#ifdef HAVE_DVBRIDGE
+  static void DVOutputOptions(const std::shared_ptr<const CSetting>& setting,
+                              std::vector<IntegerSettingOption>& list);
+#endif
 
   static const CProfile& GetCurrentProfile();
 

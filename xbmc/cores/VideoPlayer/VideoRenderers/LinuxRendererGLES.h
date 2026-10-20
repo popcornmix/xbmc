@@ -78,6 +78,9 @@ public:
   void Update() override;
   CRenderInfo GetRenderInfo() override;
   bool ConfigChanged(const VideoPicture& picture) override;
+#ifdef CB1_HAS_HDR10_AI
+  bool HDR10AIFramePending() const override { return HDR10AILookahead() && !m_aiFrameRendered; }
+#endif
 
   // Feature support
   bool SupportsMultiPassRendering() override;
@@ -85,6 +88,9 @@ public:
   bool Supports(ESCALINGMETHOD method) const override;
 
 protected:
+#ifdef CB1_HAS_HDR10_AI
+  bool m_aiFrameRendered{true};
+#endif
   // Returns 0 if scaling is below hqscalers threshold.
   // Otherwise returns the scale factor: < 1.0 = downscale, > 1.0 = upscale.
   float ScalingAboveThreshold() const;
@@ -207,13 +213,15 @@ protected:
     CDVMetadataBuffer doviMetadata;
 #ifdef HAVE_DVBRIDGE
     std::shared_ptr<AVFrame> doviEnhancement;
+    DVBRIDGE::SourceBinding doviEnhancementBinding{};
+    std::shared_ptr<VideoPicture> doviSourcePicture;
 #endif
     double doviPts = DVD_NOPTS_VALUE;
   };
 
   // YUV decoder textures
   // field index 0 is full image, 1 is odd scanlines, 2 is even scanlines
-  CPictureBuffer m_buffers[NUM_BUFFERS];
+  CPictureBuffer m_buffers[MAX_RENDER_BUFFERS];
 
   void LoadPlane(CYuvPlane& plane, int type,
                  unsigned width,  unsigned height,

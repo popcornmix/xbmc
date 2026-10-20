@@ -51,6 +51,11 @@ public:
 
   IHardwareDecoder* GetHWAccel() override;
   bool GetPictureCommon(VideoPicture* pVideoPicture) override;
+#ifdef CB1_HAS_HDR10_AI
+  unsigned GetHDR10AIBufferCount() const override;
+  void PrepareHDR10AIReopen() override;
+  void BindHDR10AISource(VideoPicture& picture);
+#endif
 #ifdef HAVE_DVBRIDGE
   bool NeedsDVEnhancement() const
   {

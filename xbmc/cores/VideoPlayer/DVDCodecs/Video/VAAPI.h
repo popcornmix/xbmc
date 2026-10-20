@@ -190,6 +190,7 @@ struct CVaapiConfig
   int upscale;
   CVideoSurfaces *videoSurfaces;
   uint32_t maxReferences;
+  unsigned renderPictures{7};
   CVAAPIContext *context;
   VADisplay dpy;
   VAProfile profile;
@@ -262,6 +263,7 @@ struct CVaapiProcessedPicture
 class CVaapiRenderPicture : public CVideoBuffer
 {
 public:
+  unsigned renderBufferCount{6};
   explicit CVaapiRenderPicture(int id) : CVideoBuffer(id) { }
   void GetPlanes(uint8_t*(&planes)[YuvImage::MAX_PLANES]) override;
   void GetStrides(int(&strides)[YuvImage::MAX_PLANES]) override;
@@ -553,7 +555,14 @@ public:
   virtual void Close();
   long Release() override;
   bool CanSkipDeint() override;
-  unsigned GetAllowedReferences() override { return 4; }
+  unsigned GetAllowedReferences() override
+  {
+#ifdef CB1_HAS_HDR10_AI
+    if (m_hdr10AIBuffers != 6)
+      return m_hdr10AIBuffers;
+#endif
+    return 4;
+  }
 
   CDVDVideoCodec::VCReturn Check(AVCodecContext* avctx) override;
   const std::string Name() override { return "vaapi"; }
@@ -592,6 +601,9 @@ protected:
 
   bool m_vaapiConfigured;
   CVaapiConfig  m_vaapiConfig;
+#ifdef CB1_HAS_HDR10_AI
+  unsigned m_hdr10AIBuffers{6};
+#endif
   CVideoSurfaces m_videoSurfaces;
   int m_getBufferError;
 

@@ -12,9 +12,13 @@
 #include "FileItemList.h"
 #include "ServiceBroker.h"
 #include "guilib/GUIMessage.h"
+#include "input/actions/Action.h"
 #include "input/actions/ActionIDs.h"
 #include "resources/LocalizeStrings.h"
 #include "resources/ResourcesComponent.h"
+#ifdef HAVE_DVBRIDGE
+#include "DVPlaybackMenuLayout.h"
+#endif
 #include "utils/StringUtils.h"
 
 #include <memory>
@@ -44,6 +48,23 @@ CGUIDialogSelect::CGUIDialogSelect(int windowId)
 }
 
 CGUIDialogSelect::~CGUIDialogSelect(void) = default;
+
+bool CGUIDialogSelect::OnAction(const CAction& action)
+{
+#ifdef HAVE_DVBRIDGE
+  if (action.GetID() == ACTION_PLAYER_PROCESS_INFO)
+  {
+    if (GetProperty("CB1.PlaybackModes").asBoolean())
+    {
+      m_bConfirmed = false;
+      Close(true);
+    }
+    // Keep the shared O key from opening information over an ordinary selector.
+    return true;
+  }
+#endif
+  return CGUIDialogBoxBase::OnAction(action);
+}
 
 bool CGUIDialogSelect::OnMessage(CGUIMessage& message)
 {
@@ -99,6 +120,8 @@ bool CGUIDialogSelect::OnMessage(CGUIMessage& message)
           if (iSelected >= 0 && iSelected < m_vecList->Size())
           {
             CFileItemPtr item(m_vecList->Get(iSelected));
+            if (item->GetProperty("disabled").asBoolean())
+              return true;
             if (m_multiSelection)
               item->Select(!item->IsSelected());
             else
@@ -342,6 +365,23 @@ void CGUIDialogSelect::OnWindowLoaded()
 
 void CGUIDialogSelect::OnInitWindow()
 {
+#ifdef HAVE_DVBRIDGE
+  if (GetProperty("CB1.PlaybackModes").asBoolean())
+  {
+    if (auto* group = GetControl(9100))
+    {
+      const float rowsHeight = DVBRIDGE::PlaybackMenuRowsHeight(m_vecList->Size());
+      const float height = 112.0f + rowsHeight;
+      group->SetPosition(group->GetXPosition(), GetCoordsRes().iHeight - 40.0f - height);
+      group->SetHeight(height);
+      if (auto* background = GetControl(9101)) background->SetHeight(height);
+      for (int id : {CONTROL_SIMPLE_LIST, CONTROL_DETAILED_LIST})
+        if (auto* list = GetControl(id)) list->SetHeight(rowsHeight);
+      if (auto* help = GetControl(9102))
+        help->SetPosition(help->GetXPosition(), 70.0f + rowsHeight);
+    }
+  }
+#endif
   m_viewControl.SetItems(*m_vecList);
   m_selectedItems.clear();
   for(int i = 0 ; i < m_vecList->Size(); i++)

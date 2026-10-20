@@ -1233,7 +1233,7 @@ constexpr std::array<InfoMap, 11> player_times = {{
 ///
 /// -----------------------------------------------------------------------------
 // clang-format off
-constexpr std::array<InfoMap, 20> player_process = {{
+constexpr std::array<InfoMap, 38> player_process = {{
     {"videodecoder",        PLAYER_PROCESS_VIDEODECODER},
     {"deintmethod",         PLAYER_PROCESS_DEINTMETHOD},
     {"pixformat",           PLAYER_PROCESS_PIXELFORMAT},
@@ -1254,6 +1254,24 @@ constexpr std::array<InfoMap, 20> player_process = {{
     {"videoqueuedatalevel", PLAYER_PROCESS_VIDEO_QUEUE_DATA_LEVEL},
     {"videoscantype",       PLAYER_PROCESS_VIDEOSCANTYPE},
     {"subtitledecoder",     PLAYER_PROCESS_SUBTITLEDECODER},
+    {"videooutputhdrtype", PLAYER_PROCESS_VIDEOOUTPUTHDRTYPE},
+    {"videoprocessingmode", PLAYER_PROCESS_VIDEOPROCESSINGMODE},
+    {"videoprocessingengine", PLAYER_PROCESS_VIDEOPROCESSINGENGINE},
+    {"videoprocessingcircuit", PLAYER_PROCESS_VIDEOPROCESSINGCIRCUIT},
+    {"videoprocessingfallback", PLAYER_PROCESS_VIDEOPROCESSINGFALLBACK},
+    {"videodvcmversion", PLAYER_PROCESS_VIDEODVCMVERSION},
+    {"videodvparsedblocks", PLAYER_PROCESS_VIDEODVPARSEDBLOCKS},
+    {"videodvappliedblocks", PLAYER_PROCESS_VIDEODVAPPLIEDBLOCKS},
+    {"videodvtransmittedblocks", PLAYER_PROCESS_VIDEODVTRANSMITTEDBLOCKS},
+    {"videosourcebits", PLAYER_PROCESS_VIDEOSOURCEBITS},
+    {"videodvprofile", PLAYER_PROCESS_VIDEODVPROFILE},
+    {"videodvlevel", PLAYER_PROCESS_VIDEODVLEVEL},
+    {"videodvversion", PLAYER_PROCESS_VIDEODVVERSION},
+    {"videodvlayers", PLAYER_PROCESS_VIDEODVLAYERS},
+    {"videoprocessingfast", PLAYER_PROCESS_VIDEOPROCESSINGFAST},
+    {"videooutputformat", PLAYER_PROCESS_VIDEOOUTPUTFORMAT},
+    {"videooutputbits", PLAYER_PROCESS_VIDEOOUTPUTBITS},
+    {"video.sidedata", PLAYER_PROCESS_VIDEOSIDEDATA},
 }};
 // clang-format on
 

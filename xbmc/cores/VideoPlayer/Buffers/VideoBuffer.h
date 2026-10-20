@@ -93,6 +93,11 @@ public:
   void Acquire(std::shared_ptr<IVideoBufferPool> pool);
   void Release();
   int GetId() const { return m_id; }
+#ifdef HAVE_DVBRIDGE
+  // Reporting identity follows the retained buffer, not asynchronous GUI flushes.
+  uint64_t PlaybackGeneration() const { return m_playbackGeneration.load(std::memory_order_relaxed); }
+  void SetPlaybackGeneration(uint64_t value) { m_playbackGeneration.store(value,std::memory_order_relaxed); }
+#endif
 
   virtual AVPixelFormat GetFormat();
   virtual uint8_t* GetMemPtr() { return nullptr; }
@@ -142,6 +147,9 @@ protected:
   std::atomic_int m_refCount;
   int m_id;
   std::shared_ptr<IVideoBufferPool> m_pool;
+#ifdef HAVE_DVBRIDGE
+  std::atomic<uint64_t> m_playbackGeneration{0};
+#endif
 };
 
 class CVideoBufferSysMem : public CVideoBuffer

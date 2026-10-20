@@ -186,6 +186,27 @@ bool CWinSystemGbmEGLContext::CreateNewWindow(const std::string& name,
   return true;
 }
 
+CWinSystemGbmEGLContext::~CWinSystemGbmEGLContext()
+{
+#ifdef HAVE_DVBRIDGE
+  if (m_nativeDVRetirement && m_nativeDVRetirement->GL())
+  {
+    // RenderSystem and derived GL members have already been destroyed. This
+    // final fence covers their commands before the matching context can retire.
+    m_nativeDVRetirement->FenceLastUse();
+    m_GBM->GetDevice().UseDVOutputLifetime();
+    CDVWindowRetirement::Resources resources;
+    resources.gbm = std::shared_ptr<CGBMUtils>(std::move(m_GBM));
+    resources.drm = std::move(m_DRM);
+    resources.vaapi = std::shared_ptr<CVaapiProxy>(std::move(m_vaapiProxy));
+    resources.fence = std::shared_ptr<KODI::UTILS::EGL::CEGLFence>(std::move(m_eglFence));
+    resources.properties = std::move(m_nativeDVProperties);
+    const auto egl = m_eglContext.RetainForRetirement();
+    CDVWindowRetirement::Keep(std::move(m_nativeDVRetirement),egl,std::move(resources));
+  }
+#endif
+}
+
 bool CWinSystemGbmEGLContext::DestroyWindow()
 {
   m_eglContext.DestroySurface();
@@ -201,6 +222,22 @@ int CWinSystemGbmEGLContext::VideoOutputBitDepth(const VideoPicture* picture) co
 
 bool CWinSystemGbmEGLContext::SetVideoOutput(const VideoPicture* videoPicture)
 {
+  if (m_dvOutputSurface)
+  {
+    if (m_dvSurfacePending || !m_eglContext.BeginOutputSurface()) return false;
+    m_dvSurfacePending = true;
+    m_priorOutputVideo = m_DRM->GetVideoPlane() != nullptr;
+    m_priorOutputPlane = m_DRM->GetGuiPlane() ? m_DRM->GetGuiPlane() : m_DRM->GetVideoPlane();
+    if (m_priorOutputPlane)
+    {
+      m_priorOutputFormat = m_priorOutputPlane->GetFormat();
+      m_priorOutputModifier = m_priorOutputPlane->GetModifier();
+    }
+  }
+  const auto reject = [this]() {
+    if (m_dvOutputSurface) RejectDVOutputSurface();
+    return false;
+  };
   // Override: the base only flips the gui/video plane role. On EGL
   // backends we additionally rebuild the GBM and EGL output surface
   // to a wider format (e.g. AR24 -> AR30) when the video needs more
@@ -217,14 +254,14 @@ bool CWinSystemGbmEGLContext::SetVideoOutput(const VideoPicture* videoPicture)
   if (!ChooseEGLConfig(m_renderableType, bitDepth))
   {
     CLog::LogF(LOGERROR, "failed to choose EGL config for {}-bit", bitDepth);
-    return false;
+    return reject();
   }
 
   uint32_t format = m_eglContext.GetConfigAttrib(EGL_NATIVE_VISUAL_ID);
 
   if (format != currentFormat)
   {
-    m_eglContext.DestroySurface();
+    if (!m_dvOutputSurface) m_eglContext.DestroySurface();
 
     std::vector<uint64_t> fallbackModifiers = {DRM_FORMAT_MOD_LINEAR};
     std::vector<uint64_t>* modifiers = &fallbackModifiers;
@@ -239,27 +276,29 @@ bool CWinSystemGbmEGLContext::SetVideoOutput(const VideoPicture* videoPicture)
     }
 
     if (!m_GBM->GetDevice().CreateSurface(m_nWidth, m_nHeight, format, modifiers->data(),
-                                          modifiers->size()))
+                                          modifiers->size(),m_dvOutputSurface))
     {
       CLog::LogF(LOGERROR, "failed to create GBM surface");
-      return false;
+      return reject();
     }
 
-    if (!m_eglContext.CreatePlatformSurface(
-            m_GBM->GetDevice().GetSurface().Get(),
-            reinterpret_cast<khronos_uintptr_t>(m_GBM->GetDevice().GetSurface().Get())))
+    auto* nativeSurface = m_GBM->GetDevice().GetSurface().Get();
+    const bool created = m_dvOutputSurface ?
+        m_eglContext.StageOutputSurface(nativeSurface,reinterpret_cast<khronos_uintptr_t>(nativeSurface)) :
+        m_eglContext.CreatePlatformSurface(nativeSurface,reinterpret_cast<khronos_uintptr_t>(nativeSurface));
+    if (!created)
     {
-      return false;
+      return reject();
     }
 
     if (!m_eglContext.BindContext())
     {
-      return false;
+      return reject();
     }
 
     if (!m_eglContext.TrySwapBuffers())
     {
-      return false;
+      return reject();
     }
 
     CLog::LogF(LOGINFO, "Output surface recreated at {}-bit", bitDepth);
@@ -293,7 +332,32 @@ bool CWinSystemGbmEGLContext::SetVideoOutput(const VideoPicture* videoPicture)
   // Chain to base for the fine-plane part: routes through FindVideoPlane
   // if videoPicture set or FindGuiPlane if videoPicture was nullptr, using
   // the now-current cached format/modifier on the active plane.
-  return CWinSystemGbm::SetVideoOutput(videoPicture);
+  const bool routed = CWinSystemGbm::SetVideoOutput(videoPicture);
+  if (!routed) return reject();
+  // No new drawable exists when only a same-format policy value changes.
+  if (m_dvOutputSurface && format == currentFormat)
+    return CompleteDVOutputSurface(true);
+  return true;
+}
+
+bool CWinSystemGbmEGLContext::CompleteDVOutputSurface(bool submitted)
+{
+  if (!m_dvSurfacePending) return true;
+  // Refused rebinding leaves both matching drawable/surface owners retained.
+  if (!m_eglContext.CompleteOutputSurface(submitted)) return false;
+  m_GBM->GetDevice().CompleteOutputSurface(submitted);
+  if (!submitted && m_priorOutputPlane)
+  {
+    m_priorOutputPlane->SetFormat(m_priorOutputFormat);
+    m_priorOutputPlane->SetModifier(m_priorOutputModifier);
+    const bool restored = m_priorOutputVideo ?
+        m_DRM->FindVideoPlane(m_priorOutputFormat,m_priorOutputModifier) :
+        m_DRM->FindGuiPlane(m_priorOutputFormat,m_priorOutputModifier);
+    if (!restored) return false;
+  }
+  m_dvSurfacePending = false;
+  m_priorOutputPlane = nullptr;
+  return true;
 }
 
 bool CWinSystemGbmEGLContext::DestroyWindowSystem()

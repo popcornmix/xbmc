@@ -17,9 +17,17 @@
 
 #include <utility>
 #include <vector>
+#ifdef CB1_HAS_HDR10_AI
+#include <deque>
+#endif
 
 #define MAX_FIELDS 3
 #define NUM_BUFFERS 6
+#ifdef CB1_HAS_HDR10_AI
+constexpr int MAX_RENDER_BUFFERS = 64;
+#else
+constexpr int MAX_RENDER_BUFFERS = NUM_BUFFERS;
+#endif
 
 class CSetting;
 struct IntegerSettingOption;
@@ -81,6 +89,15 @@ public:
   }
   // Render info, can be called before configure
   virtual CRenderInfo GetRenderInfo() { return CRenderInfo(); }
+#ifdef CB1_HAS_HDR10_AI
+  virtual bool HDR10AIQueueEligible() const { return false; }
+  virtual bool HDR10AILookahead() const { return false; }
+  virtual bool HDR10AIFramePending() const { return false; }
+  virtual bool HDR10AIFrameCommitted() const { return false; }
+  virtual bool PrepareHDR10AIQueue(const std::deque<int>& queue, bool end, bool paused,
+      uint64_t presentationDeadline = 0)
+  { return true; }
+#endif
   virtual void Update() = 0;
   virtual void RenderUpdate(
       int index, int index2, bool clear, unsigned int flags, unsigned int alpha) = 0;

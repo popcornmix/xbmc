@@ -29,6 +29,9 @@
 #ifdef HAVE_DVBRIDGE
 #include "DVDVideoCodecFFmpeg.h"
 #endif
+#ifdef CB1_HAS_HDR10_AI
+#include "HDR10AIBuffers.h"
+#endif
 
 #include <drm_fourcc.h>
 #include <va/va_drm.h>
@@ -764,6 +767,12 @@ bool CDecoder::Open(AVCodecContext* avctx, AVCodecContext* mainctx, const enum A
   // add an extra surface for safety, some faulty material
   // make ffmpeg require more buffers
   m_vaapiConfig.maxReferences += 6;
+#ifdef CB1_HAS_HDR10_AI
+  m_hdr10AIBuffers = static_cast<ICallbackHWAccel*>(avctx->opaque)->GetHDR10AIBufferCount();
+  m_vaapiConfig.maxReferences =
+      DVBRIDGE::HDR10AIBuffers::DecodeSurfaces(m_vaapiConfig.maxReferences, m_hdr10AIBuffers);
+  m_vaapiConfig.renderPictures = DVBRIDGE::HDR10AIBuffers::RenderPictures(m_hdr10AIBuffers);
+#endif
 
   if (!ConfigVAAPI())
   {
@@ -1070,6 +1079,14 @@ CDVDVideoCodec::VCReturn CDecoder::Check(AVCodecContext* avctx)
     state = m_DisplayState;
   }
 
+#ifdef CB1_HAS_HDR10_AI
+  if (state == VAAPI_OPEN &&
+      m_hdr10AIBuffers != static_cast<ICallbackHWAccel*>(avctx->opaque)->GetHDR10AIBufferCount())
+  {
+    static_cast<ICallbackHWAccel*>(avctx->opaque)->PrepareHDR10AIReopen();
+    return CDVDVideoCodec::VC_REOPEN;
+  }
+#endif
   if (state == VAAPI_LOST)
   {
     CLog::Log(LOGDEBUG, LOGVIDEO, "VAAPI::Check waiting for display reset event");
@@ -1284,11 +1301,13 @@ bool CDecoder::ConfigVAAPI()
   // can dispatch sampling per-fourcc without re-inspecting each surface.
   m_vaapiConfig.pixelFormat = pixelFormat;
 
-  VASurfaceID surfaces[32];
   int nb_surfaces = m_vaapiConfig.maxReferences;
+  if (nb_surfaces < 1 || nb_surfaces > 128)
+    return false;
+  std::vector<VASurfaceID> surfaces(nb_surfaces);
   if (!CheckSuccess(
       vaCreateSurfaces(m_vaapiConfig.dpy, format, m_vaapiConfig.surfaceWidth,
-          m_vaapiConfig.surfaceHeight, surfaces,
+          m_vaapiConfig.surfaceHeight, surfaces.data(),
           nb_surfaces, attribs, 1), "vaCreateSurfaces"))
   {
     return false;
@@ -1434,7 +1453,7 @@ public:
   bool HasFree();
   void QueueReturnPicture(CVaapiRenderPicture *pic);
   CVaapiRenderPicture* ProcessSyncPicture();
-  void Init();
+  void Init(unsigned count = NUM_RENDER_PICS);
   void DeleteTextures(bool precleanup);
 
   std::deque<CVaapiProcessedPicture> processedPics;
@@ -1465,10 +1484,9 @@ CVaapiBufferPool::CVaapiBufferPool(CDecoder &decoder)
 
 CVaapiBufferPool::~CVaapiBufferPool()
 {
-  CVaapiRenderPicture *pic;
-  for (unsigned int i = 0; i < NUM_RENDER_PICS; i++)
+  for (auto* pic : allRenderPics)
   {
-    pic = allRenderPics[i];
+    av_frame_free(&pic->avFrame);
     delete pic;
   }
   allRenderPics.clear();
@@ -1566,11 +1584,19 @@ CVaapiRenderPicture* CVaapiBufferPool::ProcessSyncPicture()
   return retPic;
 }
 
-void CVaapiBufferPool::Init()
+void CVaapiBufferPool::Init(unsigned count)
 {
+  count = std::clamp(count, unsigned(NUM_RENDER_PICS), 64u);
+  while (allRenderPics.size() < count)
+  {
+    const auto id = allRenderPics.size();
+    allRenderPics.push_back(new CVaapiRenderPicture(id));
+    freeRenderPics.push_back(id);
+  }
   for (auto &pic : allRenderPics)
   {
-    pic->avFrame = av_frame_alloc();
+    if (!pic->avFrame) pic->avFrame = av_frame_alloc();
+    pic->renderBufferCount = count == NUM_RENDER_PICS ? 6 : count - 1;
     pic->valid = false;
   }
   procPicId = 0;
@@ -2350,7 +2376,7 @@ void COutput::ProcessReturnProcPicture(int id)
 
 void COutput::EnsureBufferPool()
 {
-  m_bufferPool->Init();
+  m_bufferPool->Init(m_config.renderPictures);
 }
 
 void COutput::ReleaseBufferPool(bool precleanup)
