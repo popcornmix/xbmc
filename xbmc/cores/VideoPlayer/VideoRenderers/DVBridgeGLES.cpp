@@ -1651,7 +1651,8 @@ CDVBridgeGLES::FrameStatus CDVBridgeGLES::PrepareHardwareFrame(const Layer& base
       dvbridge_dmabuf_key key{};
       const bool cacheable = dvbridge_dmabuf_make_key(&key,
           reinterpret_cast<const AVDRMFrameDescriptor*>(imported->image.mapping->data[0]),
-          imported->image.width,imported->image.height,enhancement->hw_frames_ctx->data,
+          imported->image.width,imported->image.height,
+          enhancement->hw_frames_ctx ? enhancement->hw_frames_ctx->data : nullptr,
           imported->image.display,eglGetCurrentContext());
       if (cacheable && !m_rawELCache.empty() &&
           std::static_pointer_cast<Import::Raw>(m_rawELCache.front())->key.pool != key.pool)
@@ -1675,7 +1676,8 @@ CDVBridgeGLES::FrameStatus CDVBridgeGLES::PrepareHardwareFrame(const Layer& base
         raw->key = key;
         raw->image = imported->image;
         raw->image.mapping = nullptr;
-        raw->pool = av_buffer_ref(enhancement->hw_frames_ctx);
+        // DRM PRIME hwaccels may not expose a frames pool; such imports are never cached.
+        raw->pool = enhancement->hw_frames_ctx ? av_buffer_ref(enhancement->hw_frames_ctx) : nullptr;
         std::fill(std::begin(imported->image.images),std::end(imported->image.images),nullptr);
         std::fill(std::begin(imported->image.planes),std::end(imported->image.planes),dvbridge_gl_plane{});
         imported->raw = raw;

@@ -15,6 +15,7 @@
 #include "cores/VideoPlayer/DVDCodecs/Video/DVSourceCapture.h"
 #endif
 
+#include <deque>
 #include <memory>
 
 extern "C"
@@ -23,6 +24,7 @@ extern "C"
 }
 
 class CVideoBufferPoolDMA;
+struct dvbridge_fel;
 class CVideoBufferPoolDRMPRIMEFFmpeg;
 
 class CDVDVideoCodecDRMPRIME : public CDVDVideoCodec
@@ -43,6 +45,7 @@ public:
   void SetCodecControl(int flags) override;
 
 protected:
+  CDVDVideoCodec::VCReturn GetBasePicture(VideoPicture* pVideoPicture);
   void Drain();
   bool SetPictureParams(VideoPicture* pVideoPicture);
   void UpdateProcessInfo(struct AVCodecContext* avctx, const enum AVPixelFormat fmt);
@@ -71,6 +74,17 @@ protected:
   std::shared_ptr<CVideoBufferPoolDRMPRIMEFFmpeg> m_hwVideoBufferPool;
   std::shared_ptr<CVideoBufferPoolDMA> m_swVideoBufferPool;
 #ifdef HAVE_DVBRIDGE
+  bool NeedsDVEnhancement() const
+  {
+    return m_dvCapture.NativeOutput() && m_hints.dovi.dv_profile == 7 &&
+           m_hints.dovi.el_present_flag;
+  }
+  bool OpenDVEnhancement();
+
   DVBRIDGE::CSourceCapture m_dvCapture;
+  // Profile 7 FEL: the enhancement layer is decoded alongside and paired by pts.
+  std::shared_ptr<dvbridge_fel> m_dvFel;
+  std::deque<std::shared_ptr<VideoPicture>> m_dvPending;
+  bool m_dvFailed{false};
 #endif
 };

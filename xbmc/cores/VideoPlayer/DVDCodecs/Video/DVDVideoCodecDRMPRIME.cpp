@@ -37,6 +37,13 @@ extern "C"
 #include <libavutil/pixdesc.h>
 }
 
+#ifdef HAVE_DVBRIDGE
+extern "C"
+{
+#include "dvbridge_fel.h"
+}
+#endif
+
 namespace
 {
 
@@ -100,6 +107,10 @@ CDVDVideoCodecDRMPRIME::CDVDVideoCodecDRMPRIME(CProcessInfo& processInfo)
 
 CDVDVideoCodecDRMPRIME::~CDVDVideoCodecDRMPRIME()
 {
+#ifdef HAVE_DVBRIDGE
+  m_dvPending.clear();
+  m_dvFel.reset();
+#endif
   av_frame_free(&m_pFrame);
   av_frame_free(&m_pFilterFrame);
   FilterClose();
@@ -415,8 +426,47 @@ bool CDVDVideoCodecDRMPRIME::Open(CDVDStreamInfo& hints, CDVDCodecOptions& optio
 
   m_checkedDeinterlace = false;
 
+#ifdef HAVE_DVBRIDGE
+  m_dvPending.clear();
+  m_dvFel.reset();
+  m_dvFailed = false;
+  if (NeedsDVEnhancement() && !OpenDVEnhancement())
+  {
+    CLog::Log(LOGERROR, "CDVDVideoCodecDRMPRIME::{} - unable to set up the DV enhancement layer",
+              __FUNCTION__);
+    return false;
+  }
+#endif
+
   return true;
 }
+
+#ifdef HAVE_DVBRIDGE
+bool CDVDVideoCodecDRMPRIME::OpenDVEnhancement()
+{
+  // Same as CDVDVideoCodecFFmpeg: the FEL decoder reads layer-1 NALs from the
+  // base-layer packets, configured from the stream's EL hvcC when there is one.
+  AVCodecParameters* parameters = avcodec_parameters_alloc();
+  if (!parameters)
+    return false;
+  int result = avcodec_parameters_from_context(parameters, m_pCodecContext);
+  if (result >= 0 && m_hints.doviELConfig)
+  {
+    AVPacketSideData* side = av_packet_side_data_new(&parameters->coded_side_data,
+                                                     &parameters->nb_coded_side_data,
+                                                     AV_PKT_DATA_HEVC_CONF,
+                                                     m_hints.doviELConfig.GetSize(), 0);
+    if (side)
+      std::memcpy(side->data, m_hints.doviELConfig.GetData(), m_hints.doviELConfig.GetSize());
+    else
+      result = AVERROR(ENOMEM);
+  }
+  if (result >= 0)
+    m_dvFel = {dvbridge_fel_create(parameters, AVRational{1, AV_TIME_BASE}), dvbridge_fel_destroy};
+  avcodec_parameters_free(&parameters);
+  return m_dvFel != nullptr;
+}
+#endif
 
 void CDVDVideoCodecDRMPRIME::UpdateProcessInfo(struct AVCodecContext* avctx,
                                                const enum AVPixelFormat pix_fmt)
@@ -460,6 +510,11 @@ bool CDVDVideoCodecDRMPRIME::AddData(const DemuxPacket& packet)
   avpkt->side_data_elems = packet.iSideDataElems;
 
   int ret = avcodec_send_packet(m_pCodecContext, avpkt);
+#ifdef HAVE_DVBRIDGE
+  // Submit once, only after the base layer accepted the packet (Kodi retries EAGAIN).
+  if (ret == 0 && m_dvFel && !dvbridge_fel_submit(m_dvFel.get(), avpkt))
+    m_dvFailed = true;
+#endif
 
   //! @todo: properly handle avpkt side_data. this works around our improper use of the side_data
   // as we pass pointers to ffmpeg allocated memory for the side_data. we should really be allocating
@@ -512,6 +567,10 @@ void CDVDVideoCodecDRMPRIME::Reset()
   avcodec_flush_buffers(m_pCodecContext);
 #ifdef HAVE_DVBRIDGE
   m_dvCapture.Seek();
+  m_dvPending.clear();
+  if (m_dvFel)
+    dvbridge_fel_reset(m_dvFel.get());
+  m_dvFailed = false;
 #endif
 }
 
@@ -961,6 +1020,82 @@ std::string CDVDVideoCodecDRMPRIME::GetFilterChain(bool interlaced)
 }
 
 CDVDVideoCodec::VCReturn CDVDVideoCodecDRMPRIME::GetPicture(VideoPicture* pVideoPicture)
+{
+#ifdef HAVE_DVBRIDGE
+  // Profile 7 FEL: hold base pictures until the enhancement picture with the
+  // same pts is decoded, as CDVDVideoCodecFFmpeg does for VA-API.
+  if (m_dvFel)
+  {
+    if (m_dvFailed || dvbridge_fel_failed(m_dvFel.get()))
+      return VC_ERROR;
+    auto emit = [&]() -> VCReturn
+    {
+      if (m_dvPending.empty())
+        return VC_NONE;
+      auto& base = m_dvPending.front();
+      if (base->doviSourcePts == AV_NOPTS_VALUE)
+        return VC_ERROR;
+      AVFrame* enhancement = nullptr;
+      const int result = dvbridge_fel_take(m_dvFel.get(), base->doviSourcePts, &enhancement);
+      if (result == 2)
+      {
+        m_dvPending.pop_front();
+        return VC_BUFFER;
+      }
+      if (result < 0)
+      {
+        if (dvbridge_fel_exhausted(m_dvFel.get()))
+        {
+          CLog::Log(LOGWARNING,
+                    "DV FEL: enhancement EOF with {} unpaired base pictures; ending video without "
+                    "substituting enhancement frames",
+                    m_dvPending.size());
+          m_dvPending.clear();
+          return VC_EOF;
+        }
+        return VC_ERROR;
+      }
+      if (!result)
+        return VC_NONE;
+      base->doviEnhancement = {enhancement, [](AVFrame* f) { av_frame_free(&f); }};
+      base->doviEnhancementBinding = base->doviMetadata.Binding();
+      pVideoPicture->CopyRef(*base);
+      m_dvPending.pop_front();
+      return VC_PICTURE;
+    };
+
+    VCReturn paired = emit();
+    if (paired != VC_NONE)
+      return paired;
+    if (m_dvPending.size() >= 16)
+      return VC_ERROR;
+
+    auto base = std::make_shared<VideoPicture>();
+    base->Reset();
+    const VCReturn result = GetBasePicture(base.get());
+    // The EL decoder shares the base layer's hardware device (DRM / v4l2request).
+    AVBufferRef* device = m_pCodecContext->hw_device_ctx;
+    if (m_pCodecContext->hw_frames_ctx)
+      device = reinterpret_cast<AVHWFramesContext*>(m_pCodecContext->hw_frames_ctx->data)->device_ref;
+    if (device && !dvbridge_fel_device(m_dvFel.get(), device))
+      return VC_ERROR;
+    if (result == VC_PICTURE)
+      m_dvPending.push_back(std::move(base));
+    if (result == VC_EOF || (m_codecControlFlags & DVD_CODEC_CTRL_DRAIN))
+      if (!dvbridge_fel_drain(m_dvFel.get()))
+        return VC_ERROR;
+    paired = emit();
+    if (paired != VC_NONE)
+      return paired;
+    if (result == VC_EOF && !m_dvPending.empty())
+      return VC_ERROR;
+    return result == VC_PICTURE ? VC_BUFFER : result;
+  }
+#endif
+  return GetBasePicture(pVideoPicture);
+}
+
+CDVDVideoCodec::VCReturn CDVDVideoCodecDRMPRIME::GetBasePicture(VideoPicture* pVideoPicture)
 {
   if (m_codecControlFlags & DVD_CODEC_CTRL_DRAIN)
     Drain();
