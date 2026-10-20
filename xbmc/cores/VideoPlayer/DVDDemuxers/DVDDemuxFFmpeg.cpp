@@ -9,6 +9,14 @@
 #include "DVDDemuxFFmpeg.h"
 
 #include "DVDDemuxUtils.h"
+#ifdef HAVE_DVBRIDGE
+#include "cores/VideoPlayer/DVDStreamInfo.h"
+#include "cores/VideoPlayer/DVDCodecs/Video/DVPlaybackPolicy.h"
+extern "C"
+{
+#include "dvbridge_fel_seek.h"
+}
+#endif
 #include "DVDInputStreams/DVDInputStream.h"
 #ifdef HAVE_LIBBLURAY
 #include "DVDInputStreams/DVDInputStreamBluray.h"
@@ -1410,8 +1418,39 @@ bool CDVDDemuxFFmpeg::SeekTime(double time, bool backwards, double* startpts)
       ret = -1;
     }
     else
+    {
+#ifdef HAVE_DVBRIDGE
+      // Preserve the requested startpts while seeking to a shared layer anchor.
+      if (!m_checkTransportStream && m_seekStream == -1)
+      {
+        for (const auto& [id, stream] : m_streams)
+        {
+          if (stream->type != StreamType::VIDEO || id < 0 ||
+              static_cast<unsigned>(id) >= m_pFormatContext->nb_streams)
+            continue;
+          CDVDStreamInfo hints(*stream);
+          if (hints.dovi.dv_profile != 7 || !hints.dovi.el_present_flag ||
+              !DVBRIDGE::RetainsDVSource(hints))
+            continue;
+          AVStream* video = m_pFormatContext->streams[id];
+          const int64_t target = av_rescale_q(seek_pts, AV_TIME_BASE_Q, video->time_base);
+          const int64_t anchor = dvbridge_fel_seek_point(m_pFormatContext, id, target);
+          if (anchor != AV_NOPTS_VALUE)
+          {
+            seek_pts = av_rescale_q(anchor, video->time_base, AV_TIME_BASE_Q);
+            backwards = true;
+            CLog::Log(LOGDEBUG, "DV FEL: random-access preroll begins at {} us for {} ms seek",
+                      seek_pts, time);
+          }
+          else
+            CLog::Log(LOGWARNING, "DV FEL: no common random-access point in bounded seek probe");
+          break;
+        }
+      }
+#endif
       ret = av_seek_frame(m_pFormatContext, m_seekStream, seek_pts,
                           backwards ? AVSEEK_FLAG_BACKWARD : 0);
+    }
 
     if (ret < 0)
     {
