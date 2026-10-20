@@ -74,6 +74,7 @@ protected:
   std::shared_ptr<CVideoBufferPoolDRMPRIMEFFmpeg> m_hwVideoBufferPool;
   std::shared_ptr<CVideoBufferPoolDMA> m_swVideoBufferPool;
 #ifdef HAVE_DVBRIDGE
+  static constexpr unsigned DVEnhancementPendingPictures = 16;
   bool NeedsDVEnhancement() const
   {
     return m_dvCapture.NativeOutput() && m_hints.dovi.dv_profile == 7 &&

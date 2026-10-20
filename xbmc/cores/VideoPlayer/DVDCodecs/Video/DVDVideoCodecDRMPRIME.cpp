@@ -1067,7 +1067,7 @@ CDVDVideoCodec::VCReturn CDVDVideoCodecDRMPRIME::GetPicture(VideoPicture* pVideo
     VCReturn paired = emit();
     if (paired != VC_NONE)
       return paired;
-    if (m_dvPending.size() >= 16)
+    if (m_dvPending.size() >= DVEnhancementPendingPictures)
       return VC_ERROR;
 
     auto base = std::make_shared<VideoPicture>();
