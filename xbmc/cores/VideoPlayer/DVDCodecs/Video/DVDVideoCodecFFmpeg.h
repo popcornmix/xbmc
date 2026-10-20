@@ -70,6 +70,12 @@ protected:
   std::deque<std::shared_ptr<VideoPicture>> m_dvPending;
   bool m_dvFailed{false};
   bool m_dvNativeOutput{false};
+  DVBRIDGE::SourceOwner m_dvSourceOwner;
+  // Last in-band HDR10 static metadata of this stream (see GetPictureCommon).
+  bool m_dvHasStreamDisplayMetadata{false};
+  AVMasteringDisplayMetadata m_dvStreamDisplayMetadata{};
+  bool m_dvHasStreamLightMetadata{false};
+  AVContentLightMetadata m_dvStreamLightMetadata{};
 #endif
   void Dispose();
   CDVDVideoCodec::VCReturn HandleHwFatal();
