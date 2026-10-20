@@ -10,6 +10,9 @@
 
 #include "windowing/GraphicContext.h"
 #include "windowing/WinSystem.h"
+#ifdef HAVE_DVBRIDGE
+#include "windowing/gbm/DVBridgeCapture.h"
+#endif
 
 extern "C"
 {
@@ -30,6 +33,15 @@ ImageColorMetadata GetOutputColorMetadata(CWinSystemBase& winSystem)
   using KODI::UTILS::Colorimetry;
   using KODI::UTILS::Eotf;
   ImageColorMetadata color;
+#ifdef HAVE_DVBRIDGE
+  if (KODI::WINDOWING::GBM::HasDVBridgeScreenshot(winSystem))
+  {
+    color.primaries = AVCOL_PRI_BT2020;
+    color.transfer = AVCOL_TRC_SMPTE2084;
+    color.range = AVCOL_RANGE_JPEG;
+    return color;
+  }
+#endif
   color.primaries = AVCOL_PRI_BT709;
   const Colorimetry colorimetry = winSystem.GetColorimetry();
   if (colorimetry == Colorimetry::BT2020_RGB || colorimetry == Colorimetry::BT2020_YCC ||

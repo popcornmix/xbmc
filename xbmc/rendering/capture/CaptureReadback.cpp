@@ -11,6 +11,8 @@
 #include "utils/log.h"
 
 #include <cstddef>
+#include <algorithm>
+#include <cmath>
 
 #if defined(HAS_GL) || defined(HAS_GLES)
 #include "system_gl.h"
@@ -75,17 +77,34 @@ bool ReadFramebufferRegion(int x,
       avFormat = AV_PIX_FMT_RGBA64LE;
       rowBytes = width * 8;
     }
+    else if (readFormat == GL_RGBA && (readType == GL_FLOAT || readType == GL_HALF_FLOAT))
+    {
+      glType = GL_FLOAT;
+      avFormat = AV_PIX_FMT_RGBA64LE;
+      rowBytes = width * 8;
+    }
     // else: no deep readback offered; fall through to the 8-bit RGBA defaults
 #endif
   }
 
   out.pixels.reset(new uint8_t[static_cast<size_t>(rowBytes) * height]);
+  const size_t samples = static_cast<size_t>(width) * height * 4;
+  std::unique_ptr<float[]> floats;
+  if (glType == GL_FLOAT)
+    floats = std::make_unique<float[]>(samples);
   glReadPixels(x, y, static_cast<GLsizei>(width), static_cast<GLsizei>(height), glFormat, glType,
-               out.pixels.get());
+               floats ? static_cast<void*>(floats.get()) : out.pixels.get());
   if (glGetError() != GL_NO_ERROR)
   {
     CLog::LogF(LOGWARNING, "capture readback: glReadPixels failed");
     return false;
+  }
+  if (floats)
+  {
+    auto* values = reinterpret_cast<uint16_t*>(out.pixels.get());
+    for (size_t i = 0; i < samples; ++i)
+      values[i] = std::isfinite(floats[i]) ? static_cast<uint16_t>(
+          std::lround(std::clamp(floats[i], 0.0f, 1.0f) * 65535.0f)) : 0;
   }
 
   out.width = width;

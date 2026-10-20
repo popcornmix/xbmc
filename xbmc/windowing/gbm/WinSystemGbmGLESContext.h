@@ -83,6 +83,11 @@ public:
   bool ConfigureHDR10Conversion(const VideoPicture& picture);
   bool SupportsHDR10Conversion();
   void SetDVBridgeOverlays(bool visible) { m_dvOverlays = visible; }
+  bool HasDVBridgeScreenshot() const { return m_dvState.Captured() || m_hdrConversion; }
+  unsigned int GetDVBridgeScreenshotFramebuffer()
+  {
+    return m_dvFrame && m_dvBridge ? m_dvBridge->GetPQFramebuffer() : 0;
+  }
   bool RenderDVBridge(const CDVBridgeGLES::Layer& layer, std::shared_ptr<AVFrame> enhancement,
                        DVBRIDGE::SourceBinding enhancementBinding,
                        const CDVMetadataBuffer& metadata,
