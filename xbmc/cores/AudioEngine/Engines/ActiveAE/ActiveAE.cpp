@@ -1256,12 +1256,17 @@ void CActiveAE::Configure(AEAudioFormat *desiredFmt)
   const AESinkDevice dev = CAESinkFactory::ParseDevice(device);
   const bool requestedDefaultDevice = IsDefaultDevice(dev);
 
-  if ((!CompareFormat(m_sinkRequestFormat, m_sinkFormat) &&
+  // After a failed InitSink() m_sinkRequestFormat already holds the failed
+  // request, so the format comparison below would skip reopening the sink on
+  // retry and configure buffers and resamplers against the stale m_sinkFormat.
+  if (m_sinkInitFailed ||
+      (!CompareFormat(m_sinkRequestFormat, m_sinkFormat) &&
        !CompareFormat(m_sinkRequestFormat, oldSinkRequestFormat)) ||
       m_currDevice.compare(dev.name) != 0 || m_settings.driver.compare(dev.driver) != 0)
   {
     FlushEngine();
-    if (!InitSink())
+    m_sinkInitFailed = !InitSink();
+    if (m_sinkInitFailed)
       return;
     m_settings.driver = dev.driver;
     m_currDevice = dev.name;

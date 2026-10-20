@@ -354,6 +354,7 @@ protected:
   bool m_bStateMachineSelfTrigger;
   std::chrono::milliseconds m_extTimeout;
   bool m_extError;
+  bool m_sinkInitFailed{false};
   unsigned int m_extErrorRetries{0};
   bool m_extDrain;
   XbmcThreads::EndTime<> m_extDrainTimer;
