@@ -72,6 +72,7 @@
     </definition></include>
   <include name="DVRenderingFields"><param name="gauge"/><definition>
       <include content="DVSection"><param name="label" value="RENDERING &amp; SYSTEM"/><param name="gap" value="0"/><param name="height" value="42"/><param name="visible" value="true"/></include>
+      <include content="DVInfoRow"><param name="label" value="$LOCALIZE[40906]"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.FastRendering)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.FastRendering))"/></include>
       <include content="DVInfoRow"><param name="label" value="Render engine + GUI"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.GPURender)]"/><param name="visible" value="String.IsEqual(Window(playerprocessinfo).Property(DV.GPUAvailable),true)"/></include>
       <control type="group"><height>24</height><visible>String.IsEqual(Window(playerprocessinfo).Property(DV.GPUAvailable),true)</visible>
         <control type="progress" id="$PARAM[gauge]"><top>8</top><width>564</width><height>8</height>
@@ -102,6 +103,7 @@
       <include content="DVInfoRow"><param name="label" value="Scanout container"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.Transport)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.Transport))"/></include>
       <include content="DVInfoRow"><param name="label" value="$LOCALIZE[40848]"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.MinimumLinkBits)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.MinimumLinkBits))"/></include>
       <include content="DVInfoRow"><param name="label" value="FEL reconstructed"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.FEL)]"/><param name="visible" value="String.IsEqual(VideoPlayer.HdrType,dolbyvision) + !String.IsEmpty(Window(playerprocessinfo).Property(DV.FEL)) + !String.IsEqual(Window(playerprocessinfo).Property(DV.FEL),N/A)"/></include>
+      <include content="DVInfoRow"><param name="label" value="$LOCALIZE[40907]"/><param name="value" value="$INFO[Window(playerprocessinfo).Property(DV.FELUpscaling)]"/><param name="visible" value="!String.IsEmpty(Window(playerprocessinfo).Property(DV.FELUpscaling))"/></include>
     </definition></include>
   <include name="DVDynamicFields"><definition>
       <include content="DVSection"><param name="label" value="DOLBY VISION"/><param name="gap" value="0"/><param name="height" value="42"/><param name="visible" value="true"/></include>

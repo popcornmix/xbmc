@@ -79,17 +79,16 @@ bool CDVPlaybackModes::ShowMenu()
   if (!dialog) return false;
   const auto settings=CServiceBroker::GetSettingsComponent()->GetSettings();
   const auto& strings=CServiceBroker::GetResourcesComponent().GetLocalizeStrings();
-  struct Choice { int output,method,preset,label; };
-  constexpr Choice dvChoices[]={{0,0,0,40812},{3,0,0,40861},{3,0,1,40862},
-      {2,0,0,40814},{1,0,0,40822},{1,1,0,40823}};
+  struct Choice { int output,method,label; };
+  constexpr Choice dvChoices[]={{0,0,40812},{4,0,40913},{5,0,40914},
+      {2,0,40814},{1,0,40822},{1,1,40823}};
   const auto source=DVBRIDGE::StreamTelemetry::Read().transaction.capabilities;
-  if (!source.sourceKnown || (!source.isDV && !source.isHDR10)) return false;
+  if (source.stereoSource || !source.sourceKnown || (!source.isDV && !source.isHDR10)) return false;
   const bool hdr10Source=source.isHDR10 && !source.isDV;
 #ifdef CB1_HAS_HDR10_AI
-  constexpr Choice hdr10Choices[]={{1,0,0,40867},{2,0,0,40871},{2,0,1,40872},
-      {0,0,0,40866}};
+  constexpr Choice hdr10Choices[]={{1,0,40867},{2,0,40868},{0,0,40866}};
 #else
-  constexpr Choice hdr10Choices[]={{0,0,0,40866}};
+  constexpr Choice hdr10Choices[]={{0,0,40866}};
 #endif
   const Choice* choices=hdr10Source ? hdr10Choices : dvChoices;
   const int count=hdr10Source ? std::size(hdr10Choices) : std::size(dvChoices);
@@ -103,11 +102,9 @@ bool CDVPlaybackModes::ShowMenu()
     {
       options.emplace_back(strings.Get(choices[i].label),i);
       const auto& choice=choices[i];
-      if (hdr10Source ? (int(preferences.hdr10Source)==choice.output &&
-          (choice.output<2 || preferences.preset==choice.preset)) :
+      if (hdr10Source ? (int(preferences.hdr10Source)==choice.output) :
           (int(preferences.output)==choice.output &&
-          (choice.output!=1 || preferences.method==choice.method) &&
-          (choice.output!=3 || preferences.preset==choice.preset))) current=i;
+          (choice.output!=1 || preferences.method==choice.method))) current=i;
     }
     CSettingConditions::DVOutputOptions(choiceSetting,options);
     dialog->Reset();
@@ -137,21 +134,19 @@ bool CDVPlaybackModes::ShowMenu()
       const int priorOutput=settings->GetInt("dvbridge.outputmode");
       const int priorHDR10=settings->GetInt("dvbridge.hdr10source");
       const int priorMethod=settings->GetInt("dvbridge.hdr10method");
-      const int priorPreset=settings->GetInt("dvbridge.enhancement");
       if (!(hdr10Source ? settings->SetInt("dvbridge.hdr10source",choice.output) :
           (settings->SetInt("dvbridge.outputmode",choice.output) &&
-           settings->SetInt("dvbridge.hdr10method",choice.method))) ||
-          !settings->SetInt("dvbridge.enhancement",choice.preset))
+           settings->SetInt("dvbridge.hdr10method",choice.method))))
       {
         settings->SetInt("dvbridge.outputmode",priorOutput);
         settings->SetInt("dvbridge.hdr10source",priorHDR10);
         settings->SetInt("dvbridge.hdr10method",priorMethod);
-        settings->SetInt("dvbridge.enhancement",priorPreset);
         return true;
       }
 #ifdef CB1_HAS_HDR10_AI
       if (hdr10Source && choice.output != 0) ++DVBRIDGE::hdr10Reselection;
 #endif
+      if (!hdr10Source) DVBRIDGE::automaticFastRendering.store(false);
     }
     settings->Save();
     return true;
@@ -171,10 +166,10 @@ void DVBRIDGE::PlaybackNotification::Emit(const std::string& text)
     CGUIDialogKaiToast::QueueNotification(CGUIDialogKaiToast::Info,
         CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(40863),text,3000,false);
 }
-void DVBRIDGE::PlaybackNotification::EmitAI(int mode,int preset)
+void DVBRIDGE::PlaybackNotification::EmitAI(int mode)
 {
   if (mode!=1 && mode!=4) return;
-  const int label=mode==1 ? 40867 : (preset ? 40872 : 40871);
+  const int label=mode==1 ? 40867 : 40868;
   Emit(CServiceBroker::GetResourcesComponent().GetLocalizeStrings().Get(label));
 }
 void DVBRIDGE::PlaybackNotification::HDR10Recovery()
@@ -182,5 +177,11 @@ void DVBRIDGE::PlaybackNotification::HDR10Recovery()
   const auto& localizer=CServiceBroker::GetResourcesComponent().GetLocalizeStrings();
   CGUIDialogKaiToast::QueueNotification(CGUIDialogKaiToast::Info,
       localizer.Get(40863),localizer.Get(40875),3000,false);
+}
+void DVBRIDGE::PlaybackNotification::EmitMasterRecovery()
+{
+  const auto& localizer=CServiceBroker::GetResourcesComponent().GetLocalizeStrings();
+  CGUIDialogKaiToast::QueueNotification(CGUIDialogKaiToast::Info,
+      localizer.Get(40863),localizer.Get(40915),3000,false);
 }
 #endif

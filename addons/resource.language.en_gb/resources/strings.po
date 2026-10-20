@@ -14504,7 +14504,7 @@ msgstr ""
 #: xbmc/playlists/SmartPlayList.cpp
 #: addons/skin.estuary/xml/DialogPlayerProcessInfo.xml
 msgctxt "#20478"
-msgid "DV profile"
+msgid "Dolby Vision profile"
 msgstr ""
 
 #. Used in the smart playlist editor to define a watched mode
@@ -25908,7 +25908,7 @@ msgstr ""
 
 #: system/settings/settings.xml
 msgctxt "#40812"
-msgid "DV Standard (TV-Led)"
+msgid "Dolby Vision Standard"
 msgstr ""
 
 #: system/settings/settings.xml
@@ -25918,12 +25918,12 @@ msgstr ""
 
 #: system/settings/settings.xml
 msgctxt "#40814"
-msgid "DV Disabled (native Kodi)"
+msgid "Dolby Vision Disabled (native Kodi)"
 msgstr ""
 
 #: system/settings/settings.xml
 msgctxt "#40815"
-msgid "Choose TV-Led Dolby Vision, HDR10 conversion or standard Kodi playback. Supported changes apply at a video frame boundary."
+msgid "Choose Dolby Vision Master Reference, Dolby Vision Standard, Adaptive HDR Mapping, HDR10 conversion or standard Kodi playback. Changes apply at a video frame boundary."
 msgstr ""
 
 #: system/settings/settings.xml
@@ -25943,7 +25943,7 @@ msgstr ""
 
 #: system/settings/settings.xml
 msgctxt "#40819"
-msgid "DV Enhanced"
+msgid "Dolby Vision Adaptive HDR Mapping"
 msgstr ""
 
 msgctxt "#40820"
@@ -25960,22 +25960,6 @@ msgstr ""
 
 msgctxt "#40823"
 msgid "HDR10 Reference Expert"
-msgstr ""
-
-msgctxt "#40825"
-msgid "Enhancement preset"
-msgstr ""
-
-msgctxt "#40826"
-msgid "Dolby Vision Enhanced preset. Changing this preset does not change the HDMI output format."
-msgstr ""
-
-msgctxt "#40827"
-msgid "Natural"
-msgstr ""
-
-msgctxt "#40828"
-msgid "Signature"
 msgstr ""
 
 msgctxt "#40829"
@@ -26043,7 +26027,7 @@ msgid "Source cannot use this processing mode"
 msgstr ""
 
 msgctxt "#40845"
-msgid "Enter the TV peak, panel and gamut first"
+msgid "Configure the TV profile"
 msgstr ""
 
 msgctxt "#40846"
@@ -26080,15 +26064,7 @@ msgid "Configure TV profile"
 msgstr ""
 
 msgctxt "#40854"
-msgid "Set peak and gamut before choosing Expert or Enhanced. Standard and Basic do not need a TV profile."
-msgstr ""
-
-msgctxt "#40855"
-msgid "Quick rendering switch"
-msgstr ""
-
-msgctxt "#40856"
-msgid "Press O after player information to choose a rendering mode, then press O again to return to video. Disable to skip this menu."
+msgid "Set peak and gamut for Expert or Adaptive HDR Mapping."
 msgstr ""
 
 msgctxt "#40857"
@@ -26103,16 +26079,20 @@ msgctxt "#40901"
 msgid "Prepare at most one next CB1 frame while the current frame is presented. Native and fallback playback stay unchanged. Applies to the next video."
 msgstr ""
 
+msgctxt "#40904"
+msgid "Dolby Vision fast rendering"
+msgstr ""
+
+msgctxt "#40905"
+msgid "Standard always uses Fast. Master Reference never uses Fast; Auto switches it to Standard if rendering headroom is low. Other modes follow this setting. Small colour-detail differences may occur."
+msgstr ""
+
+msgctxt "#40906"
+msgid "Fast rendering"
+msgstr ""
+
 msgctxt "#40858"
 msgid "Show the accepted playback mode once when a video starts."
-msgstr ""
-
-msgctxt "#40861"
-msgid "DV Enhanced - Natural"
-msgstr ""
-
-msgctxt "#40862"
-msgid "DV Enhanced - Signature"
 msgstr ""
 
 msgctxt "#40863"
@@ -26132,23 +26112,15 @@ msgid "HDR10 Native"
 msgstr ""
 
 msgctxt "#40867"
-msgid "DV Reference (AI)"
+msgid "Dolby Vision Reference (AI)"
 msgstr ""
 
 msgctxt "#40868"
-msgid "DV Enhanced (AI)"
+msgid "Dolby Vision Adaptive HDR Mapping (AI)"
 msgstr ""
 
 msgctxt "#40870"
-msgid "AI-assisted HDR10 to Dolby Vision conversion. Reference preserves grading. Enhanced requires a TV profile."
-msgstr ""
-
-msgctxt "#40871"
-msgid "DV Enhanced (AI) - Natural"
-msgstr ""
-
-msgctxt "#40872"
-msgid "DV Enhanced (AI) - Signature"
+msgid "HDR10 to Dolby Vision with AI. Adaptive HDR Mapping requires a display profile."
 msgstr ""
 
 msgctxt "#40875"
@@ -26158,3 +26130,40 @@ msgstr ""
 msgctxt "#40876"
 msgid "Playback modes | Source: {0}"
 msgstr ""
+
+msgctxt "#40907"
+msgid "FEL upscaling"
+msgstr ""
+
+msgctxt "#40908"
+msgid "Choose FEL upscaling: VAAPI or nearest neighbour on the GPU. If VAAPI is unavailable, nearest neighbour is used."
+msgstr ""
+
+msgctxt "#40909"
+msgid "Nearest neighbour (GPU)"
+msgstr ""
+
+msgctxt "#40911"
+msgid "Configure TV peak brightness (nits)"
+msgstr ""
+
+msgctxt "#40912"
+msgid "Configure TV color gamut"
+msgstr ""
+
+msgctxt "#40910"
+msgid "VAAPI"
+msgstr ""
+
+msgctxt "#40913"
+msgid "Dolby Vision Master Reference"
+msgstr ""
+
+msgctxt "#40914"
+msgid "Dolby Vision Adaptive HDR Mapping"
+msgstr ""
+
+msgctxt "#40915"
+msgid "Insufficient rendering headroom. Switching to Dolby Vision Standard."
+msgstr ""
+

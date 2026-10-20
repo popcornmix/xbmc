@@ -774,7 +774,7 @@ void CDVDDemuxFFmpeg::Flush()
 {
 #ifdef HAVE_DVBRIDGE
   if (m_blurayDovi)
-    m_blurayDovi->Reset();
+    m_blurayDovi->Reset(true);
 #endif
   if (m_pFormatContext)
   {
@@ -3003,14 +3003,20 @@ int CDVDDemuxFFmpeg::ReadBlurayDovi(AVPacket* packet)
     if (packet->stream_index != m_blurayBase && packet->stream_index != m_blurayEnhancement)
       return result;
     const bool accepted = m_blurayDovi->Push(packet, packet->stream_index == m_blurayEnhancement);
+    if (m_blurayDovi->TakeDiscontinuity())
+      CLog::Log(LOGINFO, "DV Blu-ray: reset layer pairing after transport DTS discontinuity");
+    if (!accepted)
+      CLog::Log(LOGERROR, "DV Blu-ray: rejected layer={} pts={} dts={} bytes={} reason={} base_head={} rpu_first={}",
+          packet->stream_index == m_blurayEnhancement ? "EL" : "BL", packet->pts,
+          packet->dts, packet->size, m_blurayDovi->LastError(),m_blurayDovi->BasePTS(),m_blurayDovi->RpuPTS());
     av_packet_unref(packet);
     if (!accepted)
-    {
-      CLog::Log(LOGERROR, "DV Blu-ray: invalid layer packet or pairing queue exceeded");
       return AVERROR_INVALIDDATA;
-    }
     result = m_blurayDovi->Take(packet);
   }
+  if (result == 0)
+    if (const auto count = m_blurayDovi->TakePrerollCount())
+      CLog::Log(LOGINFO, "DV Blu-ray: resynchronized after {} unmatched seek preroll packets", count);
   return result;
 }
 #endif

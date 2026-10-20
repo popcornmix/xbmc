@@ -24,6 +24,8 @@
 #include <deque>
 #include <list>
 #include <memory>
+#include <optional>
+#include <mutex>
 
 #include "PlatformDefs.h"
 
@@ -80,6 +82,7 @@ public:
   void UpdateResolution();
   void TriggerUpdateResolution(float fps, int width, int height, std::string &stereomode,
                                bool nativeDV = false);
+  void ResetPictureInfo();
   void SetViewMode(int iViewMode);
   void PreInit();
   void UnInit();
@@ -159,8 +162,15 @@ protected:
   void PrepareNextRender();
   void UpdateDisplayLatency();
 #ifdef CB1_HAS_HDR10_AI
-  bool PrepareHDR10AILookahead();
+  bool PrepareHDR10AILookahead(std::unique_lock<CCriticalSection>& lock);
+  bool ExecuteHDR10AIQueuePreparation(const std::deque<int>& queue, bool paused,
+      uint64_t deadline, std::unique_lock<CCriticalSection>& lock);
+  void ReleaseDiscardedBuffers(bool onlySignaled = false);
+  uint64_t m_aiQueueGeneration{};
+  // Sticky until GUI destruction: worker UnInit must not destroy owned GL work.
+  std::atomic_bool m_aiGUIOwnsRenderer{false};
   bool m_aiQueueReady{true},m_aiEnd{};
+  bool m_aiQueuePreparationStale{};
   bool m_aiFullscreenRequested{},m_aiGuiReady{},m_aiFullscreenWanted{};
   double m_aiStartPts{DVD_NOPTS_VALUE};
 #endif
@@ -231,6 +241,7 @@ protected:
 
   struct SPresent
   {
+    std::shared_ptr<const VideoSourceSideData> sourceSideData;
     double         pts;
 #ifdef CB1_HAS_HDR10_AI
     double duration{};

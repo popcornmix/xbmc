@@ -75,6 +75,7 @@ public:
   bool VideoBypassesFramebuffer() override { return false; }
   void ReleaseBuffer(int idx) override;
   void RenderUpdate(int index, int index2, bool clear, unsigned int flags, unsigned int alpha) override;
+  bool HasRenderedFrame() const override { return m_frameRendered; }
   void Update() override;
   CRenderInfo GetRenderInfo() override;
   bool ConfigChanged(const VideoPicture& picture) override;
@@ -88,7 +89,10 @@ public:
   bool Supports(ESCALINGMETHOD method) const override;
 
 protected:
+  bool m_frameRendered{false};
+  bool ConfigureVideoOutput(const VideoPicture& picture);
 #ifdef CB1_HAS_HDR10_AI
+  bool m_aiOutputPending{false};
   bool m_aiFrameRendered{true};
 #endif
   // Returns 0 if scaling is below hqscalers threshold.

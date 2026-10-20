@@ -16,6 +16,7 @@
 #include "drm/DRMAtomic.h"
 #ifdef HAVE_DVBRIDGE
 #include "drm/DVBridgeState.h"
+#include "utils/DVBridgeDiagnosticLog.h"
 #endif
 #include "drm/DRMLegacy.h"
 #include "drm/OffScreenModeSetting.h"
@@ -175,6 +176,7 @@ bool CWinSystemGbm::InitWindowSystem()
     if (!edid.empty())
     {
       m_info = UTILS::CDisplayInfo::Create(edid);
+      if (m_info) m_displayEdid = edid;
     }
   }
 
@@ -309,6 +311,20 @@ bool CWinSystemGbm::SetFullScreen(bool fullScreen, RESOLUTION_INFO& res, bool bl
 }
 
 #ifdef HAVE_DVBRIDGE
+bool CWinSystemGbm::RefreshDisplayInfoForVideo()
+{
+  auto* connector = m_DRM ? m_DRM->GetConnector() : nullptr;
+  if (!connector) return false;
+  auto edid = connector->GetEDID(true);
+  if (edid.empty() || edid == m_displayEdid) return false;
+  auto information = UTILS::CDisplayInfo::Create(edid);
+  if (!information) return false;
+  m_info = std::move(information);
+  m_displayEdid = std::move(edid);
+  DVBRIDGE::DiagnosticLog(LOGINFO,"DVBridge display refresh: connector={} changed=true",connector->GetId());
+  return true;
+}
+
 bool CWinSystemGbm::SupportsDVOutputMode(bool requireCurrentMode) const
 {
   if (!m_DRM) return false;
@@ -334,9 +350,11 @@ bool CWinSystemGbm::SupportsNativeDVOutput(bool requireCurrentMode) const
       !std::dynamic_pointer_cast<CDRMAtomic>(m_DRM))
     return false;
   auto* connector = m_DRM->GetConnector();
-  return connector && connector->IsConnected() &&
-         connector->SupportsProperty("DVBRIDGE_DV_STANDARD_LAB") &&
-         SupportsDVOutputMode(requireCurrentMode);
+  if (!connector || !connector->IsConnected() || !SupportsDVOutputMode(requireCurrentMode))
+    return false;
+  const auto backend = CDVBridgeState::GetBackend(*connector);
+  return backend == CDVBridgeState::Backend::KERNEL ||
+      (backend == CDVBridgeState::Backend::NVIDIA && m_info->SupportsRGBQuantizationSelection());
 }
 
 bool CWinSystemGbm::CompleteDVBridgePage(int timeoutMs)
@@ -348,7 +366,8 @@ bool CWinSystemGbm::CompleteDVBridgePage(int timeoutMs)
   return true;
 }
 
-bool CWinSystemGbm::FlipDVBridgePage(CDVBridgeState& state, bool restore, bool async)
+bool CWinSystemGbm::FlipDVBridgePage(CDVBridgeState& state, bool restore, bool async,
+                                    bool retainSignal)
 {
   if (!CompleteDVBridgePage()) return false;
   auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
@@ -374,7 +393,30 @@ bool CWinSystemGbm::FlipDVBridgePage(CDVBridgeState& state, bool restore, bool a
   }
   if (valid)
     valid = state.Stage(*drm, restore);
-  const bool accepted = drm->FlipPageTransactional(valid ? bo : nullptr, restore, async);
+  if (valid && restore && retainSignal)
+    valid = RequeueOutputProperties();
+  bool accepted = false;
+  bool restarted = false;
+  // Hades RC2: restart an active NVIDIA head when only the transport depth changes.
+  // A queued new mode already performs that link transition in its own commit.
+  if (valid && restore && state.CapturedBackend() == CDVBridgeState::Backend::NVIDIA &&
+      drm->IsActive() && drm->IsSelectedModeCommitted())
+  {
+    drm->SetActive(false);
+    const bool off = drm->FlipPageTransactional(bo, true);
+    drm->SetActive(true);
+    if (off)
+    {
+      restarted = true;
+      const bool staged = state.Stage(*drm, true) &&
+          (!retainSignal || RequeueOutputProperties());
+      accepted = drm->FlipPageTransactional(staged ? bo : nullptr, true);
+    }
+    else
+      valid = state.Stage(*drm, true) && (!retainSignal || RequeueOutputProperties());
+  }
+  if (!restarted)
+    accepted = drm->FlipPageTransactional(valid ? bo : nullptr, restore, async);
   if (!drm->HasPendingCB1Page()) surface.CompleteTransactionalBuffer(accepted);
   if (accepted && restore)
   {
@@ -458,6 +500,7 @@ void CWinSystemGbm::Unregister(IDispResource* resource)
 
 void CWinSystemGbm::OnLostDevice()
 {
+  if (m_dispReset) return;
   CLog::Log(LOGDEBUG, "{} - notify display change event", __FUNCTION__);
   m_dispReset = true;
 
@@ -616,12 +659,14 @@ void CWinSystemGbm::SetColorimetry(const VideoPicture* videoPicture)
                KODI::UTILS::ColorimetryToString(scanoutColorimetry),
                KODI::UTILS::ColorimetryToString(colorimetry));
     drm->AddProperty(connector, "Colorspace", colorspace.value());
+    m_queuedColorspace = colorspace;
     drm->SetActive(true);
   }
 }
 
 bool CWinSystemGbm::SetHDR(const VideoPicture* videoPicture)
 {
+  m_queuedHdrMetadata = 0;
   if (!videoPicture && DeferSdrRestore())
     return false;
 
@@ -757,15 +802,31 @@ bool CWinSystemGbm::SetHDR(const VideoPicture* videoPicture)
     }
 
     drm->AddProperty(connector, "HDR_OUTPUT_METADATA", m_hdrBlob.Get());
+    m_queuedHdrMetadata = m_hdrBlob.Get();
     drm->SetActive(true);
   }
 
   return m_hdrBlob.IsValid();
 }
 
+bool CWinSystemGbm::RequeueOutputProperties()
+{
+  auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
+  auto* connector = drm ? drm->GetConnector() : nullptr;
+  if (!connector) return false;
+  bool valid = true;
+  if (m_queuedColorspace)
+    valid &= drm->AddProperty(connector, "Colorspace", *m_queuedColorspace);
+  if (m_queuedHdrMetadata && connector->SupportsProperty("HDR_OUTPUT_METADATA"))
+    valid &= drm->AddProperty(connector, "HDR_OUTPUT_METADATA", *m_queuedHdrMetadata);
+  drm->AllowModeset();
+  return valid;
+}
+
 #ifdef HAVE_DVBRIDGE
 bool CWinSystemGbm::StageOrdinaryHDR10Recovery()
 {
+  m_queuedColorspace.reset();
   auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
   auto* connector = drm ? drm->GetConnector() : nullptr;
   if (!connector)

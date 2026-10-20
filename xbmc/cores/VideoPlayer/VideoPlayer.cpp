@@ -7,6 +7,10 @@
  */
 
 #include "VideoPlayer.h"
+#include "utils/DVBridgeDiagnosticLog.h"
+#ifdef HAVE_DVBRIDGE
+#include "windowing/gbm/WinSystemGbmGLESContext.h"
+#endif
 #ifdef HAVE_DVBRIDGE
 #include "cores/VideoPlayer/DVDCodecs/Video/DVPlaybackNotification.h"
 #endif
@@ -80,6 +84,7 @@
 #include <limits>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <ranges>
 #include <string_view>
 #include <utility>
@@ -869,6 +874,7 @@ bool CVideoPlayer::OpenFile(const CFileItem& file, const CPlayerOptions &options
   m_playerOptions = options;
 #ifdef HAVE_DVBRIDGE
   DVBRIDGE::PlaybackNotification::StartVideo();
+  DVBRIDGE::DiagnosticOpen();
 #endif
 
   m_processInfo->SetPlayTimes(0,0,0,0);
@@ -888,6 +894,7 @@ bool CVideoPlayer::OpenFile(const CFileItem& file, const CPlayerOptions &options
 bool CVideoPlayer::CloseFile(bool reopen)
 {
 #ifdef HAVE_DVBRIDGE
+  DVBRIDGE::DiagnosticFinal("close-file");
   DVBRIDGE::PlaybackNotification::StopVideo();
 #endif
   CLog::Log(LOGINFO, "CVideoPlayer::CloseFile()");
@@ -954,6 +961,14 @@ void CVideoPlayer::OnStartup()
 
 bool CVideoPlayer::OpenInputStream()
 {
+#ifdef HAVE_DVBRIDGE
+  MESSAGING::ThreadMessageCallback refresh{
+      [](void*) {
+        auto* window=dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(CServiceBroker::GetWinSystem());
+        if (window && window->RefreshDisplayInfoForVideo()) window->RefreshDVOutputCapabilities();
+      },nullptr};
+  CServiceBroker::GetAppMessenger()->SendMsg(TMSG_CALLBACK,0,0,&refresh);
+#endif
   if (m_pInputStream.use_count() > 1)
     throw std::runtime_error("m_pInputStream reference count is greater than 1");
   m_pInputStream.reset();
@@ -2175,6 +2190,10 @@ bool CVideoPlayer::ShouldDeferSync(bool ready, std::chrono::steady_clock::time_p
 
 void CVideoPlayer::HandlePlaySpeed()
 {
+#ifdef HAVE_DVBRIDGE
+  DVBRIDGE::DiagnosticPause(m_playSpeed == DVD_PLAYSPEED_PAUSE);
+  DVBRIDGE::DiagnosticTick(DVBRIDGE::playbackMode.load() != DVBRIDGE::OutputMode::Disabled);
+#endif
 #ifdef CB1_HAS_HDR10_AI
   // Use native buffering while a new AI output is primed.
   if (!m_renderManager.PrepareHDR10AIStartup(m_playerOptions.fullscreen && !m_State.streamsReady))
@@ -3056,6 +3075,7 @@ void CVideoPlayer::OnExit()
 
   // destroy objects
 #ifdef HAVE_DVBRIDGE
+  DVBRIDGE::DiagnosticFinal("end-of-playback");
   DVBRIDGE::PlaybackNotification::StopVideo();
 #endif
   m_renderManager.Flush(false, false);
@@ -3131,6 +3151,9 @@ void CVideoPlayer::HandleMessages()
 
       FlushBuffers(DVD_NOPTS_VALUE, true, true);
       m_renderManager.Flush(false, false);
+      m_processInfo->ResetVideoCodecInfo();
+      m_renderManager.ResetPictureInfo();
+      m_overlayContainer.Clear(DVDOverlaySource::MENU);
 #ifdef HAVE_DVBRIDGE
       DVBRIDGE::PlaybackNotification::StartVideo();
 #endif
@@ -4534,8 +4557,14 @@ bool CVideoPlayer::OpenVideoStream(CDVDStreamInfo& hint, bool reset)
       MESSAGING::ThreadMessageCallback callback;
       callback.callback = &ApplyVideoModeChange;
       callback.userptr = &change;
+#ifdef HAVE_DVBRIDGE
+      DVBRIDGE::modeChangeResolution.store(nativeDV ? static_cast<int>(change.res) : -1);
+#endif
       CServiceBroker::GetAppMessenger()->SendMsg(TMSG_CALLBACK, -1, -1,
                                                  static_cast<void*>(&callback));
+#ifdef HAVE_DVBRIDGE
+      DVBRIDGE::modeChangeResolution.store(-1);
+#endif
       m_renderManager.TriggerUpdateResolution(framerate, hint.width, hint.height, hint.stereo_mode,
                                               nativeDV);
     }

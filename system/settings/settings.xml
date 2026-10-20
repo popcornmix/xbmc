@@ -18,7 +18,8 @@
           <constraints>
             <options>
               <option label="40812">0</option>
-              <option label="40819">3</option>
+              <option label="40913">4</option>
+              <option label="40914">5</option>
               <option label="40814">2</option>
               <option label="40813">1</option>
             </options>
@@ -34,21 +35,12 @@
           </options></constraints>
           <control type="list" format="string"><usedetails>true</usedetails></control>
         </setting>
-        <setting id="dvbridge.enhancement" type="integer" label="40825" help="40826">
-          <requirement>HAVE_DVBRIDGE</requirement>
-          <level>2</level><default>0</default>
-          <dependencies><dependency type="visible"><or>
-            <condition setting="dvbridge.outputmode" operator="is">3</condition>
-            <condition setting="dvbridge.hdr10source" operator="is">2</condition>
-          </or></dependency></dependencies>
-          <constraints><options><option label="40827">0</option><option label="40828">1</option></options></constraints>
-          <control type="spinner" format="string" />
-        </setting>
         <setting id="dvbridge.tvpeak" type="number" label="40829" help="40830">
           <requirement>HAVE_DVBRIDGE</requirement>
-          <level>2</level><default>0</default>
+          <level>0</level><default>0</default>
           <dependencies><dependency type="visible"><or>
             <condition setting="dvbridge.outputmode" operator="is">3</condition>
+            <condition setting="dvbridge.outputmode" operator="is">5</condition>
             <and><condition setting="dvbridge.outputmode" operator="is">1</condition><condition setting="dvbridge.hdr10method" operator="is">1</condition></and>
             <condition setting="dvbridge.hdr10source" operator="is">2</condition>
           </or></dependency></dependencies>
@@ -64,9 +56,10 @@
         </setting>
         <setting id="dvbridge.tvgamut" type="integer" label="40836" help="40837">
           <requirement>HAVE_DVBRIDGE</requirement>
-          <level>2</level><default>2</default>
+          <level>0</level><default>2</default>
           <dependencies><dependency type="visible"><or>
             <condition setting="dvbridge.outputmode" operator="is">3</condition>
+            <condition setting="dvbridge.outputmode" operator="is">5</condition>
             <and><condition setting="dvbridge.outputmode" operator="is">1</condition><condition setting="dvbridge.hdr10method" operator="is">1</condition></and>
             <condition setting="dvbridge.hdr10source" operator="is">2</condition>
           </or></dependency></dependencies>
@@ -75,27 +68,37 @@
         </setting>
         <setting id="dvbridge.enhancedinfo" type="boolean" label="40816" help="40817">
           <requirement>HAVE_DVBRIDGE</requirement>
-          <level>0</level>
-          <default>true</default>
-          <control type="toggle" />
-        </setting>
-        <setting id="dvbridge.playbackmenu" type="boolean" label="40855" help="40856">
-          <requirement>HAVE_DVBRIDGE</requirement>
-          <level>0</level>
+          <level>2</level>
           <default>true</default>
           <control type="toggle" />
         </setting>
         <setting id="dvbridge.configureprofile" type="action" label="40853" help="40854">
           <requirement>HAVE_DVBRIDGE</requirement><level>0</level>
+          <dependencies><dependency type="visible"><or>
+            <condition setting="dvbridge.outputmode" operator="is">3</condition>
+            <condition setting="dvbridge.outputmode" operator="is">5</condition>
+            <and><condition setting="dvbridge.outputmode" operator="is">1</condition><condition setting="dvbridge.hdr10method" operator="is">1</condition></and>
+            <condition setting="dvbridge.hdr10source" operator="is">2</condition>
+          </or></dependency></dependencies>
           <control type="button" format="action" />
         </setting>
         <setting id="dvbridge.startupmode" type="boolean" label="40857" help="40858">
-          <requirement>HAVE_DVBRIDGE</requirement><level>0</level><default>false</default>
+          <requirement>HAVE_DVBRIDGE</requirement><level>2</level><default>false</default>
           <control type="toggle" />
         </setting>
         <setting id="dvbridge.asyncpreparation" type="boolean" label="40900" help="40901">
-          <requirement>HAVE_DVBRIDGE</requirement><level>2</level><default>true</default>
+          <requirement>HAVE_DVBRIDGE</requirement><level>3</level><default>true</default>
           <control type="toggle" />
+        </setting>
+        <setting id="dvbridge.fastchroma" type="integer" label="40904" help="40905">
+          <requirement>HAVE_DVBRIDGE</requirement><level>2</level><default>2</default>
+          <constraints><options><option label="106">0</option><option label="107">1</option><option label="16316">2</option></options></constraints>
+          <control type="list" format="string" />
+        </setting>
+        <setting id="dvbridge.felupscaling" type="integer" label="40907" help="40908">
+          <requirement>HAVE_DVBRIDGE</requirement><level>3</level><default>0</default>
+          <constraints><options><option label="40910">0</option><option label="40909">1</option></options></constraints>
+          <control type="list" format="string" />
         </setting>
       </group>
       <group id="1" label="14230">

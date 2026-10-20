@@ -13,6 +13,7 @@
 #include "rendering/gles/RenderSystemGLES.h"
 #include "utils/EGLUtils.h"
 
+#include <array>
 #include <memory>
 #include <optional>
 #include <mutex>
@@ -20,11 +21,14 @@
 #include "cores/VideoPlayer/VideoRenderers/DVBridgeGLES.h"
 #include "cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h"
 #include "drm/DVBridgeState.h"
+#include "ModeChangeHold.h"
+#include "DVPresentStall.h"
 #endif
 
 class CGuiCompositeShaderGLES;
 
 class CVaapiProxy;
+class VideoSourceSideData;
 
 namespace KODI
 {
@@ -48,8 +52,14 @@ public:
   bool InitWindowSystem() override;
   bool SetFullScreen(bool fullScreen, RESOLUTION_INFO& res, bool blankOtherDisplays) override;
   void PresentRender(bool rendered, bool videoLayer) override;
+  void StageVideoSource(std::shared_ptr<const VideoSourceSideData> source)
+  {
+    m_videoSourceSideData = std::move(source);
+  }
 #ifdef HAVE_DVBRIDGE
   bool BeginRender() override;
+  bool Hide() override;
+  bool Show(bool raise = true) override;
   float GetDisplayLatency() override;
 #endif
 
@@ -67,6 +77,11 @@ public:
       bool allowModeSwitch = false) const;
   bool CanRetainDVSource() const;
   bool CompleteDVModeSwitch(const VideoPicture& picture);
+  bool DVModeSwitchDeferred()
+  {
+    return !m_dvRollbackFailed && m_dvShutdownFence && m_dvContext &&
+        m_dvContext->Poll() != DVBRIDGE_DV_FAILED;
+  }
   void ObserveDVImport(DVBRIDGE::SourceBinding binding, dvbridge_geometry geometry, bool usable);
   DVBRIDGE::OutputSelection SelectedDVOutput(const VideoPicture* picture) const;
   DVBRIDGE::OutputReason ConsumeDVPlaybackFailure(DVBRIDGE::SourceBinding binding);
@@ -94,20 +109,28 @@ public:
   {
     return CB1AsyncAvailable() && m_dvBridge->AsyncPreparationActive();
   }
+  bool CB1NativeAsyncPlayback() const
+  {
+    return m_DRM && m_DRM->HasQuirk(QUIRK_CB1_NATIVE_EDGE) && CB1AsyncPlayback() &&
+        !m_hdrConversion && !m_dvBridge->Advanced() &&
+        (m_dvSelection.policy.mode == DVBRIDGE_MODE_STANDARD ||
+         m_dvSelection.policy.mode == DVBRIDGE_MODE_MASTER_REFERENCE);
+  }
   std::optional<double> CB1PresentationAge() const;
   void RecordDVSubtitle(const CRect& rect, unsigned texture);
   bool BeginDVPQSubtitle();
   void EndDVPQSubtitle();
   bool DVPQSubtitlesReady() const { return m_dvPQSubtitleDraws != 0; }
   bool HasDVBridgeScreenshot() const { return m_dvState.Captured() || m_hdrConversion; }
-  unsigned int GetDVBridgeScreenshotFramebuffer()
+  bool ReadDVBridgeScreenshot(KODI::RENDERING::CAPTURE::ReadbackBuffer& out)
   {
-    return m_dvFrame && m_dvBridge ? m_dvBridge->GetPQFramebuffer() : 0;
+    return m_dvFrame && m_dvBridge && m_dvBridge->ReadScreenshot(out);
   }
   bool RenderDVBridge(const CDVBridgeGLES::Layer& layer, std::shared_ptr<AVFrame> enhancement,
                        DVBRIDGE::SourceBinding enhancementBinding,
                        const CDVMetadataBuffer& metadata,
-                       dvbridge_geometry geometry);
+                       dvbridge_geometry geometry,
+                       const CDVBridgeGLES::FELSuccessor* successor = nullptr);
   bool EndDVBridge();
   void DiscardDVBridgeFrame();
   bool StopDVBridgePlayback();
@@ -126,6 +149,19 @@ protected:
 #endif
 
 private:
+#ifdef HAVE_DVBRIDGE
+  CModeChangeHold m_modeHold;
+  CHeldModeAnnouncement m_modeAnnouncement;
+  CDVPresentStall m_presentStall;
+  bool CB1ModeCanJoin(const RESOLUTION_INFO& res) const;
+  bool HoldCB1Mode(RESOLUTION_INFO& res);
+  bool HoldCB1Stop();
+  bool PrepareNvidiaModeRestore(const RESOLUTION_INFO& res);
+  void AnnounceCB1Mode(bool transport);
+  void CompleteCB1Mode(bool accepted, bool transport);
+#endif
+  void PublishVideoSource(bool accepted, const std::shared_ptr<const VideoSourceSideData>& source);
+  std::shared_ptr<const VideoSourceSideData> m_videoSourceSideData;
   void PresentFrame(bool rendered, bool videoLayer);
   bool m_guiCompositing{false};
   CFrameBufferObject m_guiFbo;
@@ -147,9 +183,17 @@ private:
   bool RetireDVContext();
   bool CB1AsyncAvailable() const;
   bool CreateCB1GPUFence(const CDVBridgeGLES::Submission& submission);
+  void ObserveCB1Headroom();
+  DVBRIDGE::FastRendering m_fastRendering;
+  bool m_fastRenderEligible{}, m_fastSubmittedEligible{};
+  uint64_t m_fastObservedPresentation{}, m_fastSourceStream{};
+  double m_fastSourcePts{};
+  uint64_t m_fastPreparedStream{};
+  double m_fastPreparedPts{};
   bool m_dvShutdownFence{};
   bool m_dvRejectedSurface{}, m_dvRollbackFailed{};
   bool PollRejectedDVSurface();
+  bool StageOrdinaryDVOutput(const VideoPicture* picture);
   bool RecoverDVActivation();
   void ResetDVActivation(const VideoPicture* picture);
   bool m_dvRecoveryPending{}, m_dvNativeFailed{}, m_dvHDR10Failed{}, m_dvFallbackActive{};
@@ -189,6 +233,8 @@ private:
   bool m_dvStopPending{};
   bool m_hdrConversion = false;
   std::optional<dvbridge_hdr10_session> m_hdr10Session;
+  std::unique_ptr<VideoPicture> m_hdr10BasicSignal;
+  std::optional<std::array<unsigned, 5>> m_hdr10Signal;
   uint64_t m_hdr10SessionStream{};
   std::optional<uint64_t> m_hdrDeepColorPrevious;
   bool m_failedHDR10SetupRestore = false;
@@ -196,6 +242,7 @@ private:
   CRect m_dvSubtitleBounds;
   unsigned m_dvSubtitleDraws{};
   uint64_t m_dvSubtitleContent{};
+  uint64_t m_dvGUIContentGeneration{};
   CFrameBufferObject m_dvPQSubtitleFbo;
   int m_dvPQSubtitleWidth{}, m_dvPQSubtitleHeight{}, m_dvPQPreviousFbo{};
   unsigned m_dvPQSubtitleDraws{};

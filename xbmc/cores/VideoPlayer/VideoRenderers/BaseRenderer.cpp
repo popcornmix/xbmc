@@ -111,7 +111,8 @@ void CBaseRenderer::CalcDestRect(float offsetX,
                                  float inputFrameRatio,
                                  float zoomAmount,
                                  float verticalShift,
-                                 CRect& destRect)
+                                 CRect& destRect,
+                                 bool useVideoSettings)
 {
   // if view window is empty, set empty destination
   if (height == 0 || width == 0)
@@ -129,7 +130,10 @@ void CBaseRenderer::CalcDestRect(float offsetX,
 
   // allow a certain error to maximize size of render area
   float fCorrection = width / height / outputFrameRatio - 1.0f;
-  float fAllowed = CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(CSettings::SETTING_VIDEOPLAYER_ERRORINASPECT) * 0.01f;
+  const float fAllowed = useVideoSettings
+      ? CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(
+            CSettings::SETTING_VIDEOPLAYER_ERRORINASPECT) * 0.01f
+      : 0.0f;
   if (fCorrection > fAllowed)
     fCorrection = fAllowed;
   if (fCorrection < -fAllowed)
@@ -138,8 +142,8 @@ void CBaseRenderer::CalcDestRect(float offsetX,
   outputFrameRatio *= 1.0f + fCorrection;
 
   bool isRotated = false;
-  if (m_renderOrientation == 90 ||
-      m_renderOrientation == 270)
+  if (useVideoSettings && (m_renderOrientation == 90 ||
+                          m_renderOrientation == 270))
     isRotated = true;
 
   float newWidth;

@@ -64,6 +64,9 @@ public:
 #endif
 
 protected:
+  void CaptureSourceSideData(VideoPicture* picture);
+  std::optional<AVMasteringDisplayMetadata> m_sourceMasteringMetadata;
+  std::optional<AVContentLightMetadata> m_sourceLightMetadata;
   CDVDVideoCodec::VCReturn GetBasePicture(VideoPicture* picture);
 #ifdef HAVE_DVBRIDGE
   std::shared_ptr<dvbridge_fel> m_dvFel;
@@ -87,6 +90,7 @@ protected:
   void SetFilters();
   void UpdateName();
   bool SetPictureParams(VideoPicture* pVideoPicture);
+  void UpdateDropControl(int64_t pts);
 
   bool HasHardware() { return m_pHardware != nullptr; }
   void SetHardware(IHardwareDecoder *hardware);

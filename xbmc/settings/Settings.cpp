@@ -8,6 +8,9 @@
 
 #include "Settings.h"
 #ifdef HAVE_DVBRIDGE
+#include "utils/DVBridgeFastRendering.h"
+#endif
+#ifdef HAVE_DVBRIDGE
 #include "dialogs/DVPlaybackModes.h"
 #endif
 
@@ -214,8 +217,38 @@ bool CSettings::Load(const TiXmlElement* root, bool& updated)
   if (!root)
     return false;
 
+#ifdef HAVE_DVBRIDGE
+  std::unique_ptr<TiXmlElement> migrated;
+  for (const auto* setting = root->FirstChildElement("setting"); setting;
+       setting = setting->NextSiblingElement("setting"))
+  {
+    const char* id = setting->Attribute("id");
+    const char* value = setting->GetText();
+    if (!id || !value) continue;
+    const auto legacy = std::string_view(id) == "dvbridge.fastchroma" ?
+        DVBRIDGE::LegacyFastRendering(value) :
+        std::string_view(id) == "dvbridge.outputmode" && std::string_view(value) == "3" ?
+            std::optional<int>{5} : std::nullopt;
+    if (!legacy) continue;
+    if (!migrated) migrated.reset(root->Clone()->ToElement());
+    for (auto* element = migrated->FirstChildElement("setting"); element;
+         element = element->NextSiblingElement("setting"))
+      if (element->Attribute("id") && std::string_view(element->Attribute("id")) == id)
+      {
+        element->Clear();
+        element->LinkEndChild(new TiXmlText(std::to_string(*legacy).c_str()));
+        element->RemoveAttribute("default");
+        break;
+      }
+  }
+  if (migrated) root = migrated.get();
+#endif
+
   if (!CSettingsBase::LoadValuesFromXml(root, updated))
     return false;
+#ifdef HAVE_DVBRIDGE
+  updated |= bool(migrated);
+#endif
 
   return Load(static_cast<const TiXmlNode*>(root));
 }

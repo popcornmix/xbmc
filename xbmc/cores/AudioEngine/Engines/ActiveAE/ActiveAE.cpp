@@ -405,6 +405,9 @@ void CActiveAE::StateMachine(int signal, Protocol *port, Message *msg)
           return;
         case CActiveAEControlProtocol::DISPLAYRESET:
           return;
+        case CActiveAEControlProtocol::DISPLAYLOST:
+          msg->Reply(CActiveAEControlProtocol::ACC);
+          return;
         case CActiveAEControlProtocol::APPFOCUSED:
           m_sink.m_controlPort.SendOutMessage(CSinkControlProtocol::APPFOCUSED, msg->data, sizeof(bool));
           return;

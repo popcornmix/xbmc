@@ -30,23 +30,27 @@ class CDRMAtomic : public CDRMUtils
 {
 public:
   CDRMAtomic() = default;
-  ~CDRMAtomic() override = default;
+  ~CDRMAtomic() override;
   void FlipPage(struct gbm_bo* bo, bool rendered, bool videoLayer, bool async) override;
-#ifdef HAVE_DVBRIDGE
   bool LastPageAccepted() const { return m_lastPageAccepted; }
+  bool TestFramebuffer(struct gbm_bo* bo);
   bool IsSelectedModeCommitted() const;
-#endif
   bool SetVideoMode(const RESOLUTION_INFO& res, struct gbm_bo* bo) override;
   bool SetActive(bool active) override;
+  bool IsActive() const { return m_active; }
+  void AllowModeset() { m_need_modeset = true; }
   bool InitDrm() override;
   void DestroyDrm() override;
   bool SupportsFencing() override { return true; }
   bool AddProperty(CDRMObject* object, const char* name, uint64_t value);
   bool FlipPageTransactional(struct gbm_bo* bo, bool restore = false, bool async = false);
   bool HasPendingCB1Page() const { return m_cb1Pending; }
+  bool HasPendingRequest() const { return m_need_modeset || (m_req && !m_req->Empty()); }
   bool CompleteCB1Page(int timeoutMs = 0);
   uint64_t CB1PresentationTime() const { return m_cb1CompletedNs; }
   uint64_t CB1PreviousPresentationTime() const { return m_cb1PreviousCompletedNs; }
+  void SetCB1TimingPeriod(uint64_t periodNs);
+  std::optional<int64_t> TakeCB1Headroom();
   void ResetDVActivation() { m_dvRetry.Reset(); }
   void SetDVActivationPending(bool pending) { m_dvActivating = pending; }
   bool CanAsyncDVBridge() const
@@ -73,14 +77,14 @@ private:
   bool m_dvLinkKnown{false};
   uint32_t m_dvLinkConnector{0}, m_dvLinkBlob{0}, m_dvLinkStatus{0};
   void RefreshDVLink();
-  void ReportDVFailure(const char* stage, int error);
-  void ReportSignalState();
+  void ReportDVFailure(const char* stage, int error) noexcept;
+  void ReportDVCommit(const char* stage) noexcept;
+  void ReportSignalState() noexcept;
   bool m_signalDirty{false}, m_signalKnown{false};
-  std::array<uint64_t, 15> m_signalState{};
+  std::array<uint64_t, 25> m_signalState{};
   drmModeModeInfo m_committedMode{};
-  uint64_t m_signalWindow{0};
-  unsigned m_signalReports{0};
   DVBRIDGE::DiagnosticFailures m_dvFailures;
+  bool m_dvCommitReported{}, m_dvLastCommitRestore{};
   bool m_dvSnapshot{false};
   uint64_t m_dvSnapshotBlob{0};
   uint32_t m_dvSnapshotConnector{0};
@@ -90,10 +94,12 @@ private:
   int m_cb1OutFence{-1};
   uint64_t m_cb1CompletedNs{};
   uint64_t m_cb1PreviousCompletedNs{};
+  int m_cb1TimingInput{-1};
+  uint64_t m_cb1TimingPeriodNs{}, m_cb1SubmittedNs{};
+  std::optional<int64_t> m_cb1Headroom;
+  void ResetCB1Timing();
   void ResetCB1PresentationTime() { m_cb1CompletedNs = m_cb1PreviousCompletedNs = 0; }
-#ifdef HAVE_DVBRIDGE
   bool m_lastPageAccepted{};
-#endif
   bool m_active = true;
   bool m_propertyFailure = false;
   bool m_dvRestoring = false;
@@ -107,10 +113,12 @@ private:
     CDRMAtomicRequest(const CDRMAtomicRequest& right) = delete;
 
     drmModeAtomicReqPtr Get() const { return m_atomicRequest.get(); }
+    bool Empty() const { return m_atomicRequestItems.empty(); }
 
     bool AddProperty(CDRMObject* object, const char* name, uint64_t value);
     void CacheProperties();
     std::optional<drmModeModeInfo> signalMode;
+    std::optional<uint64_t> requestedDV;
     void LogAtomicRequest();
     void LogDVProperties();
 

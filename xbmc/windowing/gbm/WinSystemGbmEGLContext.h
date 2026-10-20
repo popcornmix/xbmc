@@ -41,18 +41,20 @@ public:
   }
   int GetBufferAge() override { return m_eglContext.GetBufferAge(); }
   int GetOutputBitDepth() const override { return m_eglContext.GetConfigAttrib(EGL_RED_SIZE); }
+  bool HasFloatOutput() const override
+  {
+    return m_eglContext.GetConfigAttrib(EGL_NATIVE_VISUAL_ID) == DRM_FORMAT_ABGR16161616F;
+  }
 
   bool BindTextureUploadContext() override;
   bool UnbindTextureUploadContext() override;
   bool HasContext() override;
 
+  std::vector<uint64_t> OutputModifiers(uint32_t format);
   bool SetVideoOutput(const VideoPicture* videoPicture) override;
 
 protected:
-  CWinSystemGbmEGLContext(EGLenum platform, std::string const& platformExtension)
-    : CWinSystemEGL{platform, platformExtension}
-  {
-  }
+  CWinSystemGbmEGLContext(EGLenum platform, std::string const& platformExtension);
 
   /**
    * Inheriting classes should override InitWindowSystem() without parameters
@@ -60,6 +62,10 @@ protected:
    */
   bool InitWindowSystemEGL(EGLint renderableType, EGLint apiType);
   bool ChooseEGLConfig(EGLint renderableType, int bitDepth = 8);
+  bool FloatOutputUsable() const;
+  void CheckFloatOutput(bool accepted);
+  bool m_floatOutputBlocked{};
+  std::unique_ptr<VideoPicture> m_floatOutputPicture;
   virtual bool CreateContext() = 0;
   virtual int VideoOutputBitDepth(const VideoPicture* picture) const;
   // Opt-in only for DV frame transactions. Ordinary output keeps native semantics.

@@ -18,6 +18,7 @@
 #include "VideoShaders/dither.h"
 #include "application/Application.h"
 #include "cores/IPlayer.h"
+#include "cores/VideoPlayer/VideoRenderers/RenderFlags.h"
 #include "guilib/Texture.h"
 #include "rendering/GLExtensions.h"
 #include "rendering/MatrixGL.h"
@@ -196,6 +197,9 @@ bool CLinuxRendererGLES::Configure(const VideoPicture &picture, float fps, unsig
   m_sourceHeight = picture.iHeight;
   m_renderOrientation = orientation;
 
+  m_iFlags =
+      GetFlagsChromaPosition(picture.chroma_position) | GetFlagsStereoMode(picture.stereoMode);
+
   m_srcPrimaries = picture.color_primaries;
   m_srcColorBits = picture.colorBits;
   m_srcFullRange = picture.color_range == 1;
@@ -214,6 +218,34 @@ bool CLinuxRendererGLES::Configure(const VideoPicture &picture, float fps, unsig
   // frame is loaded after every call to Configure().
   m_bValidated = false;
 
+#ifdef CB1_HAS_HDR10_AI
+  m_aiOutputPending = HDR10AILookahead() &&
+      DVBRIDGE::FrameOutputSettings().hdr10Source != DVBRIDGE::HDR10SourceMode::Native;
+  if (m_aiOutputPending)
+  {
+    // Keep the GUI output until AI preparation selects DV or native HDR10.
+    m_dvRequested = m_passthroughHDR = m_hdrFboActive = false;
+    return true;
+  }
+#endif
+  return ConfigureVideoOutput(picture);
+}
+
+bool CLinuxRendererGLES::ConfigureVideoOutput(const VideoPicture& picture)
+{
+#ifdef CB1_HAS_HDR10_AI
+  if (m_aiOutputPending &&
+      KODI::WINDOWING::GBM::CWinSystemGbmGLESContext::DVBridgeRequested(&picture))
+  {
+    // Queue preparation already owns the final surface and its first DV frame.
+    auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(
+        CServiceBroker::GetWinSystem());
+    m_dvRequested = true;
+    m_passthroughHDR = false;
+    m_hdrFboActive = window && window->BeginDVBridge();
+    return m_hdrFboActive;
+  }
+#endif
   if (!CServiceBroker::GetWinSystem()->SetVideoOutput(&picture))
   {
     CLog::Log(LOGWARNING, "LinuxRendererGLES::Configure: SetVideoOutput failed");
@@ -635,6 +667,7 @@ void CLinuxRendererGLES::DrawBlackBars()
 
 void CLinuxRendererGLES::RenderUpdate(int index, int index2, bool clear, unsigned int flags, unsigned int alpha)
 {
+  m_frameRendered = false;
 #ifdef CB1_HAS_HDR10_AI
   m_aiFrameRendered = false;
 #endif
@@ -708,6 +741,7 @@ void CLinuxRendererGLES::RenderUpdate(int index, int index2, bool clear, unsigne
   }
 
   const bool rendered = Render(flags, index);
+  m_frameRendered = rendered;
 #ifdef CB1_HAS_HDR10_AI
   m_aiFrameRendered = rendered;
 #endif
@@ -720,6 +754,7 @@ void CLinuxRendererGLES::RenderUpdate(int index, int index2, bool clear, unsigne
 
 void CLinuxRendererGLES::RenderUpdateVideo(bool clear, unsigned int flags, unsigned int alpha)
 {
+  m_frameRendered = false;
   if (!m_bConfigured)
     return;
 
@@ -761,6 +796,7 @@ void CLinuxRendererGLES::RenderUpdateVideo(bool clear, unsigned int flags, unsig
   }
 
   const bool rendered = Render(flags, index);
+  m_frameRendered = rendered;
 #ifdef CB1_HAS_HDR10_AI
   m_aiFrameRendered = rendered;
 #endif
@@ -1211,34 +1247,39 @@ bool CLinuxRendererGLES::UploadTexture(int index)
     return false;
   }
 
-  if (m_buffers[index].loaded)
+  bool ret{true};
+
+  if (!m_buffers[index].loaded)
   {
-    return true;
+    YuvImage& dst = m_buffers[index].image;
+    m_buffers[index].videoBuffer->GetPlanes(dst.plane);
+    m_buffers[index].videoBuffer->GetStrides(dst.stride);
+
+    if (m_format == AV_PIX_FMT_NV12)
+    {
+      ret = UploadNV12Texture(index);
+    }
+    else if (m_format == AV_PIX_FMT_YUYV422 || m_format == AV_PIX_FMT_UYVY422)
+    {
+      ret = UploadPackedYUVTexture(index);
+    }
+    else
+    {
+      // default to planar YUV texture handlers
+      ret = UploadPlanarYUVTexture(index);
+    }
+
+    if (ret)
+    {
+      m_buffers[index].loaded = true;
+    }
   }
 
-  bool ret{false};
-
-  YuvImage &dst = m_buffers[index].image;
-  m_buffers[index].videoBuffer->GetPlanes(dst.plane);
-  m_buffers[index].videoBuffer->GetStrides(dst.stride);
-
-  if (m_format == AV_PIX_FMT_NV12)
-  {
-    ret = UploadNV12Texture(index);
-  }
-  else if (m_format == AV_PIX_FMT_YUYV422 || m_format == AV_PIX_FMT_UYVY422)
-  {
-    ret = UploadPackedYUVTexture(index);
-  }
-  else
-  {
-    // default to planar YUV texture handlers
-    ret = UploadPlanarYUVTexture(index);
-  }
-
+  // recalculate on every render, not just on upload: ManageRenderArea() moves
+  // m_sourceRect between the two eyes of a stereoscopic source
   if (ret)
   {
-    m_buffers[index].loaded = true;
+    CalculateTextureSourceRects(index, 3);
   }
 
   return ret;
@@ -1736,8 +1777,6 @@ bool CLinuxRendererGLES::UploadPlanarYUVTexture(int source)
 
   VerifyGLState();
 
-  CalculateTextureSourceRects(source, 3);
-
   return true;
 }
 
@@ -1941,8 +1980,6 @@ bool CLinuxRendererGLES::UploadNV12Texture(int source)
 
   VerifyGLState();
 
-  CalculateTextureSourceRects(source, 3);
-
   return true;
 }
 
@@ -2097,8 +2134,6 @@ bool CLinuxRendererGLES::UploadPackedYUVTexture(int source)
             im->bpp, im->plane[0]);
 
   VerifyGLState();
-
-  CalculateTextureSourceRects(source, 3);
 
   return true;
 }

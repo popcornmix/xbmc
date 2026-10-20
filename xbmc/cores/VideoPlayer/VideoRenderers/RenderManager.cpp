@@ -32,12 +32,15 @@
 #include <mutex>
 #include <optional>
 #ifdef CB1_HAS_HDR10_AI
+#include "cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h"
 #include "guilib/GUIComponent.h"
 #include "guilib/GUIWindowManager.h"
 #include "guilib/WindowIDs.h"
 #endif
 #ifdef HAVE_DVBRIDGE
 #include "cores/VideoPlayer/DVDCodecs/Video/DVPlaybackPolicy.h"
+#endif
+#if defined(HAVE_GBM) && defined(HAS_GLES)
 #include "windowing/gbm/WinSystemGbmGLESContext.h"
 #endif
 
@@ -233,6 +236,7 @@ bool CRenderManager::Configure()
     m_playerPort->UpdateVideoRender(m_pRenderer->VideoBypassesFramebuffer());
 
     m_queued.clear();
+    for (auto& slot : m_Queue) slot.sourceSideData.reset();
 #ifdef CB1_HAS_HDR10_AI
     ResetHDR10AIQueue();
 #endif
@@ -311,16 +315,31 @@ bool CRenderManager::IsPresenting()
 }
 
 #ifdef CB1_HAS_HDR10_AI
-bool CRenderManager::PrepareHDR10AILookahead()
+bool CRenderManager::PrepareHDR10AILookahead(std::unique_lock<CCriticalSection>& lock)
 {
   if (!m_pRenderer || !m_pRenderer->HDR10AIQueueEligible())
+  {
+    m_aiQueuePreparationStale = false;
     return m_aiQueueReady = true;
+  }
+  // Let the video worker start its clock after the first committed AI image.
+  if (m_aiGuiReady && !m_showVideo && m_pRenderer->HDR10AILookahead())
+    return m_aiQueueReady;
+  // Reuse only existing slots whose renderer fence has already completed.
+  if (m_pRenderer->HDR10AILookahead()) ReleaseDiscardedBuffers(true);
   auto queue = m_queued;
   const bool paused = m_pRenderer->HDR10AILookahead() && m_showVideo &&
       m_aiStartPts != DVD_NOPTS_VALUE && m_dvdClock.IsPaused();
-  const bool pending = m_presentstep == PRESENT_FRAME && m_pRenderer->HDR10AIFramePending();
+  const bool pending = m_presentstep == PRESENT_FRAME &&
+      (m_pRenderer->HDR10AIFramePending()
+#ifdef HAVE_DVBRIDGE
+       || m_cb1PresentPending
+#endif
+      );
   const bool selected = m_presentstep == PRESENT_FLIP && m_pRenderer->HDR10AILookahead();
-  if (paused || pending || selected) queue.push_front(m_presentsource);
+  // A seek can retain the old scanout, but only the new queue may prime AI.
+  if (m_aiStartPts != DVD_NOPTS_VALUE && (paused || pending || selected))
+    queue.push_front(m_presentsource);
   if (queue.empty()) return false;
   uint64_t deadline = 0;
   if (m_pRenderer->HDR10AILookahead() && m_aiStartPts != DVD_NOPTS_VALUE)
@@ -359,10 +378,76 @@ bool CRenderManager::PrepareHDR10AILookahead()
         remaining / speed : 0;
     deadline = DVBRIDGE::DiagnosticNowMs() + static_cast<uint64_t>(std::ceil(delay / 1000.0));
   }
-  m_aiQueueReady = m_pRenderer->PrepareHDR10AIQueue(queue,m_aiEnd,paused,deadline);
+  return ExecuteHDR10AIQueuePreparation(queue,paused,deadline,lock);
+}
+
+bool CRenderManager::ExecuteHDR10AIQueuePreparation(
+    const std::deque<int>& queue, bool paused, uint64_t deadline,
+    std::unique_lock<CCriticalSection>& lock)
+{
+  auto* renderer = m_pRenderer;
+  const auto generation = m_aiQueueGeneration;
+  const double startPts = m_Queue[queue.front()].pts + m_Queue[queue.front()].duration;
+  auto preparation = renderer->CaptureHDR10AIQueue(queue,m_aiEnd,paused,deadline);
+  if (preparation.execute)
+  {
+    m_aiGUIOwnsRenderer = true;
+    // Renderer destruction/flush and all GL calls remain GUI-thread owned.
+    // The callback owns its pictures/layers and reads no renderer slots.
+    lock.unlock();
+    HDR10AIQueuePreparation::Outcome outcome{};
+    try { outcome = preparation.execute(); }
+    catch (...) { lock.lock(); throw; }
+    lock.lock();
+    if (generation != m_aiQueueGeneration || renderer != m_pRenderer ||
+        !preparation.publish || !preparation.publish(outcome))
+    {
+      m_aiQueuePreparationStale = true;
+      // Reject only unsubmitted output; accepted KMS work keeps its owner.
+#ifdef HAVE_DVBRIDGE
+      if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(
+              CServiceBroker::GetWinSystem()))
+        window->DiscardDVBridgeFrame();
+      m_cb1PresentPending = false;
+#endif
+      // A rejected selection must not be prepended again on the next tick.
+      m_presentstep = m_queued.empty() ? PRESENT_IDLE : PRESENT_READY;
+      return m_aiQueueReady = false;
+    }
+    // After rejection, fresh pending analysis is not yet a new selected frame.
+    if (outcome.ready) m_aiQueuePreparationStale = false;
+    m_aiQueueReady = outcome.ready;
+  }
+  else
+  {
+    m_aiQueueReady = preparation.ready;
+    if (preparation.ready) m_aiQueuePreparationStale = false;
+  }
   if (m_aiQueueReady && m_aiStartPts == DVD_NOPTS_VALUE)
-    m_aiStartPts = m_Queue[queue.front()].pts + m_Queue[queue.front()].duration;
+    m_aiStartPts = startPts;
   return m_aiQueueReady;
+}
+
+void CRenderManager::ReleaseDiscardedBuffers(bool onlySignaled)
+{
+  for (auto it = m_discard.begin(); it != m_discard.end();)
+  {
+    // Early retirement cannot invalidate the selected/uncommitted picture.
+    if (onlySignaled && *it == m_presentsource)
+    {
+      ++it;
+      continue;
+    }
+    if (!m_pRenderer->NeedBuffer(*it) || (!onlySignaled && !m_bRenderGUI))
+    {
+      m_pRenderer->ReleaseBuffer(*it);
+      m_Queue[*it].sourceSideData.reset();
+      m_overlays.Release(*it);
+      m_free.push_back(*it);
+      it = m_discard.erase(it);
+    }
+    else ++it;
+  }
 }
 
 bool CRenderManager::HDR10AILookahead()
@@ -375,8 +460,9 @@ bool CRenderManager::GetHDR10AIStartTime(double& pts)
 {
   std::unique_lock lock(m_presentlock);
   if (!m_pRenderer || !m_pRenderer->HDR10AIQueueEligible() ||
-      !m_aiQueueReady || m_aiStartPts == DVD_NOPTS_VALUE ||
-      (m_pRenderer->HDR10AILookahead() && m_aiFullscreenRequested && !m_aiGuiReady))
+      m_aiStartPts == DVD_NOPTS_VALUE ||
+      (m_pRenderer->HDR10AILookahead() && m_aiFullscreenRequested ?
+          !m_aiGuiReady : !m_aiQueueReady))
     return false;
   pts = m_aiStartPts;
   return true;
@@ -411,6 +497,7 @@ void CRenderManager::EndHDR10AIQueue()
 
 void CRenderManager::ResetHDR10AIQueue()
 {
+  ++m_aiQueueGeneration;
   if (m_clockSync.m_cb1Phase)
   {
     m_clockSync.Reset();
@@ -438,6 +525,9 @@ void CRenderManager::FrameMove()
       lock.unlock();
       if (!Configure())
         return;
+#ifdef HAVE_DVBRIDGE
+      if (m_nativeDVRate) UpdateResolution();
+#endif
       UpdateLatencyTweak();
       firstFrame = true;
       FrameWait(50ms);
@@ -459,14 +549,19 @@ void CRenderManager::FrameMove()
     }
 #endif
 #ifdef CB1_HAS_HDR10_AI
-    if (m_aiStartPts == DVD_NOPTS_VALUE ||
-        (m_pRenderer->HDR10AILookahead() && m_dvdClock.IsPaused()) ||
-        (m_presentstep == PRESENT_FRAME && m_pRenderer->HDR10AIFramePending()))
-      PrepareHDR10AILookahead();
-    if (m_aiFullscreenRequested && m_aiQueueReady && !m_bTriggerUpdateResolution &&
+    // Release the first real presentation before preparing a speculative next head.
+    if (!m_aiGuiReady && m_aiFullscreenRequested && m_aiStartPts != DVD_NOPTS_VALUE && !m_bTriggerUpdateResolution &&
         m_pRenderer->HDR10AIFrameCommitted() && (!m_aiFullscreenWanted ||
         CServiceBroker::GetGUI()->GetWindowManager().IsWindowActive(WINDOW_FULLSCREEN_VIDEO)))
+    {
       m_aiGuiReady = true;
+      m_presentevent.notifyAll();
+    }
+    if (m_aiStartPts == DVD_NOPTS_VALUE || m_pRenderer->HDR10AILookahead())
+    {
+      PrepareHDR10AILookahead(lock2);
+      if (m_aiQueuePreparationStale) return;
+    }
 #endif
 
     if (m_queued.empty()
@@ -496,19 +591,32 @@ void CRenderManager::FrameMove()
     {
 #ifdef CB1_HAS_HDR10_AI
       // Prepare metadata for the native selection, not the queue head it skipped.
-      if (m_pRenderer->HDR10AILookahead()) PrepareHDR10AILookahead();
+      if (m_pRenderer->HDR10AILookahead())
+      {
+        PrepareHDR10AILookahead(lock2);
+        if (m_aiQueuePreparationStale) return;
+      }
 #endif
       m_presentstep = PRESENT_FRAME;
       m_presentevent.notifyAll();
     }
 
+#ifdef HAVE_DVBRIDGE
+    m_pRenderer->SetDVBridgeFELSuccessor(
+        m_queued.empty() || m_dvdClock.IsPaused() || m_dvdClock.GetClockSpeed() != 1.0 ?
+        -1 : m_queued.front());
+#endif
     // release all previous
+#ifdef CB1_HAS_HDR10_AI
+    ReleaseDiscardedBuffers();
+#else
     for (std::deque<int>::iterator it = m_discard.begin(); it != m_discard.end(); )
     {
       // renderer may want to keep the frame for postprocessing
       if (!m_pRenderer->NeedBuffer(*it) || !m_bRenderGUI)
       {
         m_pRenderer->ReleaseBuffer(*it);
+        m_Queue[*it].sourceSideData.reset();
         m_overlays.Release(*it);
         m_free.push_back(*it);
         it = m_discard.erase(it);
@@ -516,6 +624,7 @@ void CRenderManager::FrameMove()
       else
         ++it;
     }
+#endif
 
     m_playerPort->UpdateRenderBuffers(m_queued.size(), m_discard.size(), m_free.size());
     m_bRenderGUI = true;
@@ -572,12 +681,20 @@ void CRenderManager::UnInit()
 {
   if (!CServiceBroker::GetAppMessenger()->IsProcessThread())
   {
+#ifdef CB1_HAS_HDR10_AI
+    const bool guiOwnedAI = m_aiGUIOwnsRenderer.load();
+#endif
     m_initEvent.Reset();
     CServiceBroker::GetAppMessenger()->PostMsg(TMSG_RENDERER_UNINIT);
     if (!m_initEvent.Wait(2000ms))
     {
       CLog::Log(LOGERROR, "{} - timed out waiting for renderer to uninit", __FUNCTION__);
     }
+#ifdef CB1_HAS_HDR10_AI
+    // Even on timeout, the posted GUI teardown owns AI GL resources. Keep the
+    // inherited worker fall-through only for renderers without owned AI work.
+    if (guiOwnedAI || m_aiGUIOwnsRenderer.load()) return;
+#endif
   }
 
   std::unique_lock lock(m_statelock);
@@ -631,6 +748,7 @@ bool CRenderManager::Flush(bool wait, bool saveBuffers)
 
       if (!m_pRenderer->Flush(saveBuffers))
       {
+        for (auto& slot : m_Queue) slot.sourceSideData.reset();
         m_queued.clear();
         m_discard.clear();
         m_free.clear();
@@ -698,6 +816,13 @@ void CRenderManager::DeleteRenderer()
     delete m_pRenderer;
     m_pRenderer = NULL;
   }
+#ifdef CB1_HAS_HDR10_AI
+  if (CServiceBroker::GetAppMessenger()->IsProcessThread())
+  {
+    m_aiGUIOwnsRenderer = false;
+    m_aiQueuePreparationStale = false;
+  }
+#endif
 }
 
 void CRenderManager::ServiceVideoCaptures()
@@ -808,6 +933,14 @@ void CRenderManager::Render(bool clear, DWORD flags, DWORD alpha, bool gui)
   if (!gui && m_pRenderer->IsGuiLayer())
     return;
 
+#ifdef CB1_HAS_HDR10_AI
+  {
+    std::unique_lock lock(m_presentlock);
+    // Pending readiness is normal; rejected ownership cannot render old RGB.
+    if (m_aiQueuePreparationStale) return;
+  }
+#endif
+
   bool presented = false;
   if (!gui || m_pRenderer->IsGuiLayer())
   {
@@ -829,7 +962,15 @@ void CRenderManager::Render(bool clear, DWORD flags, DWORD alpha, bool gui)
 
   // the just-presented region is video-only: OSD, GUI and subtitles come later
   if (presented)
+  {
     ServiceVideoCaptures();
+#if defined(HAVE_GBM) && defined(HAS_GLES)
+    if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(
+            CServiceBroker::GetWinSystem()))
+      window->StageVideoSource(m_pRenderer->HasRenderedFrame() ?
+          m_Queue[m_presentsource].sourceSideData : nullptr);
+#endif
+  }
 
   if (presented && !gui)
   {
@@ -1014,6 +1155,15 @@ void CRenderManager::UpdateLatencyTweak()
                                                                                      isHDREnabled));
 }
 
+void CRenderManager::ResetPictureInfo()
+{
+  std::unique_lock lock(m_statelock);
+  m_picture.Reset();
+  m_fps = 0.0f;
+  m_nativeDVRate = false;
+  m_bTriggerUpdateResolution = false;
+}
+
 void CRenderManager::UpdateResolution()
 {
   if (m_bTriggerUpdateResolution)
@@ -1028,7 +1178,12 @@ void CRenderManager::UpdateResolution()
 #ifdef HAVE_DVBRIDGE
         if (m_nativeDVRate)
           if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(CServiceBroker::GetWinSystem()))
+          {
+            // A deferred retirement has not attempted the selected modeset yet.
+            if (window->GetGfxContext().GetVideoResolution() != res &&
+                window->DVModeSwitchDeferred()) return;
             m_nativeDVRate = window->CompleteDVModeSwitch(m_picture);
+          }
 #endif
         UpdateLatencyTweak();
         if (m_pRenderer)
@@ -1146,6 +1301,7 @@ bool CRenderManager::AddVideoPicture(const VideoPicture& picture, volatile std::
 
 
   SPresent& m = m_Queue[index];
+  m.sourceSideData = picture.sourceSideData;
   m.presentfield = displayField;
   m.presentmethod = presentmethod;
   m.pts = picture.pts;
@@ -1249,6 +1405,11 @@ int CRenderManager::WaitForBuffer(volatile std::atomic_bool& bStop,
   XbmcThreads::EndTime<> endtime{timeout};
   while(m_free.empty())
   {
+#ifdef CB1_HAS_HDR10_AI
+    // Yield a full priming pool so the worker can process its startup synchronization.
+    if (m_pRenderer && m_pRenderer->HDR10AILookahead() && m_aiGuiReady && !m_showVideo)
+      return -1;
+#endif
     m_presentevent.wait(lock, std::min(50ms, timeout));
     if (endtime.IsTimePast() || bStop)
     {
@@ -1313,11 +1474,13 @@ void CRenderManager::PrepareNextRender()
       m_dvdClock.GetClockSpeed() < 0 ? renderPts : m_Queue[m_queued.front()].pts;
 
   bool cb1Async = false;
+  bool nativeAsync = false;
   std::optional<double> completionAge;
 #ifdef HAVE_DVBRIDGE
   if (auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(CServiceBroker::GetWinSystem()))
   {
     cb1Async = window->CB1AsyncPlayback();
+    nativeAsync = window->CB1NativeAsyncPlayback();
     if (cb1Async && !isPaused && m_dvdClock.GetClockSpeed() == 1.0)
       completionAge = window->CB1PresentationAge();
   }
@@ -1325,6 +1488,11 @@ void CRenderManager::PrepareNextRender()
 
   const bool physicalPhase = cb1Async && m_clockSync.m_enabled && !isPaused &&
       m_dvdClock.GetClockSpeed() == 1.0;
+  const bool prepareAhead = cb1Async && !isPaused && m_dvdClock.GetClockSpeed() == 1.0 &&
+      m_Queue[m_presentsource].presentmethod == PRESENT_METHOD_SINGLE &&
+      m_Queue[m_presentsource].presentfield == FS_NONE &&
+      m_Queue[m_queued.front()].presentmethod == PRESENT_METHOD_SINGLE &&
+      m_Queue[m_queued.front()].presentfield == FS_NONE;
   if (m_clockSync.m_cb1Phase != physicalPhase)
   {
     m_clockSync.m_error = 0;
@@ -1360,12 +1528,27 @@ void CRenderManager::PrepareNextRender()
       }
     }
     if (!isPaused)
-      renderPts += frametime / 2 - m_clockSync.m_syncOffset;
+    {
+      // One-ahead native pictures are prepared at the display edge, not its blend midpoint.
+      const bool nativeEdge = physicalPhase && nativeAsync && prepareAhead && completionAge &&
+          std::abs(frametime * static_cast<double>(m_fps) - DVD_TIME_BASE) < DVD_TIME_BASE * 0.0005;
+      renderPts += (nativeEdge ? frametime : frametime / 2) - m_clockSync.m_syncOffset;
+    }
   }
   else
   {
     m_dvdClock.SetVsyncAdjust(0);
   }
+
+#ifdef CB1_HAS_HDR10_AI
+  if (physicalPhase && completionAge && m_fps > 0 &&
+      frametime * m_fps < DVD_TIME_BASE * 0.75 && m_pRenderer->HDR10AILookahead() &&
+      DVBRIDGE::FrameOutputSettings().hdr10Source == DVBRIDGE::HDR10SourceMode::ReferenceDV)
+  {
+    // Select on the physical refresh phase, not an interpolated mid-refresh clock.
+    renderPts -= std::fmod(std::max(0.0, *completionAge), frametime);
+  }
+#endif
 
   CLog::LogFC(LOGDEBUG, LOGAVTIMING,
               "frameOnScreen: {:f} renderPts: {:f} nextFramePts: {:f} -> diff: {:f}  render: {} "
@@ -1373,11 +1556,6 @@ void CRenderManager::PrepareNextRender()
               frameOnScreen, renderPts, nextFramePts, (renderPts - nextFramePts),
               renderPts >= nextFramePts, m_forceNext);
 
-  const bool prepareAhead = cb1Async && !isPaused && m_dvdClock.GetClockSpeed() == 1.0 &&
-      m_Queue[m_presentsource].presentmethod == PRESENT_METHOD_SINGLE &&
-      m_Queue[m_presentsource].presentfield == FS_NONE &&
-      m_Queue[m_queued.front()].presentmethod == PRESENT_METHOD_SINGLE &&
-      m_Queue[m_queued.front()].presentfield == FS_NONE;
   bool combined = false;
   if (m_presentsourcePast >= 0)
   {

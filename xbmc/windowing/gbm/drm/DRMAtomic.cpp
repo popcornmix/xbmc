@@ -15,8 +15,10 @@
 #include "guilib/GUIWindowManager.h"
 #include "settings/Settings.h"
 #include "utils/log.h"
+#include "utils/DVBridgeDiagnosticLog.h"
 #include "DVBridgeKernelLogReader.h"
 #include "utils/DVBridgeEdid.h"
+#include "utils/DVBridgeFastRendering.h"
 #ifdef HAVE_DVBRIDGE
 #include "cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h"
 #endif
@@ -45,27 +47,37 @@ uint64_t DVNowMs()
       std::chrono::steady_clock::now().time_since_epoch()).count();
 }
 
+uint64_t DVNowNs()
+{
+  timespec now{};
+  return clock_gettime(CLOCK_MONOTONIC, &now) == 0 ?
+      uint64_t(now.tv_sec) * 1000000000 + now.tv_nsec : 0;
+}
+
 void CollectDVKernelLog()
 {
   DVBRIDGE::CollectKernelLog();
 }
 }
 
-void CDRMAtomic::ReportDVFailure(const char* stage, int error)
+void CDRMAtomic::ReportDVFailure(const char* stage, int error) noexcept try
 {
 #ifdef HAVE_DVBRIDGE
   if (m_dvRestoring)
     DVBRIDGE::StreamTelemetry::NativeFailure(DVBRIDGE::OutputReason::RestoreFailed,
         error,m_dvRetry.Count(),false);
 #endif
-  if (!DVBRIDGE::DiagnosticsEnabled() || !m_dvFailures.Record(DVNowMs(), stage, error))
-    return;
-  CLog::Log(LOGERROR,
-      "DVBridge output: stage={} errno={} failures={} activation_failures={} connector={} crtc={} mode={}x{} clock_khz={}",
-      stage, error, m_dvFailures.Count(), m_dvRetry.Count(),
+  if (!DVBRIDGE::DiagnosticsEnabled()) return;
+  const bool changed = m_dvFailures.Record(DVNowMs(), stage, error);
+  DVBRIDGE::DiagnosticFailureLog(stage, changed, LOGERROR,
+      "DVBridge output: result=rejected stage={} error={} failures={} activation_failures={} connector={} crtc={} mode={}x{} clock_khz={} requested_dv={} property_id={} restoring={}",
+      stage, error ? std::to_string(error) : "unavailable", m_dvFailures.Count(), m_dvRetry.Count(),
       m_connector ? m_connector->GetId() : 0, m_crtc ? m_crtc->GetId() : 0,
       m_mode ? m_mode->hdisplay : 0, m_mode ? m_mode->vdisplay : 0,
-      m_mode ? m_mode->clock : 0);
+      m_mode ? m_mode->clock : 0,
+      m_req && m_req->requestedDV ? std::to_string(*m_req->requestedDV) : "unavailable",
+      m_connector ? m_connector->GetPropertyId("DVBRIDGE_DV_STANDARD_LAB") : 0,m_dvRestoring);
+  if (!changed) return;
   // One bounded snapshot per connection identity. Never dump each frame's
   // framebuffer or synchronization objects; they obscure the actual rejection.
   const auto blobId = m_dvLinkKnown ? m_dvLinkBlob :
@@ -85,22 +97,15 @@ void CDRMAtomic::ReportDVFailure(const char* stage, int error)
       drmModeFreePropertyBlob(blob);
     }
     const auto caps = dvbridge_parse_edid(edid.data(), edid.size());
-    CLog::Log(LOGINFO, "DVBridge sink: edid_bytes={} status={} version={} legacy_vsif={} 2160p60={}",
+    DVBRIDGE::DiagnosticLog(LOGINFO, "DVBridge sink: edid_bytes={} status={} version={} legacy_vsif={} 2160p60={}",
         edid.size(), dvbridge_edid_reason(caps.status), caps.version,
         caps.legacy_vsif, caps.supports_2160p60);
-    constexpr char digits[] = "0123456789abcdef";
-    std::string hex;
-    for (size_t i = 0; i < std::min<size_t>(edid.size(), 1024); ++i)
-    {
-      hex += digits[edid[i] >> 4];
-      hex += digits[edid[i] & 15];
-    }
-    CLog::Log(LOGINFO, "DVBridge sink EDID (first 1024 bytes max): {}", hex);
     if (m_req)
       m_req->LogDVProperties();
   }
   CollectDVKernelLog();
 }
+catch (...) {}
 
 void CDRMAtomic::RefreshDVLink()
 {
@@ -122,6 +127,14 @@ void CDRMAtomic::RefreshDVLink()
   m_dvLinkStatus = current->connection;
   drmModeFreeConnector(current);
 }
+
+void CDRMAtomic::ReportDVCommit(const char* stage) noexcept try
+{
+  DVBRIDGE::DiagnosticLog(LOGINFO,
+      "DVBridge activation: stage={} result=accepted requested_dv={} restoring={}", stage,
+      m_req && m_req->requestedDV ? std::to_string(*m_req->requestedDV) : "unavailable",m_dvRestoring);
+}
+catch (...) {}
 
 bool CDRMAtomic::DrmAtomicCommit(int fb_id, int flags, bool rendered, bool videoLayer, bool strict)
 {
@@ -211,10 +224,16 @@ bool CDRMAtomic::DrmAtomicCommit(int fb_id, int flags, bool rendered, bool video
     AddProperty(outputPlane, "SRC_Y", 0);
     AddProperty(outputPlane, "SRC_W", m_width << 16);
     AddProperty(outputPlane, "SRC_H", m_height << 16);
+    // Frame packing scans out (vdisplay + vtotal) lines - the kernel doubles the
+    // CRTC timing - and the framebuffer is sized to match, so cover all of it.
+    uint32_t crtcHeight = m_mode->vdisplay;
+    if ((m_mode->flags & DRM_MODE_FLAG_3D_MASK) == DRM_MODE_FLAG_3D_FRAME_PACKING)
+      crtcHeight += m_mode->vtotal;
+
     AddProperty(outputPlane, "CRTC_X", 0);
     AddProperty(outputPlane, "CRTC_Y", 0);
     AddProperty(outputPlane, "CRTC_W", m_mode->hdisplay);
-    AddProperty(outputPlane, "CRTC_H", m_mode->vdisplay);
+    AddProperty(outputPlane, "CRTC_H", crtcHeight);
 
     if (m_inFenceFd != -1)
     {
@@ -247,11 +266,13 @@ bool CDRMAtomic::DrmAtomicCommit(int fb_id, int flags, bool rendered, bool video
     return reject("properties", EINVAL);
   }
 
+  const bool auditCommit = strict && DVBRIDGE::DiagnosticsEnabled() &&
+      (!m_dvCommitReported || m_dvLastCommitRestore != m_dvRestoring);
   auto ret = drmModeAtomicCommit(m_fd, m_req->Get(), flags | DRM_MODE_ATOMIC_TEST_ONLY, nullptr);
   if (ret < 0)
   {
     const int testError = errno;
-    if (strict)
+    if (strict || (m_mode->flags & DRM_MODE_FLAG_3D_MASK))
     {
       return reject("atomic-test", testError);
     }
@@ -271,6 +292,9 @@ bool CDRMAtomic::DrmAtomicCommit(int fb_id, int flags, bool rendered, bool video
       AddProperty(outputPlane, "FB_ID", fb_id);
   }
 
+  if (auditCommit)
+    ReportDVCommit("atomic-test");
+  if (strict && m_cb1TimingInput >= 0) m_cb1SubmittedNs = DVNowNs();
   ret = drmModeAtomicCommit(m_fd, m_req->Get(), flags, nullptr);
   if (ret < 0)
   {
@@ -284,8 +308,14 @@ bool CDRMAtomic::DrmAtomicCommit(int fb_id, int flags, bool rendered, bool video
   }
   if (strict)
   {
+    if (auditCommit)
+    {
+      m_dvCommitReported = true;
+      m_dvLastCommitRestore = m_dvRestoring;
+      ReportDVCommit("atomic-commit");
+    }
     if (DVBRIDGE::DiagnosticsEnabled() && m_dvFailures.Recovered(DVNowMs()))
-      CLog::Log(LOGINFO, "DVBridge output recovered: failures={} recoveries={}",
+      DVBRIDGE::DiagnosticLog(LOGINFO, "DVBridge output recovered: failures={} recoveries={}",
           m_dvFailures.Count(), m_dvFailures.Recoveries());
   }
   FinishRequest(true);
@@ -325,7 +355,6 @@ void CDRMAtomic::FinishRequest(bool accepted)
   m_signalDirty = false;
 }
 
-#ifdef HAVE_DVBRIDGE
 bool CDRMAtomic::IsSelectedModeCommitted() const
 {
   return m_mode && m_committedMode.clock == m_mode->clock &&
@@ -339,7 +368,32 @@ bool CDRMAtomic::IsSelectedModeCommitted() const
       m_committedMode.vtotal == m_mode->vtotal && m_committedMode.vscan == m_mode->vscan &&
       m_committedMode.vrefresh == m_mode->vrefresh && m_committedMode.flags == m_mode->flags;
 }
-#endif
+
+CDRMAtomic::~CDRMAtomic()
+{
+  ResetCB1Timing();
+}
+
+void CDRMAtomic::ResetCB1Timing()
+{
+  if (m_cb1TimingInput >= 0) close(m_cb1TimingInput);
+  m_cb1TimingInput = -1;
+  m_cb1SubmittedNs = 0;
+  m_cb1Headroom.reset();
+}
+
+void CDRMAtomic::SetCB1TimingPeriod(uint64_t periodNs)
+{
+  if (!periodNs || periodNs != m_cb1TimingPeriodNs) ResetCB1Timing();
+  m_cb1TimingPeriodNs = periodNs;
+}
+
+std::optional<int64_t> CDRMAtomic::TakeCB1Headroom()
+{
+  const auto value = m_cb1Headroom;
+  m_cb1Headroom.reset();
+  return value;
+}
 
 bool CDRMAtomic::CompleteCB1Page(int timeoutMs)
 {
@@ -353,6 +407,7 @@ bool CDRMAtomic::CompleteCB1Page(int timeoutMs)
       ioctl(m_cb1OutFence, SYNC_IOC_FILE_INFO, &info) < 0 || info.status <= 0)
   {
     m_cb1Uncertain = true;
+    ResetCB1Timing();
     ResetCB1PresentationTime();
     ReportDVFailure("display-fence", EIO);
     return false;
@@ -370,6 +425,31 @@ bool CDRMAtomic::CompleteCB1Page(int timeoutMs)
       m_cb1PreviousCompletedNs = previous;
     }
   }
+  m_cb1Headroom.reset();
+  if (m_cb1TimingInput >= 0 && m_cb1TimingPeriodNs && m_cb1CompletedNs)
+  {
+    sync_file_info input{};
+    std::array<sync_fence_info, 16> details{};
+    uint64_t completed = 0;
+    if (ioctl(m_cb1TimingInput, SYNC_IOC_FILE_INFO, &input) == 0 && input.status > 0 &&
+        input.num_fences && input.num_fences <= details.size())
+    {
+      input.sync_fence_info = reinterpret_cast<uintptr_t>(details.data());
+      if (ioctl(m_cb1TimingInput, SYNC_IOC_FILE_INFO, &input) == 0 &&
+          input.num_fences && input.num_fences <= details.size())
+        for (unsigned i = 0; i < input.num_fences; ++i)
+        {
+          if (details[i].status <= 0 || !details[i].timestamp_ns ||
+              !strcmp(details[i].driver_name, "dma_fence")) { completed = 0; break; }
+          completed = std::max(completed, uint64_t(details[i].timestamp_ns));
+        }
+    }
+    m_cb1Headroom = DVBRIDGE::PresentationHeadroom(previous, completed, m_cb1SubmittedNs,
+        m_cb1CompletedNs, m_cb1TimingPeriodNs);
+  }
+  if (m_cb1TimingInput >= 0) close(m_cb1TimingInput);
+  m_cb1TimingInput = -1;
+  m_cb1SubmittedNs = 0;
   close(m_cb1OutFence);
   m_cb1OutFence = -1;
   m_cb1Pending = false;
@@ -400,11 +480,18 @@ bool CDRMAtomic::FlipPageTransactional(struct gbm_bo* bo, bool restore, bool asy
   }
   // Stable scanout keeps the accepted mode. Transitions still validate it fully.
   const bool asynchronous = async && !restore && CanAsyncDVBridge() && m_inFenceFd >= 0;
+  ResetCB1Timing();
+  if (asynchronous && m_cb1TimingPeriodNs)
+    m_cb1TimingInput = fcntl(m_inFenceFd, F_DUPFD_CLOEXEC, 3);
   const int flags = (m_need_modeset || m_dvActivating || restore)
                         ? DRM_MODE_ATOMIC_ALLOW_MODESET :
                             asynchronous ? DRM_MODE_ATOMIC_NONBLOCK : 0;
   const bool accepted = DrmAtomicCommit(fb, flags, true, false, true);
-  if (!accepted || !asynchronous) ResetCB1PresentationTime();
+  if (!accepted || !asynchronous)
+  {
+    ResetCB1PresentationTime();
+    ResetCB1Timing();
+  }
   if (accepted)
   {
     m_need_modeset = false;
@@ -425,12 +512,31 @@ bool CDRMAtomic::FlipPageTransactional(struct gbm_bo* bo, bool restore, bool asy
   return accepted;
 }
 
+bool CDRMAtomic::TestFramebuffer(struct gbm_bo* bo)
+{
+  CDRMPlane* plane = m_gui_plane ? m_gui_plane : m_video_plane;
+  struct drm_fb* fb = bo ? DrmFbGetFromBo(bo) : nullptr;
+  if (!fb || !plane || !m_crtc || !m_mode) return false;
+
+  // Probe a new surface independently without consuming the queued signal.
+  CDRMAtomicRequest request;
+  if (!request.AddProperty(plane, "FB_ID", fb->fb_id) ||
+      !request.AddProperty(plane, "CRTC_ID", m_crtc->GetCrtcId()) ||
+      !request.AddProperty(plane, "SRC_X", 0) || !request.AddProperty(plane, "SRC_Y", 0) ||
+      !request.AddProperty(plane, "SRC_W", static_cast<uint64_t>(m_width) << 16) ||
+      !request.AddProperty(plane, "SRC_H", static_cast<uint64_t>(m_height) << 16) ||
+      !request.AddProperty(plane, "CRTC_X", 0) || !request.AddProperty(plane, "CRTC_Y", 0) ||
+      !request.AddProperty(plane, "CRTC_W", m_mode->hdisplay) ||
+      !request.AddProperty(plane, "CRTC_H", m_mode->vdisplay)) return false;
+
+  return drmModeAtomicCommit(m_fd, request.Get(),
+      DRM_MODE_ATOMIC_TEST_ONLY | DRM_MODE_ATOMIC_ALLOW_MODESET, nullptr) == 0;
+}
+
 void CDRMAtomic::FlipPage(struct gbm_bo* bo, bool rendered, bool videoLayer, bool async)
 {
   ResetCB1PresentationTime();
-#ifdef HAVE_DVBRIDGE
   m_lastPageAccepted=false;
-#endif
   struct drm_fb* drm_fb = nullptr;
   uint32_t flags = 0;
 
@@ -454,11 +560,7 @@ void CDRMAtomic::FlipPage(struct gbm_bo* bo, bool rendered, bool videoLayer, boo
     CLog::LogF(LOGDEBUG, "Execute modeset at next commit");
   }
 
-#ifdef HAVE_DVBRIDGE
   m_lastPageAccepted=DrmAtomicCommit(!drm_fb ? 0 : drm_fb->fb_id, flags, rendered, videoLayer);
-#else
-  DrmAtomicCommit(!drm_fb ? 0 : drm_fb->fb_id, flags, rendered, videoLayer);
-#endif
 }
 
 bool CDRMAtomic::InitDrm()
@@ -572,45 +674,52 @@ bool CDRMAtomic::AddProperty(CDRMObject* object, const char* name, uint64_t valu
       (strcmp(name, "MODE_ID") == 0 || strcmp(name, "ACTIVE") == 0 ||
        strcmp(name, "DVBRIDGE_DV_STANDARD_LAB") == 0 || strcmp(name, "HDR_OUTPUT_METADATA") == 0 ||
        strcmp(name, "Colorspace") == 0 || strcmp(name, "max bpc") == 0 ||
-       strcmp(name, "Broadcast RGB") == 0))
+       strcmp(name, "Broadcast RGB") == 0 || strcmp(name, "NV_HDMI_VSIF_METADATA") == 0 ||
+       strcmp(name, "dithering mode") == 0))
     m_signalDirty = true;
   m_propertyFailure |= !added;
   return added;
 }
 
-void CDRMAtomic::ReportSignalState()
+void CDRMAtomic::ReportSignalState() noexcept try
 {
-  if (!m_connector || !m_crtc || !m_mode)
-    return;
   // Cached values are updated only after an accepted real commit. No DRM query
-  // or per-frame log. max_bpc is a requested ceiling, not measured wire depth.
-  const auto get = [&](const char* name) { return m_connector->GetPropertyValue(name).value_or(0); };
+  // or per-frame log. Presence belongs in the key: absent != present at zero.
+  const auto get = [](const auto* object, const char* name) {
+    const bool known = object && object->HasPropertyInventory();
+    return DVBRIDGE::DiagnosticProperty(known, known ? object->GetPropertyValue(name) : std::nullopt);
+  };
+  const auto dv = get(m_connector, "DVBRIDGE_DV_STANDARD_LAB");
+  const auto hdr = get(m_connector, "HDR_OUTPUT_METADATA");
+  const auto color = get(m_connector, "Colorspace");
+  const auto bpc = get(m_connector, "max bpc");
+  const auto rgb = get(m_connector, "Broadcast RGB");
+  const auto active = get(m_crtc, "ACTIVE");
+  const auto nv = get(m_connector, "NV_HDMI_VSIF_METADATA");
+  const auto dither = get(m_connector, "dithering mode");
   const auto& mode = m_committedMode;
-  const std::array<uint64_t, 15> state{m_connector->GetId(), m_crtc->GetId(),
-      get("DVBRIDGE_DV_STANDARD_LAB"), get("HDR_OUTPUT_METADATA"), get("Colorspace"),
-      get("max bpc"), get("Broadcast RGB"), mode.hdisplay, mode.vdisplay, mode.clock,
-      mode.htotal, mode.vtotal, mode.flags, mode.vscan, m_crtc->GetPropertyValue("ACTIVE").value_or(0)};
+  const std::array<uint64_t, 25> state{m_connector ? m_connector->GetId() : 0,
+      m_crtc ? m_crtc->GetId() : 0, dv.value.value_or(0), hdr.value.value_or(0),
+      color.value.value_or(0), bpc.value.value_or(0), rgb.value.value_or(0),
+      mode.hdisplay, mode.vdisplay, mode.clock, mode.htotal, mode.vtotal, mode.flags,
+      mode.vscan, active.value.value_or(0), dv.Code(),hdr.Code(),color.Code(),bpc.Code(),rgb.Code(),active.Code(),
+      nv.value.value_or(0),nv.Code(),dither.value.value_or(0),dither.Code()};
   if (m_signalKnown && state == m_signalState)
     return;
-  m_signalKnown = true;
-  m_signalState = state;
-  const auto now = DVNowMs();
-  if (now - m_signalWindow >= 30000) { m_signalWindow = now; m_signalReports = 0; }
-  if (m_signalReports >= 8)
+  const auto error = m_connector ? m_connector->PropertyInventoryError() : std::nullopt;
+  if (DVBRIDGE::DiagnosticLog(LOGINFO,
+      "DVBridge signal: origin=accepted-commit-cache connector={} crtc={} dv_property={} dv_value={} hdr_property={} hdr_value={} colorspace_property={} colorspace_value={} max_bpc_property={} max_bpc_ceiling={} rgb_property={} rgb_value={} active_property={} active_value={} mode={}x{} clock_khz={} inventory_error={} nv_vsif_property={} nv_vsif_value={} dither_property={} dither_value={}",
+      state[0], state[1], dv.Presence(),dv.Value(),hdr.Presence(),hdr.Value(),
+      color.Presence(),color.Value(),bpc.Presence(),bpc.Value(),rgb.Presence(),rgb.Value(),
+      active.Presence(),active.Value(),mode.hdisplay,mode.vdisplay,mode.clock,
+      error ? std::to_string(*error) : "unavailable",nv.Presence(),nv.Value(),dither.Presence(),dither.Value()))
   {
-    if (m_signalReports == 8)
-    {
-      ++m_signalReports;
-      CLog::Log(LOGWARNING, "DVBridge signal: further state changes suppressed for this 30-second window");
-    }
-    return;
+    m_signalKnown = true;
+    m_signalState = state;
   }
-  ++m_signalReports;
-  CLog::Log(LOGINFO,
-      "DVBridge signal committed: connector={} crtc={} dv={} hdr_blob={} colorspace={} max_bpc={} rgb={} mode={}x{} clock_khz={} totals={}x{} flags={} vscan={} active={}",
-      state[0], state[1], state[2], state[3], state[4], state[5], state[6], state[7], state[8], state[9],
-      state[10], state[11], state[12], state[13], state[14]);
 }
+
+catch (...) {}
 
 CDRMAtomic::CDRMAtomicRequest::CDRMAtomicRequest() : m_atomicRequest(drmModeAtomicAlloc())
 {
@@ -629,6 +738,7 @@ bool CDRMAtomic::CDRMAtomicRequest::AddProperty(CDRMObject* object,
     return false;
 
   m_atomicRequestItems[object][propertyId] = value;
+  if (std::strcmp(name,"DVBRIDGE_DV_STANDARD_LAB") == 0) requestedDV = value;
   return true;
 }
 
@@ -690,13 +800,16 @@ void CDRMAtomic::CDRMAtomicRequest::LogDVProperties()
           name != "max bpc" && name != "Broadcast RGB" && name != "Colorspace" &&
           name != "CRTC_ID" && name != "ACTIVE" && name != "VRR_ENABLED" &&
           name != "CTM" && name != "GAMMA_LUT" && name != "DEGAMMA_LUT" &&
-          name != "rotation" && name != "alpha" && name != "COLOR_PIPELINE")
+          name != "rotation" && name != "alpha" && name != "COLOR_PIPELINE" &&
+          name != "NV_HDMI_VSIF_METADATA" && name != "dithering mode" &&
+          !name.starts_with("NV_PLANE_") && !name.starts_with("NV_CRTC_") &&
+          name != "NV_INPUT_COLORSPACE" && name != "NV_HDR_STATIC_METADATA")
         continue;
       if (count++ < 48)
         message += " " + std::to_string(object.first->GetId()) + ":" + name + "=" +
                    std::to_string(property.second);
     }
-  CLog::Log(LOGINFO, "DVBridge requested properties (48 max):{}", message);
+  DVBRIDGE::DiagnosticLog(LOGINFO, "DVBridge requested properties (48 max):{}", message);
 }
 
 void CDRMAtomic::CDRMAtomicRequest::LogAtomicRequest(

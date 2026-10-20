@@ -159,9 +159,12 @@ uint32_t CDRMUtils::DrmOpaqueFbGetFromBo(struct gbm_bo* bo)
   auto* fb = DrmFbGetFromBo(bo);
   if (!fb)
     return 0;
-  if (fb->format == DRM_FORMAT_XRGB8888 || fb->format == DRM_FORMAT_XRGB2101010)
+  // The CB1 half-float resolve writes alpha=1; NVIDIA exposes no opaque alias.
+  if (fb->format == DRM_FORMAT_XRGB8888 || fb->format == DRM_FORMAT_XRGB2101010 ||
+      fb->format == DRM_FORMAT_XBGR2101010 || fb->format == DRM_FORMAT_ABGR16161616F)
     return fb->fb_id;
-  if (fb->format != DRM_FORMAT_ARGB8888 && fb->format != DRM_FORMAT_ARGB2101010)
+  if (fb->format != DRM_FORMAT_ARGB8888 && fb->format != DRM_FORMAT_ARGB2101010 &&
+      fb->format != DRM_FORMAT_ABGR2101010)
     return 0;
   if (fb->opaque_fb_id)
     return fb->opaque_fb_id;
@@ -169,8 +172,8 @@ uint32_t CDRMUtils::DrmOpaqueFbGetFromBo(struct gbm_bo* bo)
   // A separate opaque view preserves the ordinary GUI framebuffer and owns no
   // extra pixel storage. Packed DV and reconstructed HDR10 are final images;
   // neither must be blended again by the scanout plane.
-  const uint32_t opaqueFormat = fb->format == DRM_FORMAT_ARGB2101010
-                                    ? DRM_FORMAT_XRGB2101010 : DRM_FORMAT_XRGB8888;
+  const uint32_t opaqueFormat = fb->format == DRM_FORMAT_ABGR2101010 ? DRM_FORMAT_XBGR2101010 :
+      fb->format == DRM_FORMAT_ARGB2101010 ? DRM_FORMAT_XRGB2101010 : DRM_FORMAT_XRGB8888;
   uint32_t handles[4]{}, strides[4]{}, offsets[4]{};
   uint64_t modifiers[4]{};
 #if defined(HAS_GBM_MODIFIERS)
@@ -566,7 +569,7 @@ bool CDRMUtils::OpenDrm(bool needConnector)
             version->version_major,version->version_minor,version->version_patchlevel);
 #endif
       if (strcmp(version->name, "amdgpu") == 0)
-        m_drm_quirks |= QUIRK_NEEDSPRIMARY;
+        m_drm_quirks |= QUIRK_NEEDSPRIMARY | QUIRK_CB1_NATIVE_EDGE;
       drmFreeVersion(version);
     }
 

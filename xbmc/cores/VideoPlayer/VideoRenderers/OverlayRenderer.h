@@ -19,6 +19,7 @@
 #include <atomic>
 #include <map>
 #include <memory>
+#include <optional>
 #include <vector>
 
 typedef struct ass_image ASS_Image;

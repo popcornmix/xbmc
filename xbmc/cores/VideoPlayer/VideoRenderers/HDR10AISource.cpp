@@ -36,7 +36,7 @@ cb1_ai_status HDR10AISource::Collect()
     m_lastSubmitted = m_jobIdentity.picture;
     m_lease.reset();
   }
-  return status;
+  return RecordStatus("analysis-collect",status);
 }
 
 cb1_ai_status HDR10AISource::Begin(pl_gpu gpu, const char* bundle,
@@ -44,11 +44,14 @@ cb1_ai_status HDR10AISource::Begin(pl_gpu gpu, const char* bundle,
     double pts, uint64_t now)
 {
   if (!binding.Valid() || !std::isfinite(pts) || !gpu)
-    return CB1_AI_INVALID;
+    return RecordStatus("analysis-begin",CB1_AI_INVALID);
   if (m_gpu && m_gpu != gpu)
-    return CB1_AI_INCOMPATIBLE;
+    return RecordStatus("analysis-begin",CB1_AI_INCOMPATIBLE);
   if (!m_resetPending || !Current(binding,preferences))
   {
+    m_diagnosticStage = "none";
+    m_diagnosticStatus = CB1_AI_READY;
+    m_diagnosticFailure = false;
     m_preferences = preferences;
     m_binding = binding;
     m_origin = pts;
@@ -92,6 +95,7 @@ cb1_ai_status HDR10AISource::Begin(pl_gpu gpu, const char* bundle,
   auto status = CB1_AI_READY;
   if (!m_context)
     status = cb1_hdr10_ai_create(gpu,bundle,&m_context);
+  RecordStatus("ai-create",status);
   if (status != CB1_AI_READY)
   {
     m_activation.Observe(CB1_AI_INCOMPATIBLE,Identity(binding),now);
@@ -100,8 +104,7 @@ cb1_ai_status HDR10AISource::Begin(pl_gpu gpu, const char* bundle,
   }
   m_gpu = gpu;
   cb1_hdr10_ai_reset(m_context,binding.stream,m_revision);
-  if (!cb1_hdr10_ai_set_coalesced_bounds(m_context,
-      preferences.hdr10Source == DVBRIDGE::HDR10SourceMode::EnhancedDV))
+  if (!cb1_hdr10_ai_set_coalesced_bounds(m_context,true))
     return RecordStatus("analysis-configuration",CB1_AI_INVALID);
   return CB1_AI_READY;
 }
@@ -111,7 +114,7 @@ cb1_ai_status HDR10AISource::Submit(const pl_frame* frame, DVBRIDGE::SourceBindi
 {
   if (!Matches(binding) || m_fallback || !m_context || !std::isfinite(pts) ||
       !std::isfinite(headPts) || pts < m_origin || pts < headPts || pts > headPts + 1.0 + 1e-9)
-    return CB1_AI_INVALID;
+    return RecordStatus("analysis-submit",CB1_AI_INVALID);
   const auto collected = Collect();
   if (collected != CB1_AI_READY) return collected;
   const auto submissions = Metrics().gpu_submissions;
@@ -123,15 +126,16 @@ cb1_ai_status HDR10AISource::Submit(const pl_frame* frame, DVBRIDGE::SourceBindi
     m_lease = std::move(lease);
   }
   else if (status == CB1_AI_READY) m_lastSubmitted = binding.picture;
-  return status;
+  return RecordStatus("analysis-submit",status);
 }
 
 cb1_ai_status HDR10AISource::Seal(double pts)
 {
   if (!m_context || !Active() || !std::isfinite(pts) || pts < m_origin)
-    return CB1_AI_INVALID;
+    return RecordStatus("temporal-seal",CB1_AI_INVALID);
   const auto status = Collect();
-  return status == CB1_AI_READY ? cb1_hdr10_ai_advance(m_context,pts-m_origin) : status;
+  return status == CB1_AI_READY ?
+      RecordStatus("temporal-seal",cb1_hdr10_ai_advance(m_context,pts-m_origin)) : status;
 }
 
 void HDR10AISource::End()
@@ -166,6 +170,7 @@ HDR10AISource::Decision HDR10AISource::Prediction(DVBRIDGE::SourceBinding bindin
   const auto collected = Collect();
   const auto status = collected == CB1_AI_READY || collected == CB1_AI_PENDING ?
       cb1_hdr10_ai_poll(m_context,Identity(binding),&prediction) : collected;
+  RecordStatus("prediction",status,false);
   const auto elapsed=static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
       std::chrono::steady_clock::now()-started).count());
   const auto completed=now+std::min(elapsed,std::numeric_limits<uint64_t>::max()-now);
@@ -195,11 +200,13 @@ bool HDR10AISource::Presented(DVBRIDGE::SourceBinding binding, bool success)
   return true;
 }
 
-void HDR10AISource::DiscardBefore(DVBRIDGE::SourceBinding binding)
+void HDR10AISource::DiscardBefore(DVBRIDGE::SourceBinding binding, uint64_t now)
 {
   if (Matches(binding) && AwaitingPresentation() &&
       binding.picture > m_preparedBinding.picture)
   {
+    if (m_activation.CancelPrepared(m_prepared->id, now) == Decision::Native)
+      m_fallback = true;
     // Kodi discarded this image; no presentation state is committed.
     m_prepared.reset();
     m_preparedBinding = {};
