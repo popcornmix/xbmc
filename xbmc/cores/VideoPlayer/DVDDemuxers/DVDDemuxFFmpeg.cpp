@@ -10,6 +10,7 @@
 
 #include "DVDDemuxUtils.h"
 #ifdef HAVE_DVBRIDGE
+#include "BlurayDovi.h"
 #include "cores/VideoPlayer/DVDStreamInfo.h"
 #include "cores/VideoPlayer/DVDCodecs/Video/DVPlaybackPolicy.h"
 extern "C"
@@ -730,6 +731,10 @@ bool CDVDDemuxFFmpeg::Open(const std::shared_ptr<CDVDInputStream>& pInput, bool 
 
 void CDVDDemuxFFmpeg::Dispose()
 {
+#ifdef HAVE_DVBRIDGE
+  m_blurayDovi.reset();
+  m_blurayBase = m_blurayEnhancement = -1;
+#endif
   m_pkt.result = -1;
   av_packet_unref(&m_pkt.pkt);
 
@@ -767,6 +772,10 @@ bool CDVDDemuxFFmpeg::Reset()
 
 void CDVDDemuxFFmpeg::Flush()
 {
+#ifdef HAVE_DVBRIDGE
+  if (m_blurayDovi)
+    m_blurayDovi->Reset();
+#endif
   if (m_pFormatContext)
   {
     if (m_pFormatContext->pb)
@@ -1106,7 +1115,12 @@ DemuxPacket* CDVDDemuxFFmpeg::ReadInternal(bool keep)
 
         // timeout reads after 100ms
         m_timeout.Set(20s);
+#ifdef HAVE_DVBRIDGE
+        m_pkt.result = m_blurayDovi ? ReadBlurayDovi(&m_pkt.pkt) :
+            av_read_frame(m_pFormatContext, &m_pkt.pkt);
+#else
         m_pkt.result = av_read_frame(m_pFormatContext, &m_pkt.pkt);
+#endif
         m_timeout.SetInfinite();
       }
 
@@ -1645,6 +1659,9 @@ double CDVDDemuxFFmpeg::SelectAspect(AVStream* st, bool& forced)
 
 void CDVDDemuxFFmpeg::CreateStreams(unsigned int program)
 {
+#ifdef HAVE_DVBRIDGE
+  InitBlurayDovi(program);
+#endif
   // changes must keep increasing across rebuilds; consumers detect a rebuild by comparing values
   std::map<int, int> prevChanges;
   for (const auto& [streamIdx, stream] : m_streams)
@@ -1703,7 +1720,11 @@ void CDVDDemuxFFmpeg::CreateStreams(unsigned int program)
       for (unsigned int i = 0; i < m_pFormatContext->nb_streams; i++)
       {
         m_pFormatContext->streams[i]->discard = AVDISCARD_NONE;
-        if (GetStream(i) == nullptr)
+        if (GetStream(i) == nullptr
+#ifdef HAVE_DVBRIDGE
+            && static_cast<int>(i) != m_blurayEnhancement
+#endif
+        )
           m_pFormatContext->streams[i]->discard = AVDISCARD_ALL;
       }
     }
@@ -2252,8 +2273,13 @@ CDemuxStream* CDVDDemuxFFmpeg::AddStream(int streamIdx)
       // This is not used by streaming services and devices (ATV, Nvidia Shield, XONE).
       if (pStream->id == 0x1015)
       {
+#ifdef HAVE_DVBRIDGE
+        if (streamIdx != m_blurayEnhancement)
+#endif
+        {
         CLog::Log(LOGDEBUG, "CDVDDemuxFFmpeg::AddStream - discarding Dolby Vision stream");
         pStream->discard = AVDISCARD_ALL;
+        }
         delete stream;
         return nullptr;
       }
@@ -2499,8 +2525,12 @@ bool CDVDDemuxFFmpeg::IsProgramChange()
 
   for (unsigned int i = 0; i < m_pFormatContext->programs[m_program]->nb_stream_indexes; i++)
   {
-    int idx = m_pFormatContext->programs[m_program]->stream_index[i];
-    if (m_pFormatContext->streams[idx]->discard >= AVDISCARD_ALL)
+      int idx = m_pFormatContext->programs[m_program]->stream_index[i];
+#ifdef HAVE_DVBRIDGE
+      if (idx == m_blurayEnhancement)
+        continue;
+#endif
+      if (m_pFormatContext->streams[idx]->discard >= AVDISCARD_ALL)
       continue;
     CDemuxStream* stream = GetStream(idx);
     if (!stream)
@@ -2884,6 +2914,106 @@ void CDVDDemuxFFmpeg::GetL16Parameters(int &channels, int &samplerate)
     }
   }
 }
+
+#ifdef HAVE_DVBRIDGE
+void CDVDDemuxFFmpeg::InitBlurayDovi(unsigned int program)
+{
+  m_blurayDovi.reset();
+  m_blurayBase = m_blurayEnhancement = -1;
+  if (!m_pInput->IsStreamType(DVDSTREAM_TYPE_BLURAY))
+    return;
+  const auto component = CServiceBroker::GetSettingsComponent();
+  const auto settings = component ? component->GetSettings() : nullptr;
+  if (settings && settings->GetInt("dvbridge.outputmode") == 2)
+    return;
+  if (program >= m_pFormatContext->nb_programs)
+  {
+    program = 0;
+    while (program < m_pFormatContext->nb_programs &&
+           !m_pFormatContext->programs[program]->nb_stream_indexes)
+      ++program;
+  }
+  for (unsigned int i = 0; i < m_pFormatContext->nb_stream_groups; ++i)
+  {
+    const auto* group = m_pFormatContext->stream_groups[i];
+    if (group->type != AV_STREAM_GROUP_PARAMS_DOLBY_VISION || group->nb_streams != 2)
+      continue;
+    const auto elIndex = group->params.layered_video->el_index;
+    if (elIndex > 1)
+      continue;
+    AVStream* el = group->streams[elIndex];
+    AVStream* bl = group->streams[1 - elIndex];
+    if (bl->codecpar->codec_id != AV_CODEC_ID_HEVC || el->codecpar->codec_id != AV_CODEC_ID_HEVC)
+      continue;
+    if (program < m_pFormatContext->nb_programs)
+    {
+      const auto* selected = m_pFormatContext->programs[program];
+      const auto end = selected->stream_index + selected->nb_stream_indexes;
+      if (std::find(selected->stream_index, end, bl->index) == end ||
+          std::find(selected->stream_index, end, el->index) == end)
+        continue;
+    }
+    if (av_cmp_q(bl->time_base, el->time_base))
+    {
+      CLog::Log(LOGWARNING, "DV Blu-ray: incompatible layer time bases");
+      return;
+    }
+    auto* config = av_packet_side_data_new(&bl->codecpar->coded_side_data,
+        &bl->codecpar->nb_coded_side_data, AV_PKT_DATA_DOVI_CONF,
+        sizeof(AVDOVIDecoderConfigurationRecord), 0);
+    if (!config)
+      return;
+    auto* dv = reinterpret_cast<AVDOVIDecoderConfigurationRecord*>(config->data);
+    // HDMV dual-layer HEVC is Profile 7. Blu-ray does not signal a DV level.
+    *dv = {};
+    dv->dv_version_major = 1;
+    dv->dv_profile = 7;
+    dv->rpu_present_flag = dv->el_present_flag = dv->bl_present_flag = 1;
+    dv->dv_bl_signal_compatibility_id = 6;
+    if (el->codecpar->extradata && el->codecpar->extradata_size >= 23)
+    {
+      auto* extra = av_packet_side_data_new(&bl->codecpar->coded_side_data,
+          &bl->codecpar->nb_coded_side_data, AV_PKT_DATA_HEVC_CONF,
+          el->codecpar->extradata_size, 0);
+      if (!extra)
+        return;
+      std::memcpy(extra->data, el->codecpar->extradata, extra->size);
+    }
+    m_blurayBase = bl->index;
+    m_blurayEnhancement = el->index;
+    bl->discard = el->discard = AVDISCARD_NONE;
+    m_blurayDovi = std::make_unique<CBlurayDovi>();
+    CLog::Log(LOGINFO, "DV Blu-ray: joined Profile 7 input, BL={} EL={}", bl->id, el->id);
+    return;
+  }
+}
+
+int CDVDDemuxFFmpeg::ReadBlurayDovi(AVPacket* packet)
+{
+  int result = m_blurayDovi->Take(packet);
+  while (result == AVERROR(EAGAIN))
+  {
+    result = av_read_frame(m_pFormatContext, packet);
+    if (result < 0)
+    {
+      if (result == AVERROR_EOF && m_blurayDovi->Pending())
+        CLog::Log(LOGWARNING, "DV Blu-ray: incomplete layer pair at end of stream");
+      return result;
+    }
+    if (packet->stream_index != m_blurayBase && packet->stream_index != m_blurayEnhancement)
+      return result;
+    const bool accepted = m_blurayDovi->Push(packet, packet->stream_index == m_blurayEnhancement);
+    av_packet_unref(packet);
+    if (!accepted)
+    {
+      CLog::Log(LOGERROR, "DV Blu-ray: invalid layer packet or pairing queue exceeded");
+      return AVERROR_INVALIDDATA;
+    }
+    result = m_blurayDovi->Take(packet);
+  }
+  return result;
+}
+#endif
 
 StreamHdrType CDVDDemuxFFmpeg::DetermineHdrType(AVStream* pStream)
 {

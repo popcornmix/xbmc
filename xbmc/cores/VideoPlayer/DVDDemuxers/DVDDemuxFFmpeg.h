@@ -20,6 +20,9 @@ extern "C" {
 }
 
 class CDVDDemuxFFmpeg;
+#ifdef HAVE_DVBRIDGE
+class CBlurayDovi;
+#endif
 class CDVDInputStream;
 class CURL;
 struct ChapterFFmpeg;
@@ -148,6 +151,13 @@ protected:
   double SelectAspect(AVStream* st, bool& forced);
 
   StreamHdrType DetermineHdrType(AVStream* pStream);
+
+#ifdef HAVE_DVBRIDGE
+  void InitBlurayDovi(unsigned int program);
+  int ReadBlurayDovi(AVPacket* packet);
+  std::unique_ptr<CBlurayDovi> m_blurayDovi;
+  int m_blurayBase{-1}, m_blurayEnhancement{-1};
+#endif
 
   CCriticalSection m_critSection;
   std::map<int, CDemuxStream*> m_streams;
