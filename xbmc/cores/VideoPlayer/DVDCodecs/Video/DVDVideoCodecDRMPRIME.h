@@ -11,6 +11,9 @@
 #include "cores/VideoPlayer/Buffers/VideoBuffer.h"
 #include "cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.h"
 #include "cores/VideoPlayer/DVDStreamInfo.h"
+#ifdef HAVE_DVBRIDGE
+#include "cores/VideoPlayer/DVDCodecs/Video/DVSourceCapture.h"
+#endif
 
 #include <memory>
 
@@ -67,4 +70,7 @@ protected:
   AVFilterContext* m_pFilterOut = nullptr;
   std::shared_ptr<CVideoBufferPoolDRMPRIMEFFmpeg> m_hwVideoBufferPool;
   std::shared_ptr<CVideoBufferPoolDMA> m_swVideoBufferPool;
+#ifdef HAVE_DVBRIDGE
+  DVBRIDGE::CSourceCapture m_dvCapture;
+#endif
 };

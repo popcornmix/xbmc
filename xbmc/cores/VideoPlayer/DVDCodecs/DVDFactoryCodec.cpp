@@ -72,7 +72,9 @@ std::unique_ptr<CDVDVideoCodec> CDVDFactoryCodec::CreateVideoCodec(CDVDStreamInf
   }
 
   // DVBridge carries metadata and paired hardware surfaces through the VAAPI adapter.
-#ifdef HAVE_DVBRIDGE
+  // Without VA-API, DV sources take the platform decoder (DRM PRIME / V4L2), which
+  // attaches the same source information through DVBRIDGE::CSourceCapture.
+#if defined(HAVE_DVBRIDGE) && defined(HAVE_LIBVA)
   if (DVBRIDGE::RetainsDVSource(hint))
   {
     pCodec = std::make_unique<CDVDVideoCodecFFmpeg>(processInfo);

@@ -41,6 +41,10 @@ if(("gbm" IN_LIST CORE_PLATFORM_NAME_LC OR "wayland" IN_LIST CORE_PLATFORM_NAME_
    TARGET ${APP_NAME_LC}::OpenGLES)
   list(APPEND SOURCES DVDVideoCodecDRMPRIME.cpp)
   list(APPEND HEADERS DVDVideoCodecDRMPRIME.h)
+  if(ENABLE_DVBRIDGE)
+    list(APPEND SOURCES DVSourceCapture.cpp)
+    list(APPEND HEADERS DVSourceCapture.h)
+  endif()
 endif()
 
 core_add_library(dvdvideocodecs)

@@ -320,6 +320,9 @@ bool CDVDVideoCodecDRMPRIME::Open(CDVDStreamInfo& hints, CDVDCodecOptions& optio
     return false;
 
   m_hints = hints;
+#ifdef HAVE_DVBRIDGE
+  m_dvCapture.Open(m_hints);
+#endif
 
   const AVCodecHWConfig* pConfig = FindHWConfig(pCodec);
   if (pConfig && (pConfig->methods & AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX))
@@ -507,6 +510,9 @@ void CDVDVideoCodecDRMPRIME::Reset()
 
   CLog::Log(LOGDEBUG, "CDVDVideoCodecDRMPRIME::{} - flush buffers", __FUNCTION__);
   avcodec_flush_buffers(m_pCodecContext);
+#ifdef HAVE_DVBRIDGE
+  m_dvCapture.Seek();
+#endif
 }
 
 void CDVDVideoCodecDRMPRIME::Drain()
@@ -628,6 +634,10 @@ bool CDVDVideoCodecDRMPRIME::SetPictureParams(VideoPicture* pVideoPicture)
     pVideoPicture->lightMetadata = *m_hints.contentLightMetadata.get();
     pVideoPicture->hasLightMetadata = true;
   }
+
+#ifdef HAVE_DVBRIDGE
+  m_dvCapture.Capture(pVideoPicture, m_pFrame, m_hints, m_videoProcessingGeneration);
+#endif
 
   pVideoPicture->iRepeatPicture = 0;
   pVideoPicture->iFlags = 0;
