@@ -114,6 +114,7 @@ struct VideoModeChange
 {
   RESOLUTION res;
   VideoPicture picture;
+  bool nativeDV{false};
 };
 
 void ApplyVideoModeChange(void* userptr)
@@ -121,9 +122,14 @@ void ApplyVideoModeChange(void* userptr)
   auto* change = static_cast<VideoModeChange*>(userptr);
   CWinSystemBase* winSystem = CServiceBroker::GetWinSystem();
 
-  winSystem->SetColorimetry(&change->picture);
-  if (winSystem->SetHDR(&change->picture))
-    winSystem->SetGuiCompositing(change->picture.color_transfer);
+  // Native Dolby Vision signals the link itself (RGB 8 bpc, no HDR metadata)
+  // with this mode change; HDR10 signalling here would cost a second modeset.
+  if (!change->nativeDV)
+  {
+    winSystem->SetColorimetry(&change->picture);
+    if (winSystem->SetHDR(&change->picture))
+      winSystem->SetGuiCompositing(change->picture.color_transfer);
+  }
   winSystem->GetGfxContext().SetVideoResolution(change->res, false);
 }
 } // unnamed namespace
@@ -4537,6 +4543,7 @@ bool CVideoPlayer::OpenVideoStream(CDVDStreamInfo& hint, bool reset)
       change.res = CResolutionUtils::ChooseBestResolution(static_cast<float>(framerate),
                                                           hint.width, hint.height,
                                                           !hint.stereo_mode.empty(), nativeDV);
+      change.nativeDV = nativeDV;
       change.picture.Reset();
       change.picture.iWidth = hint.width;
       change.picture.iHeight = hint.height;
