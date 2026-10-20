@@ -350,7 +350,7 @@ bool CWinSystemGbm::FlipDVBridgePage(CDVBridgeState& state, bool restore)
   }
   if (valid)
     valid = state.Stage(*drm, restore);
-  const bool accepted = drm->FlipPageTransactional(valid ? bo : nullptr);
+  const bool accepted = drm->FlipPageTransactional(valid ? bo : nullptr, restore);
   surface.CompleteTransactionalBuffer(accepted);
   if (accepted && restore)
   {

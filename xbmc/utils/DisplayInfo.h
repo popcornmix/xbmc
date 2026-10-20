@@ -12,6 +12,7 @@
 #include <stdint.h>
 #include <string>
 #include <vector>
+#include "DVBridgeEdid.h"
 
 struct di_info;
 struct di_cta_colorimetry_block;
@@ -66,7 +67,9 @@ public:
   bool SupportsEOTF(Eotf eotf) const;
 
   bool SupportsDolbyVision() const { return m_dolbyVision; }
-  bool SupportsStandardDolbyVision() const { return m_standardDolbyVision; }
+  bool SupportsStandardDolbyVision() const { return m_dvCaps.status == DV_EDID_STANDARD; }
+  bool SupportsRGBQuantizationSelection() const { return m_rgbQuantizationSelectable; }
+  const dvbridge_sink_caps& GetDolbyVisionCaps() const { return m_dvCaps; }
 
   bool SupportsColorimetry(Colorimetry colorimetry) const;
 
@@ -90,7 +93,8 @@ private:
   const di_cta_colorimetry_block* m_colorimetry = nullptr;
   const di_cta_hdr_static_metadata_block* m_hdr_static_metadata = nullptr;
   bool m_dolbyVision = false;
-  bool m_standardDolbyVision = false;
+  bool m_rgbQuantizationSelectable = false;
+  dvbridge_sink_caps m_dvCaps{};
 };
 
 } // namespace UTILS

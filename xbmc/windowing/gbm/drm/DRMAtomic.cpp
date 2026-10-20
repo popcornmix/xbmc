@@ -29,10 +29,42 @@
 
 using namespace KODI::WINDOWING::GBM;
 
+namespace
+{
+uint64_t DVNowMs()
+{
+  return std::chrono::duration_cast<std::chrono::milliseconds>(
+      std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+}
+
+void CDRMAtomic::RefreshDVLink()
+{
+  if (!m_connector)
+    return;
+  // Current is a cached DRM query, not a blocking forced EDID probe. It is
+  // used only during failed output, at most once per second.
+  auto* current = drmModeGetConnectorCurrent(m_fd, m_connector->GetId());
+  if (!current)
+    return;
+  const auto property = m_connector->GetPropertyId("EDID");
+  uint32_t blob = 0;
+  for (int i = 0; i < current->count_props; ++i)
+    if (current->props[i] == property)
+      blob = current->prop_values[i];
+  m_dvLinkKnown = true;
+  m_dvLinkConnector = current->connector_id;
+  m_dvLinkBlob = blob;
+  m_dvLinkStatus = current->connection;
+  drmModeFreeConnector(current);
+}
+
 bool CDRMAtomic::DrmAtomicCommit(int fb_id, int flags, bool rendered, bool videoLayer, bool strict)
 {
   CDRMCrtc* oldCrtc = m_old_crtc;
-  const auto reject = [&]() {
+  const auto reject = [&](int error) {
+    if (strict)
+      if (m_dvActivating && !m_dvRestoring) m_dvRetry.Failed(error);
     m_old_crtc = oldCrtc;
     FinishRequest(false);
     return false;
@@ -82,17 +114,17 @@ bool CDRMAtomic::DrmAtomicCommit(int fb_id, int flags, bool rendered, bool video
   if (flags & DRM_MODE_ATOMIC_ALLOW_MODESET)
   {
     if (!AddProperty(m_connector, "CRTC_ID", m_crtc->GetCrtcId()))
-      return reject();
+      return reject(EINVAL);
 
     modeBlob = CDRMPropertyBlob(m_fd, m_mode, sizeof(*m_mode));
     if (!modeBlob.IsValid())
-      return reject();
+      return reject(0);
 
     if (!AddProperty(m_crtc, "MODE_ID", modeBlob.Get()))
-      return reject();
+      return reject(EINVAL);
 
     if (!AddProperty(m_crtc, "ACTIVE", m_active ? 1 : 0))
-      return reject();
+      return reject(EINVAL);
   }
 
   // In Direct-To-Plane (dual plane) mode m_gui_plane is the output
@@ -141,15 +173,18 @@ bool CDRMAtomic::DrmAtomicCommit(int fb_id, int flags, bool rendered, bool video
     m_req->LogAtomicRequest();
 
   if (strict && m_propertyFailure)
-    return reject();
+  {
+    return reject(EINVAL);
+  }
 
   auto ret = drmModeAtomicCommit(m_fd, m_req->Get(), flags | DRM_MODE_ATOMIC_TEST_ONLY, nullptr);
   if (ret < 0)
   {
     if (strict)
     {
+      const int error = errno;
       CLog::LogF(LOGERROR, "transactional test commit rejected: {}", strerror(errno));
-      return reject();
+      return reject(error);
     }
     CLog::LogF(LOGERROR,
                "test commit failed: ({}) - falling back to last successful atomic "
@@ -168,8 +203,9 @@ bool CDRMAtomic::DrmAtomicCommit(int fb_id, int flags, bool rendered, bool video
   ret = drmModeAtomicCommit(m_fd, m_req->Get(), flags, nullptr);
   if (ret < 0)
   {
+    const int error = errno;
     CLog::LogF(LOGERROR, "atomic commit failed: {}", strerror(errno));
-    return reject();
+    return reject(error);
   }
   FinishRequest(true);
   return true;
@@ -203,16 +239,20 @@ void CDRMAtomic::FinishRequest(bool accepted)
   m_propertyFailure = false;
 }
 
-bool CDRMAtomic::FlipPageTransactional(struct gbm_bo* bo)
+bool CDRMAtomic::FlipPageTransactional(struct gbm_bo* bo, bool restore)
 {
+  // The window owns the bounded retry decision after coherent restoration.
+  m_dvRestoring = restore;
   if (!bo)
   {
+    if (m_dvActivating && !restore) m_dvRetry.Failed(EINVAL);
     FinishRequest(false);
     return false;
   }
   const uint32_t fb = DrmOpaqueFbGetFromBo(bo);
   if (!fb)
   {
+    if (m_dvActivating && !restore) m_dvRetry.Failed(EINVAL);
     FinishRequest(false);
     return false;
   }

@@ -10,6 +10,7 @@
 
 #include "DRMUtils.h"
 #include "utils/log.h"
+#include "utils/DVBridgeOutputRetry.h"
 
 #include <cstdint>
 #include <deque>
@@ -36,7 +37,14 @@ public:
   bool SupportsFencing() override { return true; }
   bool AddProperty(CDRMObject* object, const char* name, uint64_t value);
   // Blocking commit: rejected properties must not be paired with a new framebuffer.
-  bool FlipPageTransactional(struct gbm_bo* bo);
+  bool FlipPageTransactional(struct gbm_bo* bo, bool restore = false);
+  void ResetDVActivation() { m_dvRetry.Reset(); }
+  void SetDVActivationPending(bool pending) { m_dvActivating = pending; }
+  void FailDVActivation(int error) { m_dvRetry.Failed(error); }
+  bool CanRetryDVActivation(bool restored) const
+  { return m_dvRetry.CanRetry(m_dvRetry.Error(), restored); }
+  int DVActivationError() const { return m_dvRetry.Error(); }
+  unsigned DVActivationFailures() const { return m_dvRetry.Count(); }
 
   // Probe whether any DRM device supports atomic modesetting, with no
   // connector required. Used to decide atomic-vs-legacy before falling back.
@@ -46,10 +54,16 @@ private:
   bool DrmAtomicCommit(int fb_id, int flags, bool rendered, bool videoLayer,
                        bool strict = false);
   void FinishRequest(bool accepted);
+  DVBRIDGE::OutputRetry m_dvRetry;
+  bool m_dvLinkKnown{false};
+  uint32_t m_dvLinkConnector{0}, m_dvLinkBlob{0}, m_dvLinkStatus{0};
+  void RefreshDVLink();
 
   bool m_need_modeset{true};
   bool m_active = true;
   bool m_propertyFailure = false;
+  bool m_dvRestoring = false;
+  bool m_dvActivating = true;
 
   class CDRMAtomicRequest
   {
