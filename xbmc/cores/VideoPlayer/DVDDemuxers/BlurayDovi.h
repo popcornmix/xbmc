@@ -11,16 +11,50 @@
 extern "C"
 {
 #include <libavcodec/packet.h>
+#include <libavcodec/bsf.h>
 #include <libavutil/avutil.h>
 #include <libavutil/error.h>
+#include <libavutil/mathematics.h>
 }
 
-// Present separate Blu-ray layers as the joined HEVC stream consumed by CB1.
+// Present separate HEVC layers as the joined stream consumed by CB1.
 class CBlurayDovi
 {
 public:
+  // Preserve each layer's HEVC configuration and time base.
+  bool Configure(const AVCodecParameters* base, const AVCodecParameters* enhancement,
+                 AVRational baseClock, AVRational enhancementClock)
+  {
+    const auto* filter = av_bsf_get_by_name("hevc_mp4toannexb");
+    if (!filter || baseClock.num <= 0 || baseClock.den <= 0 ||
+        enhancementClock.num <= 0 || enhancementClock.den <= 0)
+      return false;
+    std::array<Filter, 2> prepared;
+    const AVCodecParameters* parameters[] = {base, enhancement};
+    const AVRational clocks[] = {baseClock, enhancementClock};
+    for (unsigned i = 0; i < prepared.size(); ++i)
+    {
+      AVBSFContext* context = nullptr;
+      if (av_bsf_alloc(filter, &context) < 0)
+        return false;
+      prepared[i].reset(context);
+      if (avcodec_parameters_copy(context->par_in, parameters[i]) < 0)
+        return false;
+      context->time_base_in = clocks[i];
+      if (av_bsf_init(context) < 0)
+        return false;
+    }
+    m_filters = std::move(prepared);
+    return true;
+  }
+  const AVCodecParameters* BaseParameters() const { return m_filters[0]->par_out; }
+  const AVCodecParameters* OriginalBaseParameters() const
+  { return m_filters[0] ? m_filters[0]->par_in : nullptr; }
+
   void Reset(bool resync = false)
   {
+    for (auto& filter : m_filters)
+      if (filter) av_bsf_flush(filter.get());
     m_base.clear();
     m_enhancement.clear();
     m_rpu.clear();
@@ -38,6 +72,27 @@ public:
     m_error = "";
     if (!packet || packet->size <= 0 || static_cast<size_t>(packet->size) > MAX_BYTES)
       return Reject("packet");
+    Packet normalized;
+    if (m_filters[enhancement])
+    {
+      Packet input(av_packet_clone(packet));
+      normalized.reset(av_packet_alloc());
+      auto* filter = m_filters[enhancement].get();
+      if (!input || !normalized || av_bsf_send_packet(filter, input.get()) < 0 ||
+          av_bsf_receive_packet(filter, normalized.get()) < 0)
+        return Reject("hevc-normalization");
+      const auto from = filter->time_base_out, to = m_filters[0]->time_base_out;
+      if (av_cmp_q(from, to))
+      {
+        const auto pts = normalized->pts, dts = normalized->dts, duration = normalized->duration;
+        av_packet_rescale_ts(normalized.get(), from, to);
+        if ((pts != AV_NOPTS_VALUE && av_rescale_q(normalized->pts, to, from) != pts) ||
+            (dts != AV_NOPTS_VALUE && av_rescale_q(normalized->dts, to, from) != dts) ||
+            av_rescale_q(normalized->duration, to, from) != duration)
+          return Reject("layer-time-base");
+      }
+      packet = normalized.get();
+    }
     // Wait for both transport clocks before accepting a new layer epoch.
     if (m_restartPeer == int(enhancement))
     {
@@ -203,6 +258,9 @@ private:
   static constexpr size_t MAX_BYTES = 64u * 1024u * 1024u;
   struct Release { void operator()(AVPacket* p) const { av_packet_free(&p); } };
   using Packet = std::unique_ptr<AVPacket, Release>;
+  struct ReleaseFilter { void operator()(AVBSFContext* p) const { av_bsf_free(&p); } };
+  using Filter = std::unique_ptr<AVBSFContext, ReleaseFilter>;
+  std::array<Filter, 2> m_filters;
 
   // Return the prefix and payload positions of the next Annex-B NAL.
   static std::array<int, 2> Start(const uint8_t* data, int size, int from)

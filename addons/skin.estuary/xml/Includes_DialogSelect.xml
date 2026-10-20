@@ -1278,7 +1278,7 @@
       <right>40</right><bottom>40</bottom><width>660</width><height>412</height>
       <control type="image" id="9101">
         <left>0</left><top>0</top><width>660</width><height>412</height>
-        <texture colordiffuse="dialog_tint">colors/white.png</texture>
+        <texture colordiffuse="dialog_tint">special://xbmc/media/cb1-panel.png</texture>
       </control>
       <control type="label" id="1">
         <left>20</left><top>12</top><width>620</width><height>40</height><font>font12</font><scroll>true</scroll>

@@ -18,6 +18,7 @@
 #include "resources/ResourcesComponent.h"
 #ifdef HAVE_DVBRIDGE
 #include "DVPlaybackMenuLayout.h"
+#include "guilib/GUIImage.h"
 #endif
 #include "utils/StringUtils.h"
 
@@ -368,13 +369,15 @@ void CGUIDialogSelect::OnInitWindow()
 #ifdef HAVE_DVBRIDGE
   if (GetProperty("CB1.PlaybackModes").asBoolean())
   {
-    if (auto* group = GetControl(9100))
+    auto* background = dynamic_cast<CGUIImage*>(GetControl(9101));
+    if (auto* group = GetControl(9100); group && background &&
+        background->GetFileName() == "special://xbmc/media/cb1-panel.png")
     {
       const float rowsHeight = DVBRIDGE::PlaybackMenuRowsHeight(m_vecList->Size());
       const float height = 112.0f + rowsHeight;
       group->SetPosition(group->GetXPosition(), GetCoordsRes().iHeight - 40.0f - height);
       group->SetHeight(height);
-      if (auto* background = GetControl(9101)) background->SetHeight(height);
+      background->SetHeight(height);
       for (int id : {CONTROL_SIMPLE_LIST, CONTROL_DETAILED_LIST})
         if (auto* list = GetControl(id)) list->SetHeight(rowsHeight);
       if (auto* help = GetControl(9102))

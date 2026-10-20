@@ -43,12 +43,12 @@ dvbridge_parse_edid(const unsigned char *edid, size_t size)
 {
 	static const unsigned char magic[8] = {0, 255, 255, 255, 255, 255, 255, 0};
 	struct dvbridge_sink_caps result = {DV_EDID_ABSENT, 0, 0, 0, false, false};
-	unsigned int block, i, found = 0;
+	unsigned int block, i, blocks, found = 0;
 
 	if (!edid || !size)
 		return result;
 	result.status = DV_EDID_INVALID;
-	if (size < 128 || size != ((size_t)edid[126] + 1) * 128)
+	if (size < 128 || size % 128 || size > 256 * 128)
 		return result;
 	for (i = 0; i < 8; i++)
 		if (edid[i] != magic[i])
@@ -61,8 +61,18 @@ dvbridge_parse_edid(const unsigned char *edid, size_t size)
 		if (sum)
 			return result;
 	}
+	blocks = edid[126] + 1;
+	if (edid[126] && size >= 256) {
+		const unsigned char *cta = edid + 128;
+		/* HDMI Forum EEODB occupies bytes 4..6 of the first CTA extension. */
+		if (cta[0] == 2 && cta[1] >= 3 && cta[2] >= 7 && cta[2] <= 127 &&
+		    cta[4] == 0xe2 && cta[5] == 0x78 && cta[6])
+			blocks = cta[6] + 1;
+	}
+	if (size != (size_t)blocks * 128)
+		return result;
 	result.status = DV_EDID_NO_DV;
-	for (block = 1; block < size / 128; block++) {
+	for (block = 1; block < blocks; block++) {
 		const unsigned char *b = edid + block * 128;
 		unsigned int end = b[2], pos;
 

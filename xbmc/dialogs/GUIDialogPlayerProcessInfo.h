@@ -20,6 +20,7 @@ public:
   ~CGUIDialogPlayerProcessInfo(void) override;
 
   bool OnAction(const CAction &action) override;
+  bool OnMessage(CGUIMessage& message) override;
   void OnInitWindow() override;
   void OnDeinitWindow(int nextWindowID) override;
   void Process(unsigned int currentTime, CDirtyRegionList& dirtyregions) override;

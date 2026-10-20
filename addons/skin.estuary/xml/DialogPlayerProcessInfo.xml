@@ -6,9 +6,7 @@
 	<animation effect="fade" start="100" end="0" time="200">WindowClose</animation>
 	<onunload>ClearProperty(PlayerInfoDialogFocus,Home)</onunload>
 	<controls>
-		<include file="IncludesDVProcessInfo.xml">DVProcessPanel</include>
 		<control type="group">
-			<visible>!String.IsEqual(Window(playerprocessinfo).Property(DV.Enhanced),true)</visible>
 			<bottom>0</bottom>
 			<height>250</height>
 			<animation effect="slide" end="0,-20" time="150" condition="VideoPlayer.Content(LiveTV)">conditional</animation>

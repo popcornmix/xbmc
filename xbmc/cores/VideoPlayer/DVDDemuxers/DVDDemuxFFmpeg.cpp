@@ -1434,6 +1434,8 @@ bool CDVDDemuxFFmpeg::SeekTime(double time, bool backwards, double* startpts)
     else
     {
 #ifdef HAVE_DVBRIDGE
+      if (m_blurayDovi) m_blurayDovi->Reset(true);
+      int64_t layerPosition = -1;
       // Preserve the requested startpts while seeking to a shared layer anchor.
       if (!m_checkTransportStream && m_seekStream == -1)
       {
@@ -1444,11 +1446,13 @@ bool CDVDDemuxFFmpeg::SeekTime(double time, bool backwards, double* startpts)
             continue;
           CDVDStreamInfo hints(*stream);
           if (hints.dovi.dv_profile != 7 || !hints.dovi.el_present_flag ||
-              !DVBRIDGE::RetainsDVSource(hints))
+              (!m_blurayDovi && !DVBRIDGE::RetainsDVSource(hints)))
             continue;
           AVStream* video = m_pFormatContext->streams[id];
           const int64_t target = av_rescale_q(seek_pts, AV_TIME_BASE_Q, video->time_base);
-          const int64_t anchor = dvbridge_fel_seek_point(m_pFormatContext, id, target);
+          const auto* original = m_blurayDovi && id == m_blurayBase ?
+              m_blurayDovi->OriginalBaseParameters() : nullptr;
+          const int64_t anchor = dvbridge_fel_seek_point_at(m_pFormatContext, id, target, &layerPosition, original);
           if (anchor != AV_NOPTS_VALUE)
           {
             seek_pts = av_rescale_q(anchor, video->time_base, AV_TIME_BASE_Q);
@@ -1461,9 +1465,16 @@ bool CDVDDemuxFFmpeg::SeekTime(double time, bool backwards, double* startpts)
           break;
         }
       }
+      // A transport PCR seek may land after the layer IRAP identified above.
+      ret = -1;
+      if (layerPosition >= 0 && m_blurayDovi && m_pFormatContext->pb &&
+          (m_pFormatContext->pb->seekable & AVIO_SEEKABLE_NORMAL) &&
+          std::strcmp(m_pFormatContext->iformat->name, "mpegts") == 0)
+        ret = av_seek_frame(m_pFormatContext, -1, layerPosition, AVSEEK_FLAG_BYTE);
+      if (ret < 0)
 #endif
-      ret = av_seek_frame(m_pFormatContext, m_seekStream, seek_pts,
-                          backwards ? AVSEEK_FLAG_BACKWARD : 0);
+        ret = av_seek_frame(m_pFormatContext, m_seekStream, seek_pts,
+                            backwards ? AVSEEK_FLAG_BACKWARD : 0);
     }
 
     if (ret < 0)
@@ -1535,7 +1546,12 @@ bool CDVDDemuxFFmpeg::SeekByte(int64_t pos)
   int ret = av_seek_frame(m_pFormatContext, -1, pos, AVSEEK_FLAG_BYTE);
 
   if (ret >= 0)
+  {
     m_currentPts = DVD_NOPTS_VALUE;
+#ifdef HAVE_DVBRIDGE
+    if (m_blurayDovi) m_blurayDovi->Reset(true);
+#endif
+  }
 
   m_pkt.result = -1;
   av_packet_unref(&m_pkt.pkt);
@@ -1882,6 +1898,11 @@ void CDVDDemuxFFmpeg::DisposeStreams()
 
 CDemuxStream* CDVDDemuxFFmpeg::AddStream(int streamIdx)
 {
+#ifdef HAVE_DVBRIDGE
+  // The admitted EL feeds the joined BL stream, not a selectable second video.
+  if (m_blurayDovi && streamIdx == m_blurayEnhancement)
+    return nullptr;
+#endif
   AVStream* pStream = m_pFormatContext->streams[streamIdx];
   if (pStream && pStream->discard != AVDISCARD_ALL)
   {
@@ -2918,14 +2939,84 @@ void CDVDDemuxFFmpeg::GetL16Parameters(int &channels, int &samplerate)
 #ifdef HAVE_DVBRIDGE
 void CDVDDemuxFFmpeg::InitBlurayDovi(unsigned int program)
 {
+  const bool bluray = m_pInput->IsStreamType(DVDSTREAM_TYPE_BLURAY);
+  const char* format = m_pFormatContext->iformat->name;
+  unsigned groups = 0, qualified = 0, hevc = 0;
+  for (unsigned i = 0; i < m_pFormatContext->nb_streams; ++i)
+    hevc += m_pFormatContext->streams[i]->codecpar->codec_id == AV_CODEC_ID_HEVC;
+  for (unsigned i = 0; i < m_pFormatContext->nb_stream_groups; ++i)
+  {
+    const auto* group = m_pFormatContext->stream_groups[i];
+    if (group->type != AV_STREAM_GROUP_PARAMS_DOLBY_VISION)
+      continue;
+    ++groups;
+    if (group->nb_streams == 2 && group->params.layered_video &&
+        group->params.layered_video->el_index <= 1 && group->streams[0] != group->streams[1] &&
+        group->streams[0]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO &&
+        group->streams[1]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO &&
+        group->streams[0]->codecpar->codec_id == AV_CODEC_ID_HEVC &&
+        group->streams[1]->codecpar->codec_id == AV_CODEC_ID_HEVC)
+      ++qualified;
+  }
+  // No source URL, filename or metadata: cloud URLs can contain access tokens.
+  const auto report = [&](const char* reason)
+  {
+    const unsigned inventory = !m_blurayDovi && hevc > 1 ?
+        std::min(m_pFormatContext->nb_streams, 16u) : 0;
+    CLog::Log(LOGINFO, "DV input selection: format={} bluray={} dv_groups={} qualified_groups={} "
+        "streams={} hevc={} reason={} BL={} EL={} inventory_count={}",
+        format, bluray, groups, qualified, m_pFormatContext->nb_streams, hevc, reason,
+        static_cast<unsigned>(m_blurayBase) < m_pFormatContext->nb_streams ?
+            m_pFormatContext->streams[m_blurayBase]->id : -1,
+        static_cast<unsigned>(m_blurayEnhancement) < m_pFormatContext->nb_streams ?
+            m_pFormatContext->streams[m_blurayEnhancement]->id : -1,
+        inventory);
+    for (unsigned i = 0; i < inventory; ++i)
+    {
+      const auto* stream = m_pFormatContext->streams[i];
+      const auto* sideData = av_packet_side_data_get(stream->codecpar->coded_side_data,
+          stream->codecpar->nb_coded_side_data, AV_PKT_DATA_DOVI_CONF);
+      const auto* dv = sideData && sideData->size >= sizeof(AVDOVIDecoderConfigurationRecord) ?
+          reinterpret_cast<const AVDOVIDecoderConfigurationRecord*>(sideData->data) : nullptr;
+      CLog::Log(LOGINFO, "DV input stream: index={} pid={} codec={} type={} "
+          "dv_profile={} dv_bl={} dv_el={} dv_rpu={} extradata={}",
+          stream->index, stream->id, static_cast<int>(stream->codecpar->codec_id),
+          static_cast<int>(stream->codecpar->codec_type), dv ? dv->dv_profile : 0,
+          dv ? dv->bl_present_flag : 0, dv ? dv->el_present_flag : 0,
+          dv ? dv->rpu_present_flag : 0, stream->codecpar->extradata_size);
+    }
+  };
+  // Stream-list rebuilds must configure filters from the original container framing.
+  if (m_blurayDovi && m_blurayDovi->OriginalBaseParameters() && m_blurayBase >= 0 &&
+      static_cast<unsigned>(m_blurayBase) < m_pFormatContext->nb_streams)
+    if (avcodec_parameters_copy(m_pFormatContext->streams[m_blurayBase]->codecpar,
+                               m_blurayDovi->OriginalBaseParameters()) < 0)
+    {
+      report("restore-failed");
+      return;
+    }
   m_blurayDovi.reset();
   m_blurayBase = m_blurayEnhancement = -1;
-  if (!m_pInput->IsStreamType(DVDSTREAM_TYPE_BLURAY))
+  const bool mov = std::strcmp(format, "mov") == 0 || std::strncmp(format, "mov,", 4) == 0;
+  const bool transport = std::strcmp(format, "mpegts") == 0;
+  const bool normalize = !bluray && (m_bMatroska || mov || transport);
+  if (!bluray && !normalize)
+  {
+    report("unsupported-format");
     return;
+  }
   const auto component = CServiceBroker::GetSettingsComponent();
   const auto settings = component ? component->GetSettings() : nullptr;
   if (settings && settings->GetInt("dvbridge.outputmode") == 2)
+  {
+    report("output-disabled");
     return;
+  }
+  if (normalize && groups != 1)
+  {
+    report(groups ? "ambiguous-dv-groups" : "no-dv-group");
+    return;
+  }
   if (program >= m_pFormatContext->nb_programs)
   {
     program = 0;
@@ -2933,36 +3024,96 @@ void CDVDDemuxFFmpeg::InitBlurayDovi(unsigned int program)
            !m_pFormatContext->programs[program]->nb_stream_indexes)
       ++program;
   }
+  const char* reason = groups ? "invalid-group-layout" : "no-dv-group";
   for (unsigned int i = 0; i < m_pFormatContext->nb_stream_groups; ++i)
   {
     const auto* group = m_pFormatContext->stream_groups[i];
-    if (group->type != AV_STREAM_GROUP_PARAMS_DOLBY_VISION || group->nb_streams != 2)
+    if (group->type != AV_STREAM_GROUP_PARAMS_DOLBY_VISION || group->nb_streams != 2 ||
+        !group->params.layered_video)
       continue;
     const auto elIndex = group->params.layered_video->el_index;
     if (elIndex > 1)
+    {
+      reason = "invalid-layer-index";
       continue;
+    }
     AVStream* el = group->streams[elIndex];
     AVStream* bl = group->streams[1 - elIndex];
-    if (bl->codecpar->codec_id != AV_CODEC_ID_HEVC || el->codecpar->codec_id != AV_CODEC_ID_HEVC)
+    if (bl == el || bl->codecpar->codec_type != AVMEDIA_TYPE_VIDEO ||
+        el->codecpar->codec_type != AVMEDIA_TYPE_VIDEO ||
+        bl->codecpar->codec_id != AV_CODEC_ID_HEVC || el->codecpar->codec_id != AV_CODEC_ID_HEVC)
+    {
+      reason = "invalid-layer-codecs";
       continue;
+    }
     if (program < m_pFormatContext->nb_programs)
     {
       const auto* selected = m_pFormatContext->programs[program];
       const auto end = selected->stream_index + selected->nb_stream_indexes;
       if (std::find(selected->stream_index, end, bl->index) == end ||
           std::find(selected->stream_index, end, el->index) == end)
+      {
+        reason = "layers-outside-program";
         continue;
+      }
     }
-    if (av_cmp_q(bl->time_base, el->time_base))
+    if (!normalize && av_cmp_q(bl->time_base, el->time_base))
     {
       CLog::Log(LOGWARNING, "DV Blu-ray: incompatible layer time bases");
+      report("incompatible-layer-clocks");
       return;
     }
-    auto* config = av_packet_side_data_new(&bl->codecpar->coded_side_data,
-        &bl->codecpar->nb_coded_side_data, AV_PKT_DATA_DOVI_CONF,
+    auto join = std::make_unique<CBlurayDovi>();
+    std::unique_ptr<AVCodecParameters, AVCodecParametersDeleter> combined(avcodec_parameters_alloc());
+    if (!combined || avcodec_parameters_copy(combined.get(), bl->codecpar) < 0)
+    {
+      report("base-parameters-failed");
+      return;
+    }
+    AVDOVIDecoderConfigurationRecord sourceConfig{};
+    bool hasSourceConfig = false;
+    if (normalize)
+    {
+      const auto* source = av_packet_side_data_get(el->codecpar->coded_side_data,
+          el->codecpar->nb_coded_side_data, AV_PKT_DATA_DOVI_CONF);
+      if (source)
+      {
+        if (source->size < sizeof(sourceConfig))
+        {
+          report("truncated-dv-config");
+          return;
+        }
+        std::memcpy(&sourceConfig, source->data, sizeof(sourceConfig));
+        if (sourceConfig.dv_profile != 7 || !sourceConfig.el_present_flag ||
+            !sourceConfig.rpu_present_flag)
+        {
+          report("invalid-dv-config");
+          return;
+        }
+        hasSourceConfig = true;
+      }
+      // FFmpeg also establishes descriptor-less Profile 7 groups for HDMV.
+      else if (!transport)
+      {
+        report("missing-dv-config");
+        return;
+      }
+      if (!join->Configure(bl->codecpar, el->codecpar, bl->time_base, el->time_base) ||
+          avcodec_parameters_copy(combined.get(), join->BaseParameters()) < 0)
+      {
+        CLog::Log(LOGWARNING, "DV layers: HEVC normalization unavailable");
+        report("normalization-unavailable");
+        return;
+      }
+    }
+    auto* config = av_packet_side_data_new(&combined->coded_side_data,
+        &combined->nb_coded_side_data, AV_PKT_DATA_DOVI_CONF,
         sizeof(AVDOVIDecoderConfigurationRecord), 0);
     if (!config)
+    {
+      report("config-allocation-failed");
       return;
+    }
     auto* dv = reinterpret_cast<AVDOVIDecoderConfigurationRecord*>(config->data);
     // HDMV dual-layer HEVC is Profile 7. Blu-ray does not signal a DV level.
     *dv = {};
@@ -2970,22 +3121,40 @@ void CDVDDemuxFFmpeg::InitBlurayDovi(unsigned int program)
     dv->dv_profile = 7;
     dv->rpu_present_flag = dv->el_present_flag = dv->bl_present_flag = 1;
     dv->dv_bl_signal_compatibility_id = 6;
+    if (hasSourceConfig)
+    {
+      *dv = sourceConfig;
+      dv->bl_present_flag = 1;
+    }
     if (el->codecpar->extradata && el->codecpar->extradata_size >= 23)
     {
-      auto* extra = av_packet_side_data_new(&bl->codecpar->coded_side_data,
-          &bl->codecpar->nb_coded_side_data, AV_PKT_DATA_HEVC_CONF,
+      auto* extra = av_packet_side_data_new(&combined->coded_side_data,
+          &combined->nb_coded_side_data, AV_PKT_DATA_HEVC_CONF,
           el->codecpar->extradata_size, 0);
       if (!extra)
+      {
+        report("enhancement-config-allocation-failed");
         return;
+      }
       std::memcpy(extra->data, el->codecpar->extradata, extra->size);
+    }
+    if (avcodec_parameters_copy(bl->codecpar, combined.get()) < 0)
+    {
+      report("combined-parameters-failed");
+      return;
     }
     m_blurayBase = bl->index;
     m_blurayEnhancement = el->index;
     bl->discard = el->discard = AVDISCARD_NONE;
-    m_blurayDovi = std::make_unique<CBlurayDovi>();
-    CLog::Log(LOGINFO, "DV Blu-ray: joined Profile 7 input, BL={} EL={}", bl->id, el->id);
+    m_blurayDovi = std::move(join);
+    CLog::Log(LOGINFO, "DV {}: joined Profile 7 input, BL={} EL={} normalization={} clocks={}/{}:{}/{}",
+        bluray ? "Blu-ray" : m_bMatroska ? "Matroska" : mov ? "MP4" : "MPEG-TS", bl->id, el->id,
+        normalize ? "HEVC Annex B" : "none", bl->time_base.num, bl->time_base.den,
+        el->time_base.num, el->time_base.den);
+    report("joined");
     return;
   }
+  report(reason);
 }
 
 int CDVDDemuxFFmpeg::ReadBlurayDovi(AVPacket* packet)

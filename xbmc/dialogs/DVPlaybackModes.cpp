@@ -6,6 +6,7 @@
 #include "GUIDialogNumeric.h"
 #include "GUIDialogKaiToast.h"
 #include "GUIDialogSelect.h"
+#include "GUIDialogBusy.h"
 #include "cores/VideoPlayer/DVDCodecs/Video/DVOutputSettings.h"
 #include "cores/VideoPlayer/DVDCodecs/Video/DVPlaybackNotification.h"
 #include "cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h"
@@ -19,6 +20,12 @@
 #include "settings/lib/Setting.h"
 #include "settings/lib/SettingDefinitions.h"
 #include "utils/StringUtils.h"
+#include "utils/JSONVariantParser.h"
+#include "utils/Variant.h"
+#include "utils/log.h"
+#include "threads/IRunnable.h"
+#include <cstdio>
+
 
 CDVPlaybackModes& CDVPlaybackModes::GetInstance()
 {
@@ -80,7 +87,8 @@ bool CDVPlaybackModes::ShowMenu()
   const auto settings=CServiceBroker::GetSettingsComponent()->GetSettings();
   const auto& strings=CServiceBroker::GetResourcesComponent().GetLocalizeStrings();
   struct Choice { int output,method,label; };
-  constexpr Choice dvChoices[]={{0,0,40812},{4,0,40913},{5,0,40914},
+  constexpr Choice dvChoices[]={{0,0,40812},{4,0,40913},
+      {5,0,40914},
       {2,0,40814},{1,0,40822},{1,1,40823}};
   const auto source=DVBRIDGE::StreamTelemetry::Read().transaction.capabilities;
   if (source.stereoSource || !source.sourceKnown || (!source.isDV && !source.isHDR10)) return false;
@@ -157,6 +165,9 @@ void CDVPlaybackModes::OnSettingAction(const std::shared_ptr<const CSetting>& se
 {
   if (setting && setting->GetId()=="dvbridge.configureprofile") ConfigureProfile();
 }
+
+
+
 
 void DVBRIDGE::PlaybackNotification::Emit(const std::string& text)
 {

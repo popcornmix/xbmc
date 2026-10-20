@@ -27,6 +27,7 @@
 #include "utils/StringUtils.h"
 #include "windowing/WinSystem.h"
 #ifdef HAVE_DVBRIDGE
+#include "dialogs/DVPlaybackModes.h"
 #include "cores/VideoPlayer/DVDCodecs/Video/DVOutputSelection.h"
 #include "cores/VideoPlayer/DVDCodecs/Video/DVStreamTelemetry.h"
 #include "resources/LocalizeStrings.h"
@@ -512,10 +513,17 @@ void CSettingConditions::DVOutputOptions(const std::shared_ptr<const CSetting>& 
   const auto preferences=DVBRIDGE::FrameOutputSettings();
   const auto data=DVBRIDGE::StreamTelemetry::Read();
   auto caps=data.transaction.capabilities;
+  auto* window=dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(CServiceBroker::GetWinSystem());
+  const auto available=window ? window->GetDVOutputCapabilities(nullptr, true) : DVBRIDGE::OutputCapabilities{};
   if (!caps.sourceKnown && !data.transaction.identity.Valid())
+    caps=available;
+  // A failed frame or disabled import does not remove reusable output capabilities.
+  caps.nativeDV=available.nativeDV;
+  caps.hdr10=available.hdr10;
+  if (caps.isDV && preferences.output==DVBRIDGE::OutputMode::Disabled)
   {
-    auto* window=dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(CServiceBroker::GetWinSystem());
-    caps=window ? window->GetDVOutputCapabilities(nullptr, true) : DVBRIDGE::OutputCapabilities{};
+    caps.processingKnown=available.processingKnown;
+    caps.processing=available.processing;
   }
   const auto& localizer=CServiceBroker::GetResourcesComponent().GetLocalizeStrings();
   const bool method=setting->GetId()=="dvbridge.hdr10method";
@@ -523,7 +531,8 @@ void CSettingConditions::DVOutputOptions(const std::shared_ptr<const CSetting>& 
   const bool hdr10Menu=setting->GetId()=="dvbridge.hdr10playbackchoice";
   const bool hdr10Source=hdr10Menu || setting->GetId()=="dvbridge.hdr10source";
   const auto& processing=hdr10Source && !caps.sourceKnown ? caps.hdr10Processing : caps.processing;
-  constexpr int menuModes[]{1,5,4,0,2,3};
+  constexpr int menuModes[]{1,5,
+      4,0,2,3};
 #ifdef CB1_HAS_HDR10_AI
   constexpr int hdr10MenuModes[]{1,4,0};
 #else

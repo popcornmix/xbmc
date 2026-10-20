@@ -773,6 +773,17 @@ bool CDecoder::Open(AVCodecContext* avctx, AVCodecContext* mainctx, const enum A
       DVBRIDGE::HDR10AIBuffers::DecodeSurfaces(m_vaapiConfig.maxReferences, m_hdr10AIBuffers);
   m_vaapiConfig.renderPictures = DVBRIDGE::HDR10AIBuffers::RenderPictures(m_hdr10AIBuffers);
 #endif
+#ifdef HAVE_DVBRIDGE
+  const auto* felDecoder = dynamic_cast<CDVDVideoCodecFFmpeg*>(
+      static_cast<ICallbackHWAccel*>(avctx->opaque));
+  if (felDecoder && felDecoder->NeedsDVEnhancement())
+  {
+    // Pairing retains BL output pictures while waiting for independently reordered EL.
+    // Reserve those slots in addition to the unchanged native decode/render headroom.
+    m_vaapiConfig.maxReferences += CDVDVideoCodecFFmpeg::DVEnhancementPendingPictures;
+    m_vaapiConfig.renderPictures += CDVDVideoCodecFFmpeg::DVEnhancementPendingPictures;
+  }
+#endif
 
   if (!ConfigVAAPI())
   {

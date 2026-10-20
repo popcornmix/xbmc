@@ -24,6 +24,7 @@
 #include "resources/ResourcesComponent.h"
 #include "guilib/GUIMessage.h"
 #include "guilib/GUIControlGroupList.h"
+#include "guilib/GUIFontManager.h"
 #include "windowing/WinSystem.h"
 #include "windowing/GraphicContext.h"
 #include <algorithm>
@@ -37,6 +38,36 @@ CGUIDialogPlayerProcessInfo::CGUIDialogPlayerProcessInfo(void)
 }
 
 CGUIDialogPlayerProcessInfo::~CGUIDialogPlayerProcessInfo(void) = default;
+
+bool CGUIDialogPlayerProcessInfo::OnMessage(CGUIMessage& message)
+{
+#ifdef HAVE_DVBRIDGE
+  if (message.GetMessage() == GUI_MSG_WINDOW_INIT)
+  {
+    const bool enhanced = DVBRIDGE::EnhancedInfoEnabled();
+    const std::string file = enhanced ?
+        "special://xbmc/media/cb1/DialogPlayerProcessInfo.xml" :
+        "DialogPlayerProcessInfo.xml";
+    if (GetProperty("xmlfile").asString() != file)
+    {
+      FreeResources(true);
+      SetProperty("xmlfile", file);
+    }
+    if (enhanced)
+    {
+      const RESOLUTION_INFO resolution(1920, 1080);
+      SetCoordsRes(resolution);
+      g_fontManager.LoadTTF("CB1.InfoBody", "special://xbmc/media/Fonts/arial.ttf",
+                            0xfff4f6f6, 0, 23, 0, false, 1.0f, 1.0f, &resolution);
+      g_fontManager.LoadTTF("CB1.InfoSection", "special://xbmc/media/Fonts/arial.ttf",
+                            0xfff4f6f6, 0, 25, 0, false, 1.0f, 1.0f, &resolution);
+      g_fontManager.LoadTTF("CB1.InfoTitle", "special://xbmc/media/Fonts/arial.ttf",
+                            0xfff4f6f6, 0, 30, 1, false, 1.0f, 1.0f, &resolution);
+    }
+  }
+#endif
+  return CGUIDialog::OnMessage(message);
+}
 
 void CGUIDialogPlayerProcessInfo::OnInitWindow()
 {

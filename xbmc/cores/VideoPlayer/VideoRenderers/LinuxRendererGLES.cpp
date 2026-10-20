@@ -270,9 +270,10 @@ bool CLinuxRendererGLES::ConfigureVideoOutput(const VideoPicture& picture)
     auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(
         CServiceBroker::GetWinSystem());
     m_passthroughHDR = false;
+    // Native activation follows source import and its output-surface transaction.
     m_hdrFboActive = window &&
-        (window->SelectedDVOutput(&picture).route == DVBRIDGE::OutputRoute::HDR10 ?
-         window->ConfigureHDR10Conversion(picture) : window->BeginDVBridge());
+        (window->SelectedDVOutput(&picture).route != DVBRIDGE::OutputRoute::HDR10 ||
+         window->ConfigureHDR10Conversion(picture));
     if (!m_hdrFboActive)
     {
       m_bConfigured = false;

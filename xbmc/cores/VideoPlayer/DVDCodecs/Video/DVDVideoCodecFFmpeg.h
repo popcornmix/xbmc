@@ -57,6 +57,7 @@ public:
   void BindHDR10AISource(VideoPicture& picture);
 #endif
 #ifdef HAVE_DVBRIDGE
+  static constexpr unsigned DVEnhancementPendingPictures = 16;
   bool NeedsDVEnhancement() const
   {
     return m_dvNativeOutput && m_hints.dovi.dv_profile == 7 && m_hints.dovi.el_present_flag;

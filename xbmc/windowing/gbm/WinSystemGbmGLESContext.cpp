@@ -247,7 +247,7 @@ bool CWinSystemGbmGLESContext::SetFullScreen(bool fullScreen,
   {
     CLog::Log(LOGDEBUG, "CWinSystemGbmGLESContext::{} - resolution changed, creating a new window",
               __FUNCTION__);
-    CreateNewWindow("", fullScreen, res);
+    if (!CreateNewWindow("", fullScreen, res)) return false;
   }
 
   if (!m_eglContext.TrySwapBuffers())
@@ -1801,7 +1801,8 @@ bool CWinSystemGbmGLESContext::PrepareDVOutputFrame(const VideoPicture& picture)
   const bool ordinaryBL = !source.profile || source.profile == 7 ||
       source.compatibility == 1 || source.compatibility == 2 || source.compatibility == 4;
   if (m_dvSelection.route == DVBRIDGE::OutputRoute::Vanilla && capabilities.processingKnown &&
-      !ordinaryBL && preferences.output != DVBRIDGE::OutputMode::Disabled &&
+      !ordinaryBL &&
+      preferences.output != DVBRIDGE::OutputMode::Disabled &&
       !(source.el && !picture.doviEnhancement))
   {
     std::lock_guard lock(m_dvCapabilityMutex);
@@ -1851,9 +1852,8 @@ bool CWinSystemGbmGLESContext::StageOrdinaryDVOutput(const VideoPicture* picture
           "DVBRIDGE_HDR10_DEEP_COLOR",*m_hdrDeepColorPrevious)))
   { RejectDVOutputSurface(); return false; }
   SetColorimetry(picture);
-  SetHDR(picture);
-  SetGuiCompositing(picture && (picture->color_transfer == AVCOL_TRC_SMPTE2084 ||
-      picture->color_transfer == AVCOL_TRC_ARIB_STD_B67) ? picture->color_transfer : 0);
+  const bool hdr = SetHDR(picture);
+  SetGuiCompositing(hdr && picture ? picture->color_transfer : 0);
   m_dvOrdinaryFrame = true;
   return true;
 }
@@ -2467,6 +2467,10 @@ bool CWinSystemGbmGLESContext::DestroyWindow()
 {
   m_modeHold.Cancel();
   if (!EndDVBridge() || !RetireDVContext()) return false;
+  // A resize can precede presentation of the ordinary successor surface.
+  if (HasPendingDVOutputSurface() &&
+      (!m_dvOrdinaryFrame || !CompleteDVOutputSurface(false))) return false;
+  m_dvOrdinaryFrame = m_dvStopPending = false;
   if (!CWinSystemGbmEGLContext::DestroyWindow()) return false;
   ObserveDVImport({}, {}, false);
   return true;

@@ -264,6 +264,9 @@ std::string CSkinInfo::GetSkinPath(const std::string& strFile,
                                    RESOLUTION_INFO* res,
                                    std::string_view strBaseDir /* = "" */) const
 {
+  if (StringUtils::StartsWith(strFile, "special://xbmc/media/cb1/"))
+    return strFile;
+
   if (m_resolutions.empty())
     return ""; // invalid skin
 

@@ -673,6 +673,7 @@ bool CWinSystemGbm::SetHDR(const VideoPicture* videoPicture)
   if (videoPicture)
     m_sdrRestorePending = false;
 
+  m_eotf = KODI::UTILS::Eotf::TRADITIONAL_SDR;
   auto settingsComponent = CServiceBroker::GetSettingsComponent();
   if (!settingsComponent)
     return false;
@@ -703,7 +704,6 @@ bool CWinSystemGbm::SetHDR(const VideoPicture* videoPicture)
       m_hdrBlob.Reset();
     }
 
-    m_eotf = KODI::UTILS::Eotf::TRADITIONAL_SDR;
     return false;
   }
 
@@ -725,7 +725,6 @@ bool CWinSystemGbm::SetHDR(const VideoPicture* videoPicture)
   }
 
   KODI::UTILS::Eotf eotf = KODI::UTILS::GetEOTF(*videoPicture);
-  m_eotf = eotf;
 
   if (connector->SupportsProperty("HDR_OUTPUT_METADATA") && m_info &&
       m_info->SupportsHDRStaticMetadataType1() && m_info->SupportsEOTF(eotf))
@@ -801,9 +800,23 @@ bool CWinSystemGbm::SetHDR(const VideoPicture* videoPicture)
       m_hdrBlob = CDRMPropertyBlob(drm->GetFileDescriptor(), &hdr_metadata, sizeof(hdr_metadata));
     }
 
-    drm->AddProperty(connector, "HDR_OUTPUT_METADATA", m_hdrBlob.Get());
+    if (!m_hdrBlob.IsValid() ||
+        !drm->AddProperty(connector, "HDR_OUTPUT_METADATA", m_hdrBlob.Get()))
+    {
+      m_hdrBlob.Reset();
+      CLog::LogF(LOGWARNING, "HDR output rejected: metadata blob allocation or property staging failed");
+      return false;
+    }
+    m_eotf = eotf;
     m_queuedHdrMetadata = m_hdrBlob.Get();
     drm->SetActive(true);
+  }
+  else
+  {
+    CLog::LogF(LOGWARNING, "HDR output unavailable: metadata_property={} display_metadata={} eotf_supported={}",
+               connector->SupportsProperty("HDR_OUTPUT_METADATA"),
+               m_info && m_info->SupportsHDRStaticMetadataType1(),
+               m_info && m_info->SupportsEOTF(eotf));
   }
 
   return m_hdrBlob.IsValid();

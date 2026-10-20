@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<window>
+  <depth>0.5</depth>
+  <animation effect="fade" start="0" end="100" time="300">WindowOpen</animation>
+  <animation effect="fade" start="100" end="0" time="200">WindowClose</animation>
+  <onunload>ClearProperty(DV.Enhanced)</onunload>
+  <controls>
+    <include file="special://xbmc/media/cb1/IncludesDVProcessInfo.xml">DVProcessPanel</include>
+  </controls>
+</window>
