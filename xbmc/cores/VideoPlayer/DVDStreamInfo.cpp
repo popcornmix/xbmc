@@ -69,6 +69,9 @@ void CDVDStreamInfo::Clear()
   contentLightMetadata = nullptr;
   stereo_mode.clear();
   dovi = {};
+#ifdef HAVE_DVBRIDGE
+  doviELConfig = {};
+#endif
 
   channels   = 0;
   samplerate = 0;
@@ -93,6 +96,10 @@ bool CDVDStreamInfo::Equal(const CDVDStreamInfo& right, int compare)
   {
     return false;
   }
+#ifdef HAVE_DVBRIDGE
+  if (compare & COMPARE_EXTRADATA && doviELConfig != right.doviELConfig)
+    return false;
+#endif
 
   // VIDEO
   // clang-format off
@@ -237,6 +244,9 @@ void CDVDStreamInfo::Assign(const CDVDStreamInfo& right, bool withextradata)
   contentLightMetadata = right.contentLightMetadata;
   stereo_mode = right.stereo_mode;
   dovi = right.dovi;
+#ifdef HAVE_DVBRIDGE
+  doviELConfig = withextradata ? right.doviELConfig : FFmpegExtraData{};
+#endif
 
   // AUDIO
   channels      = right.channels;
@@ -305,6 +315,9 @@ void CDVDStreamInfo::Assign(const CDemuxStream& right, bool withextradata)
     contentLightMetadata = stream->contentLightMetaData;
     stereo_mode = stream->stereo_mode;
     dovi = stream->dovi;
+#ifdef HAVE_DVBRIDGE
+    doviELConfig = withextradata ? stream->doviELConfig : FFmpegExtraData{};
+#endif
   }
   else if (right.type == StreamType::SUBTITLE)
   {

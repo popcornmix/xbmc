@@ -195,8 +195,23 @@ public:
   void SurfaceAttrib(EGLint attribute, EGLint value);
   bool CreateSurface(EGLNativeWindowType nativeWindow, EGLint HDRcolorSpace = EGL_NONE);
   bool CreatePlatformSurface(void* nativeWindow, EGLNativeWindowType nativeWindowLegacy);
+  // Opt-in custom output staging. Ordinary creation/destruction is unchanged.
+  bool BeginOutputSurface();
+  bool StageOutputSurface(void* nativeWindow, EGLNativeWindowType nativeWindowLegacy);
+  bool CompleteOutputSurface(bool presented);
+  bool BindPriorOutputSurface();
+  bool HasOutputSurfaceTransaction() const { return m_outputSurfaceTransaction; }
+  struct RetainedContext
+  {
+    EGLDisplay display;
+    EGLContext context, uploadContext;
+    EGLSurface surface, priorSurface;
+  };
+  RetainedContext RetainForRetirement();
+  static bool DestroyRetiredContext(RetainedContext& state);
   bool InitializeDisplay(EGLint renderingApi);
-  bool ChooseConfig(EGLint renderableType, EGLint visualId = 0, bool hdr = false, int alpha = 8);
+  bool ChooseConfig(EGLint renderableType, EGLint visualId = 0, bool hdr = false, int alpha = 8,
+                    bool floating = false);
   bool CreateContext(CEGLAttributesVec contextAttribs);
   bool BindContext();
   void Destroy();
@@ -241,6 +256,9 @@ private:
   EGLContext m_eglContext{EGL_NO_CONTEXT};
   EGLConfig m_eglConfig{}, m_eglHDRConfig{};
   EGLContext m_eglUploadContext{EGL_NO_CONTEXT};
+  bool m_outputSurfaceTransaction{false};
+  EGLSurface m_priorSurface{EGL_NO_SURFACE};
+  EGLConfig m_priorConfig{}, m_priorHDRConfig{};
   mutable CCriticalSection m_textureUploadLock;
 
   PFNEGLSETDAMAGEREGIONKHRPROC m_eglSetDamageRegionKHR{nullptr};

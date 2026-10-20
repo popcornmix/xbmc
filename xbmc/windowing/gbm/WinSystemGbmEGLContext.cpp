@@ -194,6 +194,11 @@ bool CWinSystemGbmEGLContext::DestroyWindow()
   return true;
 }
 
+int CWinSystemGbmEGLContext::VideoOutputBitDepth(const VideoPicture* picture) const
+{
+  return picture ? picture->colorBits : 8;
+}
+
 bool CWinSystemGbmEGLContext::SetVideoOutput(const VideoPicture* videoPicture)
 {
   // Override: the base only flips the gui/video plane role. On EGL
@@ -203,7 +208,7 @@ bool CWinSystemGbmEGLContext::SetVideoOutput(const VideoPicture* videoPicture)
   // base so plane-role tracking sees the new format. EGL context survives
   // across the rebuild, no shader-rebuild. The next flip forces a modeset
   // when needed (amdgpu), on other drivers it is a fast flip."
-  const int bitDepth = videoPicture ? videoPicture->colorBits : 8;
+  const int bitDepth = VideoOutputBitDepth(videoPicture);
 
   // Pick an EGL config matching the target bit depth, then rebuild
   // the surface only if that pick changed the native visual ID.

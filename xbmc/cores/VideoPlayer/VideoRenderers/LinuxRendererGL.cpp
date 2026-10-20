@@ -308,6 +308,9 @@ void CLinuxRendererGL::AddVideoPicture(const VideoPicture &picture, int index)
   buf.videoBuffer = picture.videoBuffer;
   buf.videoBuffer->Acquire();
   buf.loaded = false;
+  buf.doviMetadata = picture.doviMetadata;
+  buf.doviPts = picture.doviSourcePts == AV_NOPTS_VALUE ? DVD_NOPTS_VALUE :
+                  static_cast<double>(picture.doviSourcePts);
   buf.m_srcPrimaries = picture.color_primaries;
   buf.m_srcColSpace = picture.color_space;
   buf.m_srcColTransfer = picture.color_transfer;
@@ -324,6 +327,8 @@ void CLinuxRendererGL::AddVideoPicture(const VideoPicture &picture, int index)
 void CLinuxRendererGL::ReleaseBuffer(int idx)
 {
   CPictureBuffer &buf = m_buffers[idx];
+  buf.doviMetadata.Reset();
+  buf.doviPts = DVD_NOPTS_VALUE;
   if (buf.videoBuffer)
   {
     buf.videoBuffer->Release();

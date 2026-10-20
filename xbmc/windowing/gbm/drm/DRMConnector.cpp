@@ -99,10 +99,20 @@ std::string CDRMConnector::GetName()
   return GetType() + "-" + std::to_string(m_connector->connector_type_id);
 }
 
-std::vector<uint8_t> CDRMConnector::GetEDID() const
+std::vector<uint8_t> CDRMConnector::GetEDID(bool refresh) const
 {
 
   uint64_t blob_id = GetPropertyValue("EDID").value_or(0);
+  if (refresh)
+  {
+    auto* current = drmModeGetConnector(m_fd,m_connector->connector_id);
+    if (!current) return {};
+    const auto property = GetPropertyId("EDID");
+    blob_id = 0;
+    for (int i=0;i<current->count_props;++i)
+      if (current->props[i] == property) blob_id = current->prop_values[i];
+    drmModeFreeConnector(current);
+  }
 
   if (blob_id == 0)
   {
@@ -114,6 +124,11 @@ std::vector<uint8_t> CDRMConnector::GetEDID() const
   drmModePropertyBlobPtr blob = drmModeGetPropertyBlob(m_fd, blob_id);
   if (!blob)
     return {};
+  if (!blob->data || !blob->length || blob->length > 32768)
+  {
+    drmModeFreePropertyBlob(blob);
+    return {};
+  }
 
   auto data = static_cast<uint8_t*>(blob->data);
   auto edid = std::vector<uint8_t>(data, data + blob->length);

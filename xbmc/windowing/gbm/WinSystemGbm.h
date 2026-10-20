@@ -34,6 +34,7 @@ namespace WINDOWING
 {
 namespace GBM
 {
+class CDVBridgeState;
 
 class CWinSystemGbm : public CWinSystemBase
 {
@@ -50,6 +51,10 @@ public:
   bool SetFullScreen(bool fullScreen, RESOLUTION_INFO& res, bool blankOtherDisplays) override;
 
   void FlipPage(bool rendered, bool videoLayer, bool async);
+#ifdef HAVE_DVBRIDGE
+  bool FlipDVBridgePage(CDVBridgeState& state, bool restore);
+  bool SupportsNativeDVOutput() const;
+#endif
 
   bool CanDoWindowed() override { return false; }
   void UpdateResolutions() override;

@@ -26,6 +26,9 @@
 #include <array>
 #include <mutex>
 #include <optional>
+#ifdef HAVE_DVBRIDGE
+#include "DVDVideoCodecFFmpeg.h"
+#endif
 
 #include <drm_fourcc.h>
 #include <va/va_drm.h>
@@ -778,6 +781,20 @@ bool CDecoder::Open(AVCodecContext* avctx, AVCodecContext* mainctx, const enum A
 
   vaapiDeviceCtx->display = m_vaapiConfig.dpy;
   vaapiDeviceCtx->driver_quirks = AV_VAAPI_DRIVER_QUIRK_RENDER_PARAM_BUFFERS;
+#ifdef HAVE_DVBRIDGE
+  const auto* dvDecoder = dynamic_cast<CDVDVideoCodecFFmpeg*>(
+      static_cast<ICallbackHWAccel*>(avctx->opaque));
+  if (dvDecoder && dvDecoder->NeedsDVEnhancement())
+  {
+    // A second FFmpeg-managed decoder needs the device's format table initialized.
+    vaapiDeviceCtx->driver_quirks |= AV_VAAPI_DRIVER_QUIRK_USER_SET;
+    if (av_hwdevice_ctx_init(m_deviceRef.get()) < 0)
+    {
+      av_buffer_unref(&framesRef);
+      return false;
+    }
+  }
+#endif
   vaapiFramesCtx->nb_attributes = 0;
   vaapiFramesCtx->nb_surfaces = m_videoSurfaces.Size();
   VASurfaceID *surfaceIds = (VASurfaceID*)av_malloc(vaapiFramesCtx->nb_surfaces *  sizeof(VASurfaceID));

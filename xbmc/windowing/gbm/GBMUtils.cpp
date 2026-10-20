@@ -39,8 +39,11 @@ CGBMUtils::CGBMDevice::CGBMDevice(gbm_device* device) : m_device(device)
 }
 
 bool CGBMUtils::CGBMDevice::CreateSurface(
-    int width, int height, uint32_t format, const uint64_t* modifiers, const int modifiers_count)
+    int width, int height, uint32_t format, const uint64_t* modifiers, const int modifiers_count,
+    bool staged)
 {
+  if (m_priorSurface)
+    return false;
   gbm_surface* surface{nullptr};
 #if defined(HAS_GBM_MODIFIERS)
   if (modifiers)
@@ -65,9 +68,25 @@ bool CGBMUtils::CGBMDevice::CreateSurface(
   CLog::Log(LOGDEBUG, "CGBMUtils::{} - created surface with size {}x{}", __FUNCTION__, width,
             height);
 
-  m_surface.reset(new CGBMSurface(surface));
+  if (staged)
+  {
+    m_surface.get_deleter().releaseBuffers = true;
+    m_priorSurface = std::move(m_surface);
+    m_surface = decltype(m_surface)(new CGBMSurface(surface), CGBMSurfaceDeleter{true});
+  }
+  else
+    m_surface.reset(new CGBMSurface(surface));
 
   return true;
+}
+
+void CGBMUtils::CGBMDevice::CompleteOutputSurface(bool presented)
+{
+  if (!m_priorSurface)
+    return;
+  if (!presented)
+    m_surface.swap(m_priorSurface);
+  m_priorSurface.reset();
 }
 
 CGBMUtils::CGBMDevice::CGBMSurface::CGBMSurface(gbm_surface* surface) : m_surface(surface)
@@ -98,6 +117,39 @@ CGBMUtils::CGBMDevice::CGBMSurface::CGBMSurfaceBuffer& CGBMUtils::CGBMDevice::CG
 CGBMUtils::CGBMDevice::CGBMSurface::CGBMSurfaceBuffer::CGBMSurfaceBuffer(gbm_surface* surface)
   : m_surface(surface), m_buffer(gbm_surface_lock_front_buffer(surface))
 {
+}
+
+gbm_bo* CGBMUtils::CGBMDevice::CGBMSurface::LockTransactionalBuffer()
+{
+  if (m_pendingBuffer)
+    return nullptr;
+  auto buffer = std::make_unique<CGBMSurfaceBuffer>(m_surface);
+  if (!buffer->Get())
+    return nullptr;
+  m_pendingBuffer = std::move(buffer);
+  return m_pendingBuffer->Get();
+}
+
+void CGBMUtils::CGBMDevice::CGBMSurface::CompleteTransactionalBuffer(bool presented)
+{
+  if (!m_pendingBuffer)
+    return;
+  if (presented)
+  {
+    // The blocking commit has replaced every legacy queued scanout buffer.
+    while (!m_buffers.empty())
+      m_buffers.pop();
+    m_scanoutBuffer = std::move(m_pendingBuffer);
+  }
+  else
+    m_pendingBuffer.reset();
+}
+
+void CGBMUtils::CGBMDevice::CGBMSurface::EndTransactionalMode()
+{
+  // Transfer the restored scanout to the ordinary queue without unlocking it.
+  if (!m_pendingBuffer && m_scanoutBuffer)
+    m_buffers.push(std::move(m_scanoutBuffer));
 }
 
 CGBMUtils::CGBMDevice::CGBMSurface::CGBMSurfaceBuffer::~CGBMSurfaceBuffer()

@@ -3,6 +3,11 @@
 # Kodi's licensing rules
 Kodi is provided under the terms of the GNU General Public License v2.0 or later, as provided in **[LICENSES/GPL-2.0-or-later](GPL-2.0-or-later)**.
 
+This patched Kodi build includes GPL-3.0-or-later DVBridge metadata validation
+even when `ENABLE_DVBRIDGE` is disabled. The combined build is distributed under GPL-3.0-or-later; see
+**[LICENSES/GPL-3.0-or-later](GPL-3.0-or-later)**. Existing files retain their
+original notices. Disabling the adapter does not exclude shared validation.
+
 This file provides a description of how each source file should be annotated to make its license clear and unambiguous. **It doesn't replace Kodi's license**.
 
 The license described in the **[LICENSE](../LICENSE.md)** file applies to **Kodi's source as a whole**, though individual source files can have a different license which is required to be compatible with the **GPL-2.0**. Aside from that, individual files can be provided under a dual license, e.g. one of the compatible GPL variants and alternatively under a permissive license like BSD, MIT etc.
@@ -73,4 +78,3 @@ Kodi currently contains files and code licensed under:
 * **[Unlicense](Unlicense)**: Unlicense (Public Domain)
 
 These licensing rules were adapted from the **[Linux kernel licensing rules](https://github.com/torvalds/linux/blob/master/Documentation/process/license-rules.rst)**.
-

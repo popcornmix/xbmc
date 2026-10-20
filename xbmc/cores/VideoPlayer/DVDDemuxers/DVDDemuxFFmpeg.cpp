@@ -1974,10 +1974,16 @@ CDemuxStream* CDVDDemuxFFmpeg::AddStream(int streamIdx)
           sideData =
               av_packet_side_data_get(pStream->codecpar->coded_side_data,
                                       pStream->codecpar->nb_coded_side_data, AV_PKT_DATA_DOVI_CONF);
-          if (sideData && sideData->size)
+          if (sideData && sideData->size >= sizeof(AVDOVIDecoderConfigurationRecord))
           {
             st->dovi = *reinterpret_cast<const AVDOVIDecoderConfigurationRecord*>(sideData->data);
           }
+#ifdef HAVE_DVBRIDGE
+          sideData = av_packet_side_data_get(pStream->codecpar->coded_side_data,
+                                            pStream->codecpar->nb_coded_side_data, AV_PKT_DATA_HEVC_CONF);
+          if (sideData && sideData->size >= 23 && sideData->size <= 1024 * 1024)
+            st->doviELConfig = FFmpegExtraData(sideData->data, sideData->size);
+#endif
         }
 
         sideData = av_packet_side_data_get(pStream->codecpar->coded_side_data,

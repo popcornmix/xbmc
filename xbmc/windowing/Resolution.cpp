@@ -66,7 +66,8 @@ float RESOLUTION_INFO::DisplayRatio() const
   return iWidth * fPixelRatio / iHeight;
 }
 
-RESOLUTION CResolutionUtils::ChooseBestResolution(float fps, int width, int height, bool is3D)
+RESOLUTION CResolutionUtils::ChooseBestResolution(float fps, int width, int height, bool is3D,
+                                                 bool allowNativeProgressiveRates)
 {
   RESOLUTION res = CServiceBroker::GetWinSystem()->GetGfxContext().GetVideoResolution();
   float weight = 0.0f;
@@ -75,7 +76,7 @@ RESOLUTION CResolutionUtils::ChooseBestResolution(float fps, int width, int heig
   {
     if (!FindResolutionFromOverride(fps, width, is3D, res, weight, true)) //if that fails find it from a fallback
     {
-      FindResolutionFromWhitelist(fps, width, height, is3D, res); //find a refreshrate from whitelist
+      FindResolutionFromWhitelist(fps, width, height, is3D, res, allowNativeProgressiveRates);
     }
   }
 
@@ -84,7 +85,8 @@ RESOLUTION CResolutionUtils::ChooseBestResolution(float fps, int width, int heig
   return res;
 }
 
-void CResolutionUtils::FindResolutionFromWhitelist(float fps, int width, int height, bool is3D, RESOLUTION &resolution)
+void CResolutionUtils::FindResolutionFromWhitelist(float fps, int width, int height, bool is3D,
+                                                  RESOLUTION &resolution, bool allowNativeProgressiveRates)
 {
   RESOLUTION_INFO curr = CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo(resolution);
   CLog::Log(LOGINFO,
@@ -112,7 +114,13 @@ void CResolutionUtils::FindResolutionFromWhitelist(float fps, int width, int hei
         // them on playback start. Especially interlaced content is not properly detected
         // and this causes ugly double switching.
         // This won't allow 25p / 30p playback on native refreshrate by default
-        if ((info.fRefreshRate > 30) || (MathUtils::FloatEquals(info.fRefreshRate, 24.0f, 0.1f)))
+        // Only the native DV renderer opts in to exact progressive cadence.
+        // Explicit user whitelists and all ordinary HDR/SDR calls stay unchanged.
+        const bool nativeDVRate = allowNativeProgressiveRates && !is3D &&
+            !(info.dwFlags & D3DPRESENTFLAG_INTERLACED) &&
+            MathUtils::FloatEquals(info.fRefreshRate, fps, 0.01f);
+        if (nativeDVRate || (info.fRefreshRate > 30) ||
+            (MathUtils::FloatEquals(info.fRefreshRate, 24.0f, 0.1f)))
           indexList.push_back(CDisplaySettings::GetInstance().GetStringFromRes(c));
       }
     }

@@ -251,9 +251,10 @@ std::optional<DRMPRIME::DmaBufIdentity> IdentityFromVaDescriptor(
 
 } // namespace
 
-void CVaapiTexturePool::Init(InteropInfo& interop)
+void CVaapiTexturePool::Init(InteropInfo& interop, size_t maxEntries)
 {
   m_interop = interop;
+  m_cache = DRMPRIME::CDmaBufIdentityCache{maxEntries, "vaapi"};
 }
 
 CVaapi2Texture* CVaapiTexturePool::Get(CVaapiRenderPicture* pic,
@@ -300,7 +301,10 @@ CVaapi2Texture* CVaapiTexturePool::Get(CVaapiRenderPicture* pic,
     else
     {
       slot = m_entries.size();
-      m_entries.push_back(std::make_unique<CVaapi2Texture>());
+      m_entries.emplace_back(new CVaapi2Texture(),[](CVaapi2Texture* texture) {
+        texture->Reset();
+        delete texture;
+      });
       m_entries[slot]->Init(m_interop);
     }
 
@@ -321,7 +325,8 @@ CVaapi2Texture* CVaapiTexturePool::Get(CVaapiRenderPicture* pic,
   protect.push_back(handle);
   for (size_t slot = 0; slot < m_entries.size(); slot++)
   {
-    if (std::find(inUse.begin(), inUse.end(), m_entries[slot].get()) != inUse.end())
+    if (m_entries[slot].use_count() > 1 ||
+        std::find(inUse.begin(), inUse.end(), m_entries[slot].get()) != inUse.end())
       protect.push_back(static_cast<uint32_t>(slot) + 1);
   }
 
@@ -337,13 +342,16 @@ CVaapi2Texture* CVaapiTexturePool::Get(CVaapiRenderPicture* pic,
 void CVaapiTexturePool::ReleaseAll()
 {
   m_cache.TakeAll();
-  for (auto& entry : m_entries)
-  {
-    if (entry)
-      entry->Reset();
-  }
+  // Foreign DV leases defer Reset until their real source-read completion.
   m_entries.clear();
   m_free.clear();
+}
+
+std::shared_ptr<void> CVaapiTexturePool::Retain(CVaapiTexture* texture) const
+{
+  for (const auto& entry : m_entries)
+    if (entry.get() == texture) return entry;
+  return {};
 }
 
 bool CVaapi2Texture::TestEsh(VADisplay vaDpy, EGLDisplay eglDisplay, std::uint32_t rtFormat, std::int32_t pixelFormat)

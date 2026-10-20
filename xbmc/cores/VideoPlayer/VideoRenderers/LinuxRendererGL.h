@@ -203,6 +203,8 @@ protected:
     AVMasteringDisplayMetadata displayMetadata;
     bool hasLightMetadata = false;
     AVContentLightMetadata lightMetadata;
+    CDVMetadataBuffer doviMetadata;
+    double doviPts = DVD_NOPTS_VALUE;
   };
 
   // YUV decoder textures

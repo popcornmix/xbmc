@@ -179,6 +179,9 @@ public:
   std::string stereo_mode; // expected stereo mode
   StreamHdrType hdr_type = StreamHdrType::HDR_TYPE_NONE; // type of HDR for this stream (hdr10, etc)
   AVDOVIDecoderConfigurationRecord dovi{};
+#ifdef HAVE_DVBRIDGE
+  FFmpegExtraData doviELConfig;
+#endif
 };
 
 class CDemuxStreamAudio : public CDemuxStream

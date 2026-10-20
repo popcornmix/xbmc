@@ -11,10 +11,12 @@
 
 #include "../RenderFlags.h"
 #include "ConvolutionKernels.h"
+#include "ServiceBroker.h"
 #include "ToneMappers.h"
 #include "settings/AdvancedSettings.h"
 #include "utils/GLUtils.h"
 #include "utils/log.h"
+#include "windowing/WinSystem.h"
 
 #include <sstream>
 #include <string>
@@ -88,6 +90,13 @@ BaseYUV2RGBGLSLShader::BaseYUV2RGBGLSLShader(EShaderFormat format,
 
   if (m_dither)
     m_defines += "#define XBMC_DITHER\n";
+
+  // A floating-point output keeps what a fixed-point one clamps away: values outside [0, 1], and
+  // results that are no number (0/0 in the tone mapping of a black pixel, which the shaders then
+  // leave out).
+  if (const auto* winSystem = CServiceBroker::GetWinSystem();
+      winSystem && winSystem->HasFloatOutput())
+    m_defines += "#define KODI_CLAMP_OUTPUT\n";
 
   VertexShader()->LoadSource("gles_yuv2rgb.vert", m_defines);
 

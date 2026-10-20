@@ -65,6 +65,9 @@ public:
 
   bool SupportsEOTF(Eotf eotf) const;
 
+  bool SupportsDolbyVision() const { return m_dolbyVision; }
+  bool SupportsStandardDolbyVision() const { return m_standardDolbyVision; }
+
   bool SupportsColorimetry(Colorimetry colorimetry) const;
 
 private:
@@ -86,6 +89,8 @@ private:
 
   const di_cta_colorimetry_block* m_colorimetry = nullptr;
   const di_cta_hdr_static_metadata_block* m_hdr_static_metadata = nullptr;
+  bool m_dolbyVision = false;
+  bool m_standardDolbyVision = false;
 };
 
 } // namespace UTILS

@@ -103,6 +103,16 @@ void CDisplayInfo::Parse()
 
           switch (cta_tag)
           {
+            case DI_CTA_DATA_BLOCK_DOLBY_VIDEO:
+            {
+              // Report the connected display's capability, not the current output mode.
+              const auto* dv = di_cta_data_block_get_dolby_video(block);
+              m_dolbyVision |= dv != nullptr;
+              // V0/V1 advertise Standard DV; V2 can advertise LLDV only.
+              if (dv)
+                m_standardDolbyVision |= dv->v0 || dv->v1 || (dv->v2 && dv->v2->mode_standard);
+              break;
+            }
             case DI_CTA_DATA_BLOCK_COLORIMETRY:
             {
               m_colorimetry = di_cta_data_block_get_colorimetry(block);

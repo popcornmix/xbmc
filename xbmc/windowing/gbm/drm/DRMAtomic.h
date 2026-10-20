@@ -35,16 +35,21 @@ public:
   void DestroyDrm() override;
   bool SupportsFencing() override { return true; }
   bool AddProperty(CDRMObject* object, const char* name, uint64_t value);
+  // Blocking commit: rejected properties must not be paired with a new framebuffer.
+  bool FlipPageTransactional(struct gbm_bo* bo);
 
   // Probe whether any DRM device supports atomic modesetting, with no
   // connector required. Used to decide atomic-vs-legacy before falling back.
   static bool SupportsAtomicModesetting();
 
 private:
-  void DrmAtomicCommit(int fb_id, int flags, bool rendered, bool videoLayer);
+  bool DrmAtomicCommit(int fb_id, int flags, bool rendered, bool videoLayer,
+                       bool strict = false);
+  void FinishRequest(bool accepted);
 
   bool m_need_modeset{true};
   bool m_active = true;
+  bool m_propertyFailure = false;
 
   class CDRMAtomicRequest
   {

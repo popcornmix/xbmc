@@ -80,6 +80,9 @@ public:
   std::shared_ptr<AVContentLightMetadata> contentLightMetadata;
   std::string stereo_mode; // stereoscopic 3d mode
   AVDOVIDecoderConfigurationRecord dovi{};
+#ifdef HAVE_DVBRIDGE
+  FFmpegExtraData doviELConfig;
+#endif
 
   // AUDIO
   int channels;

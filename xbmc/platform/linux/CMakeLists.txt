@@ -41,3 +41,7 @@ if(ADDONS_CONFIGURE_AT_STARTUP)
 endif()
 
 core_add_library(linuxsupport)
+if(ENABLE_DVBRIDGE)
+  target_link_libraries(${CORE_LIBRARY} PRIVATE dvbridge_core)
+  target_compile_definitions(${CORE_LIBRARY} PRIVATE HAVE_DVBRIDGE=1)
+endif()

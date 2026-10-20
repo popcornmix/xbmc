@@ -39,7 +39,7 @@ public:
   bool IsConnected() { return m_connector->connection == DRM_MODE_CONNECTED; }
   bool CheckConnector();
 
-  std::vector<uint8_t> GetEDID() const;
+  std::vector<uint8_t> GetEDID(bool refresh = false) const;
 
 private:
   struct DrmModeConnectorDeleter

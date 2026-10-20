@@ -84,6 +84,9 @@ void main()
 
   rgb.a = m_alpha;
 
+#if defined(KODI_CLAMP_OUTPUT)
+  rgb = clamp(rgb, 0.0, 1.0);
+#endif
   gl_FragColor = rgb;
 }
 

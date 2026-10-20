@@ -24,3 +24,7 @@ if(TARGET ${APP_NAME_LC}::OpenGLES)
 endif()
 
 core_add_library(windowing_gbm)
+if(ENABLE_DVBRIDGE)
+  target_link_libraries(${CORE_LIBRARY} PRIVATE dvbridge_core)
+  target_compile_definitions(${CORE_LIBRARY} PRIVATE HAVE_DVBRIDGE=1)
+endif()

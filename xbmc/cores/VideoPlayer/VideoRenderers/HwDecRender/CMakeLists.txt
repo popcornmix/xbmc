@@ -75,4 +75,7 @@ endif()
 # with ENABLE_VDPAU=OFF and ENABLE_VAAPI=OFF
 if(SOURCES)
   core_add_library(videorenderers_hwdec)
+  if(ENABLE_DVBRIDGE)
+    target_link_libraries(${CORE_LIBRARY} PRIVATE dvbridge_core)
+  endif()
 endif()

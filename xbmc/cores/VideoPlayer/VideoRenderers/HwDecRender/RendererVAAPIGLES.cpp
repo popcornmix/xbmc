@@ -16,6 +16,11 @@
 #include "utils/EGLFence.h"
 #include "utils/GLUtils.h"
 #include "utils/log.h"
+#ifdef HAVE_DVBRIDGE
+#include "ServiceBroker.h"
+#include "windowing/gbm/WinSystemGbmGLESContext.h"
+#include <cmath>
+#endif
 
 #include <memory>
 
@@ -72,7 +77,7 @@ CRendererVAAPIGLES::CRendererVAAPIGLES() = default;
 
 CRendererVAAPIGLES::~CRendererVAAPIGLES()
 {
-  for (int i = 0; i < NUM_BUFFERS; ++i)
+  for (int i = 0; i < MAX_RENDER_BUFFERS; ++i)
   {
     DeleteTexture(i);
   }
@@ -89,6 +94,12 @@ bool CRendererVAAPIGLES::Configure(const VideoPicture& picture, float fps, unsig
     m_isVAAPIBuffer = false;
 
   m_vaapiFourcc = pic->procPic.fourcc;
+#ifdef CB1_HAS_HDR10_AI
+  m_aiBuffers = m_isVAAPIBuffer && picture.hdrType == StreamHdrType::HDR_TYPE_HDR10 &&
+      !picture.doviSourceInfo.profile && !(picture.iFlags & DVP_FLAG_INTERLACED) &&
+      DVBridgeOrientationSupported(orientation) ? pic->renderBufferCount : NUM_BUFFERS;
+  m_aiLookahead=m_aiBuffers>NUM_BUFFERS;
+#endif
 
   if (m_isVAAPIBuffer)
   {
@@ -101,7 +112,13 @@ bool CRendererVAAPIGLES::Configure(const VideoPicture& picture, float fps, unsig
     interop.eglDisplay = m_pWinSystem->GetEGLDisplay();
 
     m_texturePool.ReleaseAll();
+#ifdef CB1_HAS_HDR10_AI
+    // Keep imported textures for the expanded decoder pool.
+    m_texturePool.Init(interop, VAAPI::CVaapiTexturePool::MAX_ENTRIES +
+                                  (m_aiBuffers > NUM_BUFFERS ? m_aiBuffers - NUM_BUFFERS : 0));
+#else
     m_texturePool.Init(interop);
+#endif
     for (auto& tex : m_vaapiTextures)
       tex = nullptr;
 
@@ -114,9 +131,32 @@ bool CRendererVAAPIGLES::Configure(const VideoPicture& picture, float fps, unsig
   return CLinuxRendererGLES::Configure(picture, fps, orientation);
 }
 
+#ifdef CB1_HAS_HDR10_AI
+CRenderInfo CRendererVAAPIGLES::GetRenderInfo()
+{
+  CRenderInfo info;
+  info.max_buffer_size = m_aiBuffers;
+  return info;
+}
+
+bool CRendererVAAPIGLES::HDR10AILookahead() const
+{
+  return m_aiBuffers > NUM_BUFFERS && m_aiLookahead;
+}
+
+#endif
+
 bool CRendererVAAPIGLES::ConfigChanged(const VideoPicture& picture)
 {
   CVaapiRenderPicture *pic = dynamic_cast<CVaapiRenderPicture*>(picture.videoBuffer);
+#ifdef CB1_HAS_HDR10_AI
+  const unsigned buffers = pic->procPic.videoSurface != VA_INVALID_ID &&
+      picture.hdrType == StreamHdrType::HDR_TYPE_HDR10 && !picture.doviSourceInfo.profile &&
+      !(picture.iFlags & DVP_FLAG_INTERLACED) && DVBridgeOrientationSupported(m_renderOrientation) ?
+      pic->renderBufferCount : NUM_BUFFERS;
+  if (m_aiBuffers != buffers)
+    return true;
+#endif
   if ((pic->procPic.videoSurface != VA_INVALID_ID && !m_isVAAPIBuffer) ||
       (pic->procPic.videoSurface == VA_INVALID_ID && m_isVAAPIBuffer))
     return true;
@@ -170,6 +210,189 @@ bool CRendererVAAPIGLES::RenderHook(int idx)
 {
   return false;
 }
+
+#ifdef HAVE_DVBRIDGE
+bool CRendererVAAPIGLES::DVBridgeOrientationSupported(unsigned int orientation) const
+{
+  // Native orientation includes the saved playback rotation; CB1 ignores only that part.
+  return orientation == static_cast<unsigned int>(m_videoSettings.m_Orientation);
+}
+
+bool CRendererVAAPIGLES::BuildDVBridgeLayer(int idx, CDVBridgeGLES::Layer& layer)
+{
+  // CB1 reads the full decoded texture, independent of Kodi's view-mode crop.
+  if (!m_isVAAPIBuffer || m_textureTarget != GL_TEXTURE_2D ||
+      !DVBridgeOrientationSupported(m_renderOrientation))
+    return false;
+  auto& buffer = m_buffers[idx];
+  if (!buffer.doviSourcePicture)
+    return false;
+  const auto& source = *buffer.doviSourcePicture;
+  bool hdr10 = false;
+#ifdef CB1_HAS_HDR10_AI
+  hdr10 = source.hdrType == StreamHdrType::HDR_TYPE_HDR10 &&
+      source.doviSourceBinding.Valid() && !source.doviSourceInfo.profile;
+#endif
+  if (!hdr10 && (!buffer.doviMetadata.Data() || buffer.doviPts == DVD_NOPTS_VALUE))
+    return false;
+  switch (m_vaapiFourcc)
+  {
+    case VA_FOURCC_NV12: layer.layout = DVBRIDGE_NV12; break;
+    case VA_FOURCC_P010: layer.layout = DVBRIDGE_P010; break;
+    case VA_FOURCC_P012: layer.layout = DVBRIDGE_P012; break;
+    case VA_FOURCC_P016: layer.layout = DVBRIDGE_P016; break;
+    default: return false;
+  }
+  layer.width = m_sourceWidth;
+  layer.height = m_sourceHeight;
+  layer.pts = hdr10 ? double(source.doviSourcePts) / DVD_TIME_BASE : buffer.doviPts;
+  layer.binding = hdr10 ? source.doviSourceBinding : buffer.doviMetadata.Binding();
+  if (!std::isfinite(layer.pts) || (hdr10 && source.doviSourcePts == AV_NOPTS_VALUE))
+    return false;
+  const auto texture = m_texturePool.Retain(m_vaapiTextures[idx]);
+  if (!texture || !buffer.doviSourcePicture) return false;
+  layer.sourceInfo = buffer.doviSourcePicture->doviSourceInfo;
+  layer.chromaLocation = source.chroma_position;
+  if (hdr10)
+  {
+    layer.fullRange = source.color_range != 0;
+    if (source.hasDisplayMetadata && source.displayMetadata.has_luminance)
+    {
+      layer.hdr.max_luma = av_q2d(source.displayMetadata.max_luminance);
+      layer.hdr.min_luma = av_q2d(source.displayMetadata.min_luminance);
+    }
+    if (source.hasLightMetadata)
+    {
+      layer.hdr.max_cll = source.lightMetadata.MaxCLL;
+      layer.hdr.max_fall = source.lightMetadata.MaxFALL;
+    }
+  }
+  struct ForeignLease
+  {
+    std::shared_ptr<void> imported;
+    std::shared_ptr<VideoPicture> decoded;
+  };
+  layer.lease = std::make_shared<ForeignLease>(texture,buffer.doviSourcePicture);
+  for (int p = 0; p < 2; ++p)
+  {
+    const auto& plane = buffer.fields[FIELD_FULL][p];
+    layer.planes[p] = {plane.id, static_cast<int>(plane.texwidth),
+                      static_cast<int>(plane.texheight)};
+  }
+  return true;
+}
+
+#ifdef CB1_HAS_HDR10_AI
+bool CRendererVAAPIGLES::PrepareHDR10AIQueue(const std::deque<int>& queue, bool end, bool paused,
+    uint64_t presentationDeadline)
+{
+  auto preparation = CaptureHDR10AIQueue(queue,end,paused,presentationDeadline);
+  if (!preparation.execute) return preparation.ready;
+  const auto outcome = preparation.execute();
+  return preparation.publish(outcome) && outcome.ready;
+}
+
+HDR10AIQueuePreparation CRendererVAAPIGLES::CaptureHDR10AIQueue(
+    const std::deque<int>& queue, bool end, bool paused, uint64_t presentationDeadline)
+{
+  if (queue.empty() || !HDR10AIQueueEligible()) return {};
+  auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(
+      CServiceBroker::GetWinSystem());
+  if (!window) { m_aiLookahead=false; return {}; }
+  std::vector<CDVBridgeGLES::Layer> layers;
+  // Copy ownership, not a reference to a slot that the decoder may replace.
+  const auto head = m_buffers[queue.front()].doviSourcePicture;
+  if (!head) return {};
+  const auto horizon = double(head->doviSourcePts) / DVD_TIME_BASE + 1.0;
+  for (const auto idx : queue)
+  {
+    const auto* pic = dynamic_cast<CVaapiRenderPicture*>(m_buffers[idx].videoBuffer);
+    if (!pic || !pic->valid) break;
+    // ReleaseBuffer invalidates the import before a slot receives another picture.
+    if (!m_vaapiTextures[idx] && !UploadTexture(idx)) break;
+    CDVBridgeGLES::Layer layer{};
+    if (!BuildDVBridgeLayer(idx,layer)) break;
+    layers.push_back(std::move(layer));
+    if (layers.back().pts >= horizon - 1e-9) break;
+  }
+  // Future imports must not replace the current picture's admission identity.
+  if (!UploadTexture(queue.front())) return {false, {}, {}};
+  const auto index = queue.front();
+  const auto binding = head->doviSourceBinding;
+  const auto preferences = DVBRIDGE::FrameOutputSettings();
+  if (preferences.hdr10Source == DVBRIDGE::HDR10SourceMode::Native)
+  {
+    // Preserve the original locked/native stop and readiness path.
+    const bool ready = window->PrepareHDR10AIQueue(*head,layers,end,paused,presentationDeadline);
+    m_aiLookahead = window->HDR10AILookaheadActive();
+    if (ready && m_aiOutputPending)
+    {
+      if (!ConfigureVideoOutput(*head)) return {};
+      m_aiOutputPending = false;
+    }
+    return {ready, {}, {}};
+  }
+  return {false,
+      [window,head,layers=std::move(layers),end,paused,presentationDeadline]() {
+        const bool ready = window->PrepareHDR10AIQueue(*head,layers,end,paused,presentationDeadline);
+        return HDR10AIQueuePreparation::Outcome{ready,window->HDR10AILookaheadActive()};
+      },
+      [this,index,binding,preferences](const HDR10AIQueuePreparation::Outcome& outcome) {
+        const auto& current = m_buffers[index].doviSourcePicture;
+        const auto settings = DVBRIDGE::FrameOutputSettings();
+        if (!current || !(current->doviSourceBinding == binding) ||
+            settings.revision != preferences.revision || !settings.SameValues(preferences))
+          return false;
+        m_aiLookahead = outcome.lookahead;
+        if (outcome.ready && m_aiOutputPending)
+        {
+          if (!ConfigureVideoOutput(*current)) return false;
+          m_aiOutputPending = false;
+        }
+        return true;
+      }};
+}
+
+bool CRendererVAAPIGLES::HDR10AIFrameCommitted() const
+{
+  auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(CServiceBroker::GetWinSystem());
+  return window && window->HDR10AIFrameCommitted();
+}
+#endif
+
+dvbridge_geometry CRendererVAAPIGLES::DVBridgeGeometry()
+{
+  const CRect view = CServiceBroker::GetWinSystem()->GetGfxContext().GetViewWindow();
+  CRect dest;
+  CalcDestRect(view.x1, view.y1, view.Width(), view.Height(), GetAspectRatio(),
+               1.0f, 0.0f, dest, false);
+  return {static_cast<int>(m_sourceWidth), static_cast<int>(m_sourceHeight),
+          static_cast<int>(std::lround(dest.x1)), static_cast<int>(std::lround(dest.y1)),
+          static_cast<int>(std::lround(dest.Width())),
+          static_cast<int>(std::lround(dest.Height()))};
+}
+
+void CRendererVAAPIGLES::SetDVBridgeFELSuccessor(int index)
+{
+  m_felSuccessor = {};
+  if (index < 0 || index >= MAX_RENDER_BUFFERS) return;
+  const auto& buffer = m_buffers[index];
+  if (!buffer.doviEnhancement || !buffer.doviMetadata.Data() ||
+      !(buffer.doviEnhancementBinding == buffer.doviMetadata.Binding())) return;
+  m_felSuccessor = {buffer.doviEnhancement,buffer.doviEnhancementBinding,buffer.doviMetadata};
+}
+
+bool CRendererVAAPIGLES::RenderDVBridge(int idx)
+{
+  auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(
+      CServiceBroker::GetWinSystem());
+  CDVBridgeGLES::Layer layer{};
+  if (!window || !BuildDVBridgeLayer(idx,layer)) return false;
+  auto& buffer = m_buffers[idx];
+  return window->RenderDVBridge(layer, buffer.doviEnhancement,
+      buffer.doviEnhancementBinding, buffer.doviMetadata, DVBridgeGeometry(), &m_felSuccessor);
+}
+#endif
 
 bool CRendererVAAPIGLES::CreateTexture(int index)
 {
@@ -237,6 +460,11 @@ void CRendererVAAPIGLES::DeleteTexture(int index)
 
 bool CRendererVAAPIGLES::UploadTexture(int index)
 {
+#ifdef HAVE_DVBRIDGE
+  auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(
+      CServiceBroker::GetWinSystem());
+  if (window) window->ObserveDVImport({}, {}, false);
+#endif
   if (!m_isVAAPIBuffer)
   {
     CPictureBuffer& buf = m_buffers[index];
@@ -315,6 +543,18 @@ bool CRendererVAAPIGLES::UploadTexture(int index)
   }
 
   CalculateTextureSourceRects(index, 3);
+#ifdef HAVE_DVBRIDGE
+  if (window && buf.doviSourcePicture)
+  {
+    const bool layout = m_vaapiFourcc == VA_FOURCC_NV12 || m_vaapiFourcc == VA_FOURCC_P010 ||
+        m_vaapiFourcc == VA_FOURCC_P012 || m_vaapiFourcc == VA_FOURCC_P016;
+    const bool usable = layout && m_textureTarget == GL_TEXTURE_2D &&
+        DVBridgeOrientationSupported(m_renderOrientation);
+    const auto binding = buf.doviSourcePicture->doviSourceBinding.Valid() ?
+        buf.doviSourcePicture->doviSourceBinding : buf.doviMetadata.Binding();
+    window->ObserveDVImport(binding, DVBridgeGeometry(), usable);
+  }
+#endif
   return true;
 }
 

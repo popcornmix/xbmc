@@ -78,7 +78,8 @@ public:
 
   RESOLUTION GetResolution();
   void UpdateResolution();
-  void TriggerUpdateResolution(float fps, int width, int height, std::string &stereomode);
+  void TriggerUpdateResolution(float fps, int width, int height, std::string &stereomode,
+                               bool nativeDV = false);
   void SetViewMode(int iViewMode);
   void PreInit();
   void UnInit();
@@ -170,6 +171,7 @@ protected:
   CCriticalSection m_presentlock;
   CCriticalSection m_datalock;
   bool m_bTriggerUpdateResolution = false;
+  std::atomic_bool m_nativeDVRate{false};
   bool m_bRenderGUI = true;
   bool m_renderedDebugOverlay = false;
   bool m_renderDebug = false;

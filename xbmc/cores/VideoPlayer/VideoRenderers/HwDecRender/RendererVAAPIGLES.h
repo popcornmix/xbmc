@@ -49,6 +49,9 @@ public:
 protected:
   bool LoadShadersHook() override;
   bool RenderHook(int idx) override;
+#ifdef HAVE_DVBRIDGE
+  bool RenderDVBridge(int idx) override;
+#endif
   void AfterRenderHook(int idx) override;
 
   // textures

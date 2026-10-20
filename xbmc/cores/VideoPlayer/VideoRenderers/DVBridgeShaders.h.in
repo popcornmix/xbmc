@@ -1,0 +1,4 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+#pragma once
+inline constexpr char DVBRIDGE_VERTEX[] = R"DVGLSL(@DVBRIDGE_VERTEX_SOURCE@)DVGLSL";
+inline constexpr char DVBRIDGE_FRAGMENT[] = R"DVGLSL(@DVBRIDGE_FRAGMENT_SOURCE@)DVGLSL";

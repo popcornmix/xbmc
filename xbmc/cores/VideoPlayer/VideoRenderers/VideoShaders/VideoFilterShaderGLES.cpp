@@ -15,11 +15,23 @@
 #include "rendering/gles/RenderSystemGLES.h"
 #include "utils/GLUtils.h"
 #include "utils/log.h"
+#include "windowing/WinSystem.h"
 
 #include <math.h>
 #include <string>
 
 using namespace Shaders::GLES;
+
+namespace
+{
+// A floating-point output keeps what a fixed-point one clamps away: values outside [0, 1] (the
+// overshoot of a scaling kernel) and results that are no number.
+std::string OutputDefines()
+{
+  const auto* winSystem = CServiceBroker::GetWinSystem();
+  return winSystem && winSystem->HasFloatOutput() ? "#define KODI_CLAMP_OUTPUT\n" : "";
+}
+} // unnamed namespace
 
 //////////////////////////////////////////////////////////////////////
 // BaseVideoFilterShader - base class for video filter shaders
@@ -37,7 +49,7 @@ BaseVideoFilterShader::BaseVideoFilterShader()
 
   VertexShader()->LoadSource("gles_videofilter.vert");
 
-  PixelShader()->LoadSource("gles_videofilter.frag");
+  PixelShader()->LoadSource("gles_videofilter.frag", OutputDefines());
 }
 
 void BaseVideoFilterShader::OnCompiledAndLinked()
@@ -63,7 +75,7 @@ ConvolutionFilterShader::ConvolutionFilterShader(ESCALINGMETHOD method, bool dit
   m_dither = dither;
 
   std::string shadername;
-  std::string defines;
+  std::string defines = OutputDefines();
 
   if (CGLExtensions::IsExtensionSupported(CGLExtensions::EXT_color_buffer_float))
   {
@@ -94,7 +106,7 @@ ConvolutionFilterShader::ConvolutionFilterShader(ESCALINGMETHOD method, bool dit
   if (m_floattex)
   {
     m_internalformat = GL_RGBA16F_EXT;
-    defines = "#define HAS_FLOAT_TEXTURE\n";
+    defines += "#define HAS_FLOAT_TEXTURE\n";
   }
   else
   {

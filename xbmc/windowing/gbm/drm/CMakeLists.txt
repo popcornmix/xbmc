@@ -18,4 +18,8 @@ set(HEADERS DRMAtomic.h
             DRMUtils.h
             OffScreenModeSetting.h)
 
+if(ENABLE_DVBRIDGE)
+  list(APPEND SOURCES DVBridgeState.cpp)
+  list(APPEND HEADERS DVBridgeState.h)
+endif()
 core_add_library(windowing_gbm_drm)

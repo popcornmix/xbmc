@@ -29,6 +29,9 @@
 #include "utils/MathUtils.h"
 #include "utils/log.h"
 #include "windowing/WinSystem.h"
+#ifdef HAVE_DVBRIDGE
+#include "windowing/gbm/WinSystemGbmGLESContext.h"
+#endif
 
 #include <mutex>
 
@@ -208,9 +211,36 @@ bool CLinuxRendererGLES::Configure(const VideoPicture &picture, float fps, unsig
   m_bValidated = false;
 
   if (!CServiceBroker::GetWinSystem()->SetVideoOutput(&picture))
+  {
     CLog::Log(LOGWARNING, "LinuxRendererGLES::Configure: SetVideoOutput failed");
+#ifdef HAVE_DVBRIDGE
+    if (KODI::WINDOWING::GBM::CWinSystemGbmGLESContext::DVBridgeRequested(&picture))
+    {
+      m_bConfigured = false;
+      return false;
+    }
+#endif
+  }
 
   CServiceBroker::GetWinSystem()->SetColorimetry(&picture);
+
+#ifdef HAVE_DVBRIDGE
+  m_dvRequested = KODI::WINDOWING::GBM::CWinSystemGbmGLESContext::DVBridgeRequested(&picture);
+  if (m_dvRequested)
+  {
+    auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(
+        CServiceBroker::GetWinSystem());
+    m_passthroughHDR = false;
+    m_hdrFboActive = window && window->BeginDVBridge();
+    if (!m_hdrFboActive)
+    {
+      m_bConfigured = false;
+      CLog::Log(LOGERROR, "DVBridge: native output initialization rejected");
+      return false;
+    }
+    return true;
+  }
+#endif
 
   m_passthroughHDR = CServiceBroker::GetWinSystem()->SetHDR(&picture);
   CLog::Log(LOGDEBUG, "LinuxRendererGLES::Configure: HDR passthrough: {}",
@@ -251,6 +281,12 @@ void CLinuxRendererGLES::AddVideoPicture(const VideoPicture &picture, int index)
   buf.videoBuffer = picture.videoBuffer;
   buf.videoBuffer->Acquire();
   buf.loaded = false;
+  buf.doviMetadata = picture.doviMetadata;
+#ifdef HAVE_DVBRIDGE
+  buf.doviEnhancement = picture.doviEnhancement;
+#endif
+  buf.doviPts = picture.doviSourcePts == AV_NOPTS_VALUE ? DVD_NOPTS_VALUE :
+                  static_cast<double>(picture.doviSourcePts);
   buf.m_srcPrimaries = picture.color_primaries;
   buf.m_srcColSpace = picture.color_space;
   buf.m_srcColTransfer = picture.color_transfer;
@@ -269,6 +305,11 @@ void CLinuxRendererGLES::AddVideoPicture(const VideoPicture &picture, int index)
 void CLinuxRendererGLES::ReleaseBuffer(int idx)
 {
   CPictureBuffer &buf = m_buffers[idx];
+  buf.doviMetadata.Reset();
+#ifdef HAVE_DVBRIDGE
+  buf.doviEnhancement.reset();
+#endif
+  buf.doviPts = DVD_NOPTS_VALUE;
   if (buf.videoBuffer)
   {
     buf.videoBuffer->Release();
@@ -1065,6 +1106,20 @@ void CLinuxRendererGLES::UnInit()
 
   glFinish();
 
+#ifdef HAVE_DVBRIDGE
+  if (m_dvRequested)
+  {
+    auto* window = dynamic_cast<KODI::WINDOWING::GBM::CWinSystemGbmGLESContext*>(
+        CServiceBroker::GetWinSystem());
+    if (window && !window->EndDVBridge())
+    {
+      CLog::Log(LOGERROR, "DVBridge: cannot restore output during renderer teardown");
+      return;
+    }
+    m_dvRequested = false;
+  }
+#endif
+
   // YUV textures
   for (int i = 0; i < NUM_BUFFERS; ++i)
   {
@@ -1171,6 +1226,14 @@ bool CLinuxRendererGLES::Render(unsigned int flags, int index)
     return false;
   }
 
+#ifdef HAVE_DVBRIDGE
+  if (m_dvRequested)
+  {
+    const bool rendered = m_currentField == FIELD_FULL && RenderDVBridge(index);
+    AfterRenderHook(index);
+    return rendered;
+  }
+#endif
   if (RenderHook(index))
   {
     ;

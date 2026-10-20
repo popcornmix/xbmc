@@ -9,6 +9,7 @@
 #pragma once
 
 #include "DVDResource.h"
+#include "DVMetadataBuffer.h"
 #include "cores/VideoPlayer/Buffers/VideoBuffer.h"
 #include "cores/VideoPlayer/Interface/DemuxPacket.h"
 #include "cores/VideoPlayer/Process/ProcessInfo.h"
@@ -24,6 +25,7 @@ extern "C" {
 #include <vector>
 
 class CSetting;
+class VideoSourceSideData;
 
 // when modifying these structures, make sure you update all codecs accordingly
 #define FRAME_TYPE_UNDEF 0
@@ -78,6 +80,15 @@ public:
   StreamHdrType hdrTypeAlt;
   std::string strDVELType;
   std::shared_ptr<const DoviRpu> doviRpu;
+  std::shared_ptr<const VideoSourceSideData> sourceSideData;
+  CDVMetadataBuffer doviMetadata;
+  DVBRIDGE::SourceInfo doviSourceInfo{};
+  DVBRIDGE::SourceBinding doviSourceBinding{};
+  int64_t doviSourcePts = AV_NOPTS_VALUE;
+#ifdef HAVE_DVBRIDGE
+  std::shared_ptr<AVFrame> doviEnhancement;
+  DVBRIDGE::SourceBinding doviEnhancementBinding{};
+#endif
 
   bool hasDisplayMetadata = false;
   AVMasteringDisplayMetadata displayMetadata;
@@ -125,6 +136,11 @@ class CDVDCodecOptions;
 class CDVDVideoCodec
 {
 public:
+  void SetVideoProcessingGeneration(uint64_t generation)
+  {
+    m_videoProcessingGeneration = generation;
+    m_videoSourceSerial = 0;
+  }
 
   enum VCReturn
   {
@@ -257,6 +273,8 @@ public:
 
 protected:
   CProcessInfo &m_processInfo;
+  uint64_t m_videoProcessingGeneration{};
+  uint64_t m_videoSourceSerial{};
 };
 
 // callback interface for ffmpeg hw accelerators
@@ -282,4 +300,8 @@ public:
   virtual ~ICallbackHWAccel() = default;
   virtual IHardwareDecoder* GetHWAccel() = 0;
   virtual bool GetPictureCommon(VideoPicture* pVideoPicture) = 0;
+#ifdef CB1_HAS_HDR10_AI
+  virtual unsigned GetHDR10AIBufferCount() const { return 6; }
+  virtual void PrepareHDR10AIReopen() {}
+#endif
 };

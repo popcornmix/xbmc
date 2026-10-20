@@ -17,6 +17,7 @@
 #include "utils/log.h"
 
 #include <chrono>
+#include <algorithm>
 #include <errno.h>
 #include <string.h>
 #include <thread>
@@ -28,8 +29,14 @@
 
 using namespace KODI::WINDOWING::GBM;
 
-void CDRMAtomic::DrmAtomicCommit(int fb_id, int flags, bool rendered, bool videoLayer)
+bool CDRMAtomic::DrmAtomicCommit(int fb_id, int flags, bool rendered, bool videoLayer, bool strict)
 {
+  CDRMCrtc* oldCrtc = m_old_crtc;
+  const auto reject = [&]() {
+    m_old_crtc = oldCrtc;
+    FinishRequest(false);
+    return false;
+  };
   // Declared at function scope so the blob outlives drmModeAtomicCommit.
   // DRM requires the blob to remain alive for the duration of the commit;
   // destroying it before the commit returns leaves the atomic request
@@ -75,17 +82,17 @@ void CDRMAtomic::DrmAtomicCommit(int fb_id, int flags, bool rendered, bool video
   if (flags & DRM_MODE_ATOMIC_ALLOW_MODESET)
   {
     if (!AddProperty(m_connector, "CRTC_ID", m_crtc->GetCrtcId()))
-      return;
+      return reject();
 
     modeBlob = CDRMPropertyBlob(m_fd, m_mode, sizeof(*m_mode));
     if (!modeBlob.IsValid())
-      return;
+      return reject();
 
     if (!AddProperty(m_crtc, "MODE_ID", modeBlob.Get()))
-      return;
+      return reject();
 
     if (!AddProperty(m_crtc, "ACTIVE", m_active ? 1 : 0))
-      return;
+      return reject();
   }
 
   // In Direct-To-Plane (dual plane) mode m_gui_plane is the output
@@ -133,9 +140,17 @@ void CDRMAtomic::DrmAtomicCommit(int fb_id, int flags, bool rendered, bool video
   if (CServiceBroker::GetLogging().CanLogComponent(LOGWINDOWING))
     m_req->LogAtomicRequest();
 
+  if (strict && m_propertyFailure)
+    return reject();
+
   auto ret = drmModeAtomicCommit(m_fd, m_req->Get(), flags | DRM_MODE_ATOMIC_TEST_ONLY, nullptr);
   if (ret < 0)
   {
+    if (strict)
+    {
+      CLog::LogF(LOGERROR, "transactional test commit rejected: {}", strerror(errno));
+      return reject();
+    }
     CLog::LogF(LOGERROR,
                "test commit failed: ({}) - falling back to last successful atomic "
                "request",
@@ -154,9 +169,15 @@ void CDRMAtomic::DrmAtomicCommit(int fb_id, int flags, bool rendered, bool video
   if (ret < 0)
   {
     CLog::LogF(LOGERROR, "atomic commit failed: {}", strerror(errno));
-    m_atomicRequestQueue.pop_back();
+    return reject();
   }
-  else
+  FinishRequest(true);
+  return true;
+}
+
+void CDRMAtomic::FinishRequest(bool accepted)
+{
+  if (accepted)
   {
     // Sync the property cache with values the kernel accepted.
     // This must happen after a successful commit so that
@@ -168,6 +189,8 @@ void CDRMAtomic::DrmAtomicCommit(int fb_id, int flags, bool rendered, bool video
     if (m_atomicRequestQueue.size() > 1)
       m_atomicRequestQueue.pop_front();
   }
+  else if (!m_atomicRequestQueue.empty())
+    m_atomicRequestQueue.pop_back();
 
   if (m_inFenceFd != -1)
   {
@@ -177,6 +200,27 @@ void CDRMAtomic::DrmAtomicCommit(int fb_id, int flags, bool rendered, bool video
 
   m_atomicRequestQueue.emplace_back(std::make_unique<CDRMAtomicRequest>());
   m_req = m_atomicRequestQueue.back().get();
+  m_propertyFailure = false;
+}
+
+bool CDRMAtomic::FlipPageTransactional(struct gbm_bo* bo)
+{
+  if (!bo)
+  {
+    FinishRequest(false);
+    return false;
+  }
+  const uint32_t fb = DrmOpaqueFbGetFromBo(bo);
+  if (!fb)
+  {
+    FinishRequest(false);
+    return false;
+  }
+  const int flags = DRM_MODE_ATOMIC_ALLOW_MODESET;
+  const bool accepted = DrmAtomicCommit(fb, flags, true, false, true);
+  if (accepted)
+    m_need_modeset = false;
+  return accepted;
 }
 
 void CDRMAtomic::FlipPage(struct gbm_bo* bo, bool rendered, bool videoLayer, bool async)
@@ -310,9 +354,9 @@ bool CDRMAtomic::SetActive(bool active)
 
 bool CDRMAtomic::AddProperty(CDRMObject* object, const char* name, uint64_t value)
 {
-  if (!object)
-    return false;
-  return m_req->AddProperty(object, name, value);
+  const bool added = object && m_req && m_req->AddProperty(object, name, value);
+  m_propertyFailure |= !added;
+  return added;
 }
 
 CDRMAtomic::CDRMAtomicRequest::CDRMAtomicRequest() : m_atomicRequest(drmModeAtomicAlloc())

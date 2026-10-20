@@ -58,6 +58,7 @@ protected:
   bool InitWindowSystemEGL(EGLint renderableType, EGLint apiType);
   bool ChooseEGLConfig(EGLint renderableType, int bitDepth = 8);
   virtual bool CreateContext() = 0;
+  virtual int VideoOutputBitDepth(const VideoPicture* picture) const;
 
   EGLint m_renderableType{0};
 

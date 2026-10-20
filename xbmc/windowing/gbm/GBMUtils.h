@@ -68,7 +68,22 @@ public:
                        int height,
                        uint32_t format,
                        const uint64_t* modifiers,
-                       const int modifiers_count);
+                       const int modifiers_count,
+                       bool staged = false);
+    bool StageOutputSurface(int width, int height, uint32_t format,
+                            const uint64_t* modifiers, int count)
+    {
+      return CreateSurface(width, height, format, modifiers, count, true);
+    }
+    void CompleteOutputSurface(bool presented);
+    bool HasOutputSurfaceTransition() const { return bool(m_priorSurface); }
+    void UseDVOutputLifetime()
+    {
+      m_dvOutputLifetime = true;
+      m_surface.get_deleter().releaseBuffers = true;
+      m_priorSurface.get_deleter().releaseBuffers = true;
+    }
+    bool HasDVOutputLifetime() const { return m_dvOutputLifetime; }
 
     /**
      * @brief Get the underlying gbm_device
@@ -127,9 +142,16 @@ public:
        */
       CGBMSurfaceBuffer& LockFrontBuffer();
 
+      // Blocking atomic presentation only: retain the current scanout on failure.
+      gbm_bo* LockTransactionalBuffer();
+      void CompleteTransactionalBuffer(bool presented);
+      void EndTransactionalMode();
+
     private:
       gbm_surface* m_surface{nullptr};
       std::queue<std::unique_ptr<CGBMSurfaceBuffer>> m_buffers;
+      std::unique_ptr<CGBMSurfaceBuffer> m_scanoutBuffer;
+      std::unique_ptr<CGBMSurfaceBuffer> m_pendingBuffer;
     };
 
     /**
@@ -141,16 +163,23 @@ public:
 
   private:
     gbm_device* m_device{nullptr};
+    bool m_dvOutputLifetime{};
 
     struct CGBMSurfaceDeleter
     {
+      bool releaseBuffers{false};
       void operator()(CGBMSurface* p) const
       {
         if (p)
-          gbm_surface_destroy(p->Get());
+        {
+          auto* surface = p->Get();
+          if (releaseBuffers) delete p;
+          gbm_surface_destroy(surface);
+        }
       }
     };
-    std::unique_ptr<CGBMSurface, CGBMSurfaceDeleter> m_surface;
+    std::unique_ptr<CGBMSurface, CGBMSurfaceDeleter> m_surface{nullptr, CGBMSurfaceDeleter{false}};
+    std::unique_ptr<CGBMSurface, CGBMSurfaceDeleter> m_priorSurface{nullptr, CGBMSurfaceDeleter{false}};
   };
 
   /**
@@ -166,7 +195,11 @@ private:
     void operator()(CGBMDevice* p) const
     {
       if (p)
-        gbm_device_destroy(p->Get());
+      {
+        auto* device = p->Get();
+        if (p->HasDVOutputLifetime()) delete p;
+        gbm_device_destroy(device);
+      }
     }
   };
   std::unique_ptr<CGBMDevice, CGBMDeviceDeleter> m_device;

@@ -14,6 +14,9 @@
 #include "VideoSyncGbm.h"
 #include "cores/VideoPlayer/VideoReferenceClock.h"
 #include "drm/DRMAtomic.h"
+#ifdef HAVE_DVBRIDGE
+#include "drm/DVBridgeState.h"
+#endif
 #include "drm/DRMLegacy.h"
 #include "drm/OffScreenModeSetting.h"
 #include "messaging/ApplicationMessenger.h"
@@ -30,6 +33,7 @@
 #include "windowing/GraphicContext.h"
 
 #include <mutex>
+#include <cmath>
 #include <string.h>
 
 #ifndef HAVE_HDR_OUTPUT_METADATA
@@ -288,11 +292,9 @@ bool CWinSystemGbm::SetFullScreen(bool fullScreen, RESOLUTION_INFO& res, bool bl
 
   auto result = m_DRM->SetVideoMode(res, bo);
 
-  // For atomic DRM, SetVideoMode only queues the modeset (m_need_modeset).
-  // Commit it now so the kernel CRTC matches the new surface before any
-  // subsequent eglSwapBuffers; otherwise mesa logs a spurious
-  // EGL_BAD_SURFACE on the next frame while userspace surface and kernel
-  // CRTC are out of sync. Legacy DRM already committed in SetVideoMode.
+  // Complete Kodi's queued native modeset before the next EGL buffer swap.
+  // This existing GBM synchronization is required for ordinary HDR as well;
+  // it does not set DV signaling or override Kodi's HDR/SDR policy.
   if (result && std::dynamic_pointer_cast<CDRMAtomic>(m_DRM))
     FlipPage(true, false, false);
 
@@ -305,6 +307,59 @@ bool CWinSystemGbm::SetFullScreen(bool fullScreen, RESOLUTION_INFO& res, bool bl
 
   return result;
 }
+
+#ifdef HAVE_DVBRIDGE
+bool CWinSystemGbm::SupportsNativeDVOutput() const
+{
+  if (!m_info || !m_info->SupportsStandardDolbyVision() ||
+      !std::dynamic_pointer_cast<CDRMAtomic>(m_DRM))
+    return false;
+  const auto* mode = m_DRM->GetSelectedMode();
+  auto* connector = m_DRM->GetConnector();
+  return connector && connector->IsConnected() &&
+         connector->SupportsProperty("DVBRIDGE_DV_STANDARD_LAB") && mode &&
+         mode->hdisplay == 3840 && mode->vdisplay == 2160 &&
+         !(mode->flags & DRM_MODE_FLAG_INTERLACE);
+}
+
+bool CWinSystemGbm::FlipDVBridgePage(CDVBridgeState& state, bool restore)
+{
+  auto drm = std::dynamic_pointer_cast<CDRMAtomic>(m_DRM);
+  if (!drm || !m_GBM || !state.Captured())
+    return false;
+  auto& surface = m_GBM->GetDevice().GetSurface();
+  auto* bo = surface.LockTransactionalBuffer();
+  bool valid = bo != nullptr;
+  if (valid && !restore)
+  {
+    const auto mode = drm->GetSelectedMode();
+    const auto format = gbm_bo_get_format(bo);
+    valid = gbm_bo_get_width(bo) == 3840 && gbm_bo_get_height(bo) == 2160 &&
+            (format == DRM_FORMAT_XRGB8888 || format == DRM_FORMAT_ARGB8888) &&
+            mode && mode->hdisplay == 3840 && mode->vdisplay == 2160 &&
+            !(mode->flags & (DRM_MODE_FLAG_INTERLACE | DRM_MODE_FLAG_DBLSCAN));
+    if (valid)
+    {
+      const double rate = mode->htotal && mode->vtotal
+                              ? mode->clock * 1000.0 / mode->htotal / mode->vtotal : 0.0;
+      valid = false;
+      for (double supported : {24000.0 / 1001, 24.0, 25.0, 30000.0 / 1001,
+                               30.0, 50.0, 60000.0 / 1001, 60.0})
+        valid |= std::abs(rate - supported) < 0.012;
+    }
+  }
+  if (valid)
+    valid = state.Stage(*drm, restore);
+  const bool accepted = drm->FlipPageTransactional(valid ? bo : nullptr);
+  surface.CompleteTransactionalBuffer(accepted);
+  if (accepted && restore)
+  {
+    surface.EndTransactionalMode();
+    state.Restored();
+  }
+  return accepted;
+}
+#endif
 
 void CWinSystemGbm::FlipPage(bool rendered, bool videoLayer, bool async)
 {
@@ -710,6 +765,9 @@ CHDRCapabilities CWinSystemGbm::GetDisplayHDRCapabilities() const
 
   if (m_info->SupportsEOTF(UTILS::Eotf::HLG))
     caps.SetHLG();
+
+  if (m_info->SupportsDolbyVision())
+    caps.SetDolbyVision();
 
   return caps;
 }

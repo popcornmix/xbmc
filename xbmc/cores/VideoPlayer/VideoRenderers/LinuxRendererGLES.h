@@ -132,6 +132,11 @@ protected:
   // hooks for HwDec rendering
   virtual bool LoadShadersHook() { return false; }
   virtual bool RenderHook(int idx) { return false; }
+#ifdef HAVE_DVBRIDGE
+  // Failure is terminal for this frame: never silently use the ordinary shader.
+  virtual bool RenderDVBridge(int idx) { return false; }
+  bool m_dvRequested{false};
+#endif
   virtual void AfterRenderHook(int idx) {}
 
   struct
@@ -199,6 +204,11 @@ protected:
     AVMasteringDisplayMetadata displayMetadata;
     bool hasLightMetadata{false};
     AVContentLightMetadata lightMetadata;
+    CDVMetadataBuffer doviMetadata;
+#ifdef HAVE_DVBRIDGE
+    std::shared_ptr<AVFrame> doviEnhancement;
+#endif
+    double doviPts = DVD_NOPTS_VALUE;
   };
 
   // YUV decoder textures

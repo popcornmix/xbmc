@@ -17,6 +17,10 @@
 #include <memory>
 #include <string>
 #include <vector>
+#ifdef HAVE_DVBRIDGE
+#include <deque>
+struct dvbridge_fel;
+#endif
 
 extern "C"
 {
@@ -47,8 +51,21 @@ public:
 
   IHardwareDecoder* GetHWAccel() override;
   bool GetPictureCommon(VideoPicture* pVideoPicture) override;
+#ifdef HAVE_DVBRIDGE
+  bool NeedsDVEnhancement() const
+  {
+    return m_dvNativeOutput && m_hints.dovi.dv_profile == 7 && m_hints.dovi.el_present_flag;
+  }
+#endif
 
 protected:
+  CDVDVideoCodec::VCReturn GetBasePicture(VideoPicture* picture);
+#ifdef HAVE_DVBRIDGE
+  std::shared_ptr<dvbridge_fel> m_dvFel;
+  std::deque<std::shared_ptr<VideoPicture>> m_dvPending;
+  bool m_dvFailed{false};
+  bool m_dvNativeOutput{false};
+#endif
   void Dispose();
   CDVDVideoCodec::VCReturn HandleHwFatal();
   static enum AVPixelFormat GetFormat(struct AVCodecContext * avctx, const AVPixelFormat * fmt);

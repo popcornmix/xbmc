@@ -29,6 +29,9 @@
 
 #include <mutex>
 #include <utility>
+#ifdef HAVE_DVBRIDGE
+#include "Video/DVPlaybackPolicy.h"
+#endif
 
 //------------------------------------------------------------------------------
 // Video
@@ -68,6 +71,14 @@ std::unique_ptr<CDVDVideoCodec> CDVDFactoryCodec::CreateVideoCodec(CDVDStreamInf
     return nullptr;
   }
 
+  // DVBridge carries metadata and paired hardware surfaces through the VAAPI adapter.
+#ifdef HAVE_DVBRIDGE
+  if (DVBRIDGE::RetainsDVSource(hint))
+  {
+    pCodec = std::make_unique<CDVDVideoCodecFFmpeg>(processInfo);
+    return pCodec->Open(hint, options) ? std::move(pCodec) : nullptr;
+  }
+#endif
   // platform specific video decoders
   if (!(hint.codecOptions & CODEC_FORCE_SOFTWARE))
   {
@@ -287,4 +298,3 @@ std::unique_ptr<CDVDOverlayCodec> CDVDFactoryCodec::CreateOverlayCodec(CDVDStrea
 
   return nullptr;
 }
-

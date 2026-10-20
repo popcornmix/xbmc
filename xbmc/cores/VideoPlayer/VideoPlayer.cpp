@@ -7,6 +7,9 @@
  */
 
 #include "VideoPlayer.h"
+#ifdef HAVE_DVBRIDGE
+#include "cores/VideoPlayer/DVDCodecs/Video/DVPlaybackPolicy.h"
+#endif
 
 #include "DVDCodecs/DVDCodecUtils.h"
 #include "DVDDemuxers/DVDDemux.h"
@@ -4472,9 +4475,14 @@ bool CVideoPlayer::OpenVideoStream(CDVDStreamInfo& hint, bool reset)
                                                    (double)DVD_TIME_BASE * hint.fpsscale /
                                                    (hint.fpsrate * (hint.interlaced ? 2 : 1)));
 
+      bool nativeDV = false;
+#ifdef HAVE_DVBRIDGE
+      nativeDV = DVBRIDGE::WantsNativeOutput(hint);
+#endif
       VideoModeChange change;
-      change.res = CResolutionUtils::ChooseBestResolution(
-          static_cast<float>(framerate), hint.width, hint.height, !hint.stereo_mode.empty());
+      change.res = CResolutionUtils::ChooseBestResolution(static_cast<float>(framerate),
+                                                          hint.width, hint.height,
+                                                          !hint.stereo_mode.empty(), nativeDV);
       change.picture.Reset();
       change.picture.iWidth = hint.width;
       change.picture.iHeight = hint.height;
@@ -4497,7 +4505,8 @@ bool CVideoPlayer::OpenVideoStream(CDVDStreamInfo& hint, bool reset)
       callback.userptr = &change;
       CServiceBroker::GetAppMessenger()->SendMsg(TMSG_CALLBACK, -1, -1,
                                                  static_cast<void*>(&callback));
-      m_renderManager.TriggerUpdateResolution(framerate, hint.width, hint.height, hint.stereo_mode);
+      m_renderManager.TriggerUpdateResolution(framerate, hint.width, hint.height, hint.stereo_mode,
+                                              nativeDV);
     }
   }
 

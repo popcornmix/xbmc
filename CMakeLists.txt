@@ -5,6 +5,16 @@ endif()
 
 project(kodi LANGUAGES CXX C ASM)
 
+option(ENABLE_DVBRIDGE "Build experimental native DV bridge (requires patched dependencies)" OFF)
+set(DVBRIDGE_SOURCE_DIR "" CACHE PATH "DVBridge common source directory")
+if(NOT EXISTS "${DVBRIDGE_SOURCE_DIR}/dvbridge_metadata_bounds.h")
+  message(FATAL_ERROR "DVBRIDGE_SOURCE_DIR must provide the shared metadata validation headers")
+endif()
+if(ENABLE_DVBRIDGE)
+  # Headers change class layout: every translation unit must use the same ABI.
+  add_compile_definitions(HAVE_DVBRIDGE=1)
+endif()
+
 if(POLICY CMP0069)
   set(CMAKE_POLICY_DEFAULT_CMP0069 NEW)
   cmake_policy(SET CMP0069 NEW)

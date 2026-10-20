@@ -106,7 +106,14 @@ void main()
 
 #if defined(KODI_TONE_MAPPING_REINHARD)
   float luma = dot(rgb.rgb, m_coefsDst);
+#if defined(KODI_CLAMP_OUTPUT)
+  // 0/0 for a black pixel is no number. A fixed-point output stores it as 0; a floating-point
+  // one keeps it, and what clamp() makes of it is not defined. A black pixel stays black.
+  if (luma > 0.0)
+    rgb.rgb *= reinhard(luma) / luma;
+#else
   rgb.rgb *= reinhard(luma) / luma;
+#endif
 
 #elif defined(KODI_TONE_MAPPING_ACES)
   rgb.rgb = inversePQ(rgb.rgb);
@@ -125,5 +132,8 @@ void main()
 
 #endif
 
+#if defined(KODI_CLAMP_OUTPUT)
+  rgb = clamp(rgb, 0.0, 1.0);
+#endif
   fragColor = rgb;
 }
