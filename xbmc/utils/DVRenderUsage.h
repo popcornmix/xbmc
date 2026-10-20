@@ -51,6 +51,12 @@ public:
         std::string unit;
         renderEngine = bool(value >> render.busy >> unit) && unit == "ns";
       }
+      else if (key == "drm-engine-panthor" || key == "drm-engine-fragment")
+      {
+        // Mali: panthor reports one engine, panfrost's fragment engine is the render load.
+        std::string unit;
+        renderEngine = bool(value >> render.busy >> unit) && unit == "ns";
+      }
       else if (key == "drm-engine-gfx")
       {
         std::string unit;
@@ -69,8 +75,13 @@ public:
     }
     if (!input.eof()) return; // Long lines or an exhausted record budget are unavailable.
     const bool amd = driver == "amdgpu";
+    const bool mali = driver == "panthor" || driver == "panfrost";
+    // Platform (non-PCI) GPUs have no drm-pdev; there is only one such device.
+    if (mali && device.empty())
+      device = driver;
     if (id.empty() || device.empty() ||
-        (amd ? !gfxEngine : (!renderEngine || (driver != "i915" && driver != "xe"))))
+        (amd ? !gfxEngine
+             : (!renderEngine || (driver != "i915" && driver != "xe" && !mali))))
       return;
     // Graphics only: compute/decode counters are not independent render utilization.
     Client client = amd ? gfx : render;
