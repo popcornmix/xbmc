@@ -891,9 +891,8 @@ bool CDVBridgeGLES::Initialize(bool allowSoftware, bool hdr10, std::shared_ptr<C
     return Failure("opengl-create");
   m_gl = m_context->GL(); m_log = m_context->Log();
   // GUI alpha blending takes place in the 32F PQ target, before transport packing.
-  if (!pl_opengl_has_ext(m_gl, "GL_EXT_float_blend") ||
-      !pl_opengl_has_ext(m_gl, "GL_OES_texture_float_linear"))
-    return Failure("float-blend-or-linear-unavailable");
+  if (!pl_opengl_has_ext(m_gl, "GL_EXT_float_blend"))
+    return Failure("float-blend-unavailable");
   m_renderer = m_context->Attach();
   m_packer = dvbridge_gl_packer_create(DVBRIDGE_VERTEX, DVBRIDGE_FRAGMENT);
   return m_renderer && m_packer && RebindOutputSurface(hdr10);

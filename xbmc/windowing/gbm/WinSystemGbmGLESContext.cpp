@@ -1074,12 +1074,13 @@ void CWinSystemGbmGLESContext::RefreshDVOutputCapabilities()
     {
       if (auto* renderer = context->Attach())
       {
-        const bool common = pl_opengl_has_ext(context->GL(), "GL_EXT_float_blend") &&
+        const bool floatBlend = pl_opengl_has_ext(context->GL(), "GL_EXT_float_blend");
+        const bool common = floatBlend &&
             pl_opengl_has_ext(context->GL(), "GL_OES_texture_float_linear");
         caps.processingKnown = true;
         for (unsigned mode = 1; mode < caps.processing.size(); ++mode)
         {
-          const bool usable=common && dvbridge_renderer_supports_mode(renderer, static_cast<dvbridge_mode>(mode));
+          const bool usable=floatBlend && dvbridge_renderer_supports_mode(renderer, static_cast<dvbridge_mode>(mode));
           caps.processing[mode] = {usable, usable ? DVBRIDGE::OutputReason::None :
               DVBRIDGE::OutputReason::NoGPUProcessing};
           const bool ai=common && dvbridge_renderer_supports_hdr10_ai(renderer,static_cast<dvbridge_mode>(mode));
