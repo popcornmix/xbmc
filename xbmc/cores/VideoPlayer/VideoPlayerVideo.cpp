@@ -42,6 +42,12 @@
 
 using namespace std::chrono_literals;
 
+namespace
+{
+//! How often the frame loss counters are written to the log while frames are being lost
+constexpr auto STATS_LOG_INTERVAL = 5000ms;
+} // namespace
+
 class CDVDMsgVideoCodecChange : public CDVDMsg
 {
 public:
@@ -84,7 +90,14 @@ CVideoPlayerVideo::CVideoPlayerVideo(CDVDClock* pClock,
   m_messageQueue.SetMaxDataSize(sizeMB * 1024 * 1024);
   m_messageQueue.SetMaxTimeSize(messageQueueTimeSize);
 
-  m_iDroppedFrames = 0;
+  m_iDroppedFramesDecoder = 0;
+  m_iSkippedPicturesDecoder = 0;
+  m_iDroppedFramesOutput = 0;
+  m_iRenderLateFrames = 0;
+  m_statsLogged = false;
+  m_iLoggedDroppedFrames = 0;
+  m_iLoggedSkippedFrames = 0;
+  m_iLoggedRepeatedFrames = 0;
   m_fFrameRate = 25;
   m_fStableFrameRate = 0.0;
   m_iFrameRateCount = 0;
@@ -363,7 +376,15 @@ void CVideoPlayerVideo::Process()
 
   m_videoStats.Start();
   m_droppingStats.Reset();
-  m_iDroppedFrames = 0;
+  m_iDroppedFramesDecoder = 0;
+  m_iSkippedPicturesDecoder = 0;
+  m_iDroppedFramesOutput = 0;
+  m_iRenderLateFrames = 0;
+  m_statsLogged = false;
+  m_iLoggedDroppedFrames = 0;
+  m_iLoggedSkippedFrames = 0;
+  m_iLoggedRepeatedFrames = 0;
+  m_statsLogTimer.Set(STATS_LOG_INTERVAL);
   m_rewindStalled = false;
   m_outputSate = OUTPUT_NORMAL;
 
@@ -618,9 +639,10 @@ void CVideoPlayerVideo::Process()
       {
         bRequestDrop = true;
       }
+      // the pictures themselves are counted in CalcDropRequirement, which knows how many the
+      // decoder actually lost rather than just that it lost some
       if (iDropDirective & DROP_DROPPED)
       {
-        m_iDroppedFrames++;
         m_ptsTracker.Flush();
       }
       if (m_messageQueue.GetDataSize() == 0 ||  m_speed < 0)
@@ -676,6 +698,40 @@ void CVideoPlayerVideo::UpdatePlayerInfo()
   m_processInfo.SetVideoLiveBitRate(GetVideoBitrate());
   m_processInfo.SetVideoQueueLevel(std::min(99, m_messageQueue.GetLevel()));
   m_processInfo.SetVideoQueueDataLevel(std::min(99, m_messageQueue.GetLevel(true)));
+  LogPlaybackStats();
+}
+
+void CVideoPlayerVideo::LogPlaybackStats()
+{
+  if (!m_statsLogTimer.IsTimePast())
+    return;
+
+  m_statsLogTimer.Set(STATS_LOG_INTERVAL);
+
+  const int dropped = GetDroppedFrames();
+  const int skipped = m_renderManager.GetSkippedFrames();
+  const int repeated = m_renderManager.GetRepeatedFrames();
+
+  // after the first line, which is there to show the counters are live, only worth a line when
+  // something was actually lost since the last one
+  if (m_statsLogged && dropped == m_iLoggedDroppedFrames && skipped == m_iLoggedSkippedFrames &&
+      repeated == m_iLoggedRepeatedFrames)
+    return;
+
+  m_statsLogged = true;
+
+  CLog::Log(LOGDEBUG,
+            "CVideoPlayerVideo::{} - lost frames in the last {}s: dropped:{} skipped:{} "
+            "repeated:{} - totals: dropped:{} (decoder:{} postproc:{} output:{}) skipped:{} "
+            "repeated:{} - late:{} vq:{}% fr:{:.3f}",
+            __FUNCTION__, STATS_LOG_INTERVAL.count() / 1000, dropped - m_iLoggedDroppedFrames,
+            skipped - m_iLoggedSkippedFrames, repeated - m_iLoggedRepeatedFrames, dropped,
+            m_iDroppedFramesDecoder, m_iSkippedPicturesDecoder, m_iDroppedFramesOutput, skipped,
+            repeated, m_iRenderLateFrames, std::min(99, m_processInfo.GetLevelVQ()), m_fFrameRate);
+
+  m_iLoggedDroppedFrames = dropped;
+  m_iLoggedSkippedFrames = skipped;
+  m_iLoggedRepeatedFrames = repeated;
 }
 
 bool CVideoPlayerVideo::ProcessDecoderOutput(double &frametime, double &pts)
@@ -840,7 +896,7 @@ bool CVideoPlayerVideo::ProcessDecoderOutput(double &frametime, double &pts)
     }
     else if ((m_outputSate == OUTPUT_DROPPED) && !(m_picture.iFlags & DVP_FLAG_DROPPED))
     {
-      m_iDroppedFrames++;
+      m_iDroppedFramesOutput++;
       m_ptsTracker.Flush();
     }
 
@@ -966,13 +1022,13 @@ CVideoPlayerVideo::EOutputState CVideoPlayerVideo::OutputPicture(const VideoPict
       const auto gpu = m_diagnosticRender.Sample(60000000000ULL);
       const auto elapsed = m_diagnosticTime ? now - m_diagnosticTime : 0;
       const int skipped = m_renderManager.GetSkippedFrames();
-      const bool reset = m_iDroppedFrames < m_diagnosticDropped || skipped < m_diagnosticSkipped;
+      const bool reset = GetDroppedFrames() < m_diagnosticDropped || skipped < m_diagnosticSkipped;
       // Native counters are aggregated, not a decoder-versus-renderer attribution.
       CLog::Log(LOGINFO, "DVBridge playback health: interval_ms={} output_attempts={} source_fps={:.3f} speed={} stalled={} pts_s={:.3f} drop_total={} skip_total={} drop_delta={} skip_delta={} counters_reset={} video_queue_pct={} video_queue_s={:.3f} bitrate_mbps={:.2f} render_avg_pct={} transitions={} pts_valid={} (speed 1000=normal; attempts are not display flips)",
           elapsed, m_diagnosticPictures, m_fFrameRate, m_speed, m_stalled.load(),
           pPicture->pts == DVD_NOPTS_VALUE ? 0.0 : pPicture->pts / DVD_TIME_BASE,
-          m_iDroppedFrames, skipped,
-          reset ? 0 : m_iDroppedFrames - m_diagnosticDropped,
+          GetDroppedFrames(), skipped,
+          reset ? 0 : GetDroppedFrames() - m_diagnosticDropped,
           reset ? 0 : skipped - m_diagnosticSkipped, reset,
           m_processInfo.GetLevelVQ(), m_messageQueue.GetTimeSize(),
           GetVideoBitrate() / 1000000.0, gpu ? StringUtils::Format("{:.1f}", *gpu) : "unavailable",
@@ -980,12 +1036,12 @@ CVideoPlayerVideo::EOutputState CVideoPlayerVideo::OutputPicture(const VideoPict
           pPicture->pts != DVD_NOPTS_VALUE);
       m_diagnosticTime = now;
       m_diagnosticPictures = 0;
-      m_diagnosticDropped = m_iDroppedFrames;
+      m_diagnosticDropped = GetDroppedFrames();
       m_diagnosticSkipped = skipped;
       m_diagnosticTransitions = 0;
     }
   }
-  DVBRIDGE::StreamTelemetry::Counters(m_iDroppedFrames, m_renderManager.GetSkippedFrames());
+  DVBRIDGE::StreamTelemetry::Counters(GetDroppedFrames(), m_renderManager.GetSkippedFrames());
 #endif
   m_bAbortOutput = false;
 
@@ -1111,8 +1167,10 @@ std::string CVideoPlayerVideo::GetPlayerInfo()
   s << "s, Mb/s:" << std::fixed << std::setprecision(2)
     << static_cast<double>(GetVideoBitrate()) / (1024.0 * 1024.0);
   s << ", fr:" << std::fixed << std::setprecision(3) << m_fFrameRate;
-  s << ", drop:" << m_iDroppedFrames;
+  s << ", drop:" << GetDroppedFrames();
   s << ", skip:" << m_renderManager.GetSkippedFrames();
+  s << ", rep:" << m_renderManager.GetRepeatedFrames();
+  s << ", late:" << m_iRenderLateFrames;
 
   int pc = m_ptsTracker.GetPatternLength();
   if (pc > 0)
@@ -1258,6 +1316,15 @@ int CVideoPlayerVideo::CalcDropRequirement(double pts)
   // get render stats
   m_renderManager.GetStats(lateframes, iRenderPts, queued, discard);
   iBufferLevel = queued + discard;
+  m_iRenderLateFrames = lateframes;
+
+  // Count what the decoder reported whether or not we are allowed to act on it. GetCodecStats
+  // clears the codec side counters as it reads them, so anything not counted here - which until
+  // the frame rate has been measured is everything, as m_bAllowDrop is still false - is lost.
+  if (iSkippedPicture > 0)
+    m_iSkippedPicturesDecoder += iSkippedPicture;
+  if (iDroppedFrames > 0)
+    m_iDroppedFramesDecoder += iDroppedFrames;
 
   if (iBufferLevel < 0)
     result |= DROP_BUFFER_LEVEL;
