@@ -274,6 +274,8 @@ public:
   virtual bool BeginGuiComposite(bool guiWillRender) { return false; }
   virtual void EndGuiComposite() {}
   virtual void CompositeGui() {}
+  // True when a GUI frame rendered now could not reach the screen, so it can be skipped.
+  virtual bool IsGuiFrameRedundant() const { return false; }
 
   // True when GUI is rendered to an FBO that is then color-transformed
   // (sRGB -> PQ/HLG) and composited against HDR video in that non-linear

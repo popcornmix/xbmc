@@ -773,6 +773,17 @@ bool CWinSystemGbmGLESContext::BeginGuiComposite(bool guiWillRender)
   return true;
 }
 
+bool CWinSystemGbmGLESContext::IsGuiFrameRedundant() const
+{
+#ifdef HAVE_DVBRIDGE
+  // RenderDVBridge keeps the prepared picture until it is presented, so a GUI
+  // rendered meanwhile would never be composed into it.
+  return m_dvState.Captured() && m_cb1FramePending && m_dvFrame;
+#else
+  return false;
+#endif
+}
+
 void CWinSystemGbmGLESContext::EndGuiComposite()
 {
   if (m_guiWillRender)

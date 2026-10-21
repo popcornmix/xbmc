@@ -1631,6 +1631,8 @@ void CApplication::FrameMove(bool processEvents, bool processGUI)
     if (!m_skipGuiRender && appPlayer->IsRenderingVideoLayer() &&
         !CServiceBroker::GetGUI()->GetWindowManager().HasDirtyRegions())
       m_skipGuiRender = true;
+    if (!m_skipGuiRender && CServiceBroker::GetWinSystem()->IsGuiFrameRedundant())
+      m_skipGuiRender = true;
     CServiceBroker::GetGUI()->GetWindowManager().FrameMove();
   }
 

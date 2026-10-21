@@ -68,6 +68,7 @@ public:
   bool BeginGuiComposite(bool guiWillRender) override;
   void EndGuiComposite() override;
   void CompositeGui() override;
+  bool IsGuiFrameRedundant() const override;
   bool IsHdrComposite() const override { return m_guiCompositing; }
 #ifdef HAVE_DVBRIDGE
   static bool DVBridgeRequested(const VideoPicture* picture);
