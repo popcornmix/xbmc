@@ -182,6 +182,7 @@ CRendererDRMPRIMEDV::Layout CRendererDRMPRIMEDV::LayoutFor(const AVDRMFrameDescr
     case DRM_FORMAT_NV12:
       return Layout::NV12;
     case DRM_FORMAT_P010:
+    case DRM_FORMAT_P030:
       return Layout::P010;
     case DRM_FORMAT_NV15:
       return Layout::NV15;
@@ -197,11 +198,16 @@ bool CRendererDRMPRIMEDV::LayoutUsable(const AVDRMFrameDescriptor* desc,
 {
   if (layout == Layout::NONE || width < 2 || height < 2 || width > 4096 || height > 2304)
     return false;
+  const uint32_t format = desc->nb_layers == 1 ? desc->layers[0].format : 0;
   for (int i = 0; i < desc->nb_objects; ++i)
   {
     // The NV15 unpack addresses bytes directly, so tiled or compressed layouts are out.
     const uint64_t modifier = desc->objects[i].format_modifier;
-    if (modifier != DRM_FORMAT_MOD_LINEAR && modifier != DRM_FORMAT_MOD_INVALID)
+    const bool sand = fourcc_mod_broadcom_mod(modifier) == DRM_FORMAT_MOD_BROADCOM_SAND128;
+    if (sand ? format != DRM_FORMAT_NV12 && format != DRM_FORMAT_P030
+             : modifier != DRM_FORMAT_MOD_LINEAR && modifier != DRM_FORMAT_MOD_INVALID)
+      return false;
+    if (format == DRM_FORMAT_P030 && !sand)
       return false;
     if (desc->objects[i].fd < 0)
       return false;
@@ -359,6 +365,9 @@ bool CRendererDRMPRIMEDV::ImportPlane(const AVDRMFrameDescriptor* desc,
   if (plane.object_index < 0 || plane.object_index >= desc->nb_objects)
     return false;
   const AVDRMObjectDescriptor& object = desc->objects[plane.object_index];
+  if (!m_hasModifiers && object.format_modifier != DRM_FORMAT_MOD_LINEAR &&
+      object.format_modifier != DRM_FORMAT_MOD_INVALID)
+    return false;
 
   CEGLAttributes<8> attribs;
   attribs.Add({{EGL_LINUX_DRM_FOURCC_EXT, static_cast<EGLint>(fourcc)},
