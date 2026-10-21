@@ -34,11 +34,11 @@ inline bool DecodeReferenceScreenshot(const uint8_t* carrier, unsigned width, un
       const double y=((unsigned(p[1])<<4)|(p[2]&15))/4095.0;
       double light[3];
       for (unsigned i=0;i<3;i++)
-        light[i]=eotf(decode[4*i]*y+decode[4*i+1]*cb+decode[4*i+2]*cr+decode[4*i+3]);
+        light[i]=eotf(double(decode[4*i])*y+double(decode[4*i+1])*cb+double(decode[4*i+2])*cr+double(decode[4*i+3]));
       uint16_t* out=rgb+4*(pixel+side);
       for (unsigned i=0;i<3;i++)
         out[i]=static_cast<uint16_t>(std::lround(65535.0*oetf(
-            linear[3*i]*light[0]+linear[3*i+1]*light[1]+linear[3*i+2]*light[2])));
+            double(linear[3*i])*light[0]+double(linear[3*i+1])*light[1]+double(linear[3*i+2])*light[2])));
       out[3]=65535;
     }
   }
