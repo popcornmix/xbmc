@@ -2055,8 +2055,6 @@ bool CWinSystemGbmGLESContext::RenderDVBridge(const CDVBridgeGLES::Layer& layer,
       m_dvSubtitleDraws && m_dvSubtitleDraws == GetGUIElementCount() &&
       (!m_dvPQSubtitleDraws || m_dvPQSubtitleDraws == m_dvSubtitleDraws);
   const bool pqSubtitles = subtitlesOnly && m_dvPQSubtitleDraws;
-  const bool enhancedSubtitles = subtitlesOnly && metadata.Data() &&
-      m_dvSelection.policy.mode == DVBRIDGE_MODE_ENHANCED_DV;
   const bool fullGUI = m_guiWillRender && GetGUIElementCount() &&
       CDVBridgeGLES::CanComposeSDRGUI(preferences.optimizedDV ||
           m_dvSelection.policy.mode == DVBRIDGE_MODE_MASTER_REFERENCE,m_hdrConversion,capturing && !masterCapture,
@@ -2071,8 +2069,8 @@ bool CWinSystemGbmGLESContext::RenderDVBridge(const CDVBridgeGLES::Layer& layer,
       nativeOverlay ? (pqSubtitles ? m_dvPQSubtitleFbo.Texture() : m_guiFbo.Texture()) : 0,
       nativeOverlay ? m_compositeShader->GetDegammaTexture() : 0,
       nativeOverlay ? m_compositeShader->GetTransferTexture() : 0,
-      fullGUI && !enhancedSubtitles ? CRect(0,0,3840,2160) : m_dvSubtitleBounds,
-      fullGUI && !enhancedSubtitles ? m_dvGUIContentGeneration : m_dvSubtitleContent, pqSubtitles);
+      fullGUI && !subtitlesOnly ? CRect(0,0,3840,2160) : m_dvSubtitleBounds,
+      fullGUI && !subtitlesOnly ? m_dvGUIContentGeneration : m_dvSubtitleContent, pqSubtitles);
   if (std::getenv("CB1_PRESENTATION_AUDIT"))
   {
     static unsigned prior = ~0u;
