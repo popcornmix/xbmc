@@ -16,6 +16,7 @@ struct OutputCapabilities
 {
   bool sourceKnown{}, isDV{}, processingKnown{}, nativeDV{}, hdr10{};
   bool stereoSource{};
+  bool fullRaster{};
   uint64_t generation{};
   std::array<ModeAdmission, 6> processing{};
   bool isHDR10{};

@@ -960,6 +960,12 @@ void CWinSystemGbmGLESContext::CompositeGui()
 #ifdef HAVE_DVBRIDGE
 namespace
 {
+bool FullRaster(const dvbridge_geometry& geometry)
+{
+  return geometry.source_width == 3840 && geometry.source_height == 2160 && !geometry.x &&
+         !geometry.y && geometry.width == 3840 && geometry.height == 2160;
+}
+
 bool NativeDVEligible(bool source, bool software, bool interlaced, bool stereo)
 {
   if (!source || software)
@@ -1209,6 +1215,7 @@ DVBRIDGE::OutputCapabilities CWinSystemGbmGLESContext::GetDVOutputCapabilities(
     caps.processingKnown = false;
     return caps;
   }
+  caps.fullRaster = FullRaster(m_dvImportGeometry);
   const auto& metadata = picture->doviMetadata;
   const bool paired = picture->doviEnhancement && picture->doviEnhancementBinding.Valid() &&
       picture->doviEnhancementBinding == metadata.Binding() &&
@@ -2003,7 +2010,12 @@ void CWinSystemGbmGLESContext::ObserveCB1Headroom()
   if (m_fastRendering.Observe(presentation, margin.value_or(0), eligible))
   {
     DVBRIDGE::automaticFastRendering.store(true);
-    if (m_dvSelection.policy.mode == DVBRIDGE_MODE_MASTER_REFERENCE)
+    dvbridge_geometry geometry;
+    {
+      std::lock_guard lock(m_dvCapabilityMutex);
+      geometry = m_dvImportGeometry;
+    }
+    if (m_dvSelection.policy.mode == DVBRIDGE_MODE_MASTER_REFERENCE && FullRaster(geometry))
       DVBRIDGE::PlaybackNotification::ArmMasterRecovery();
     DVBRIDGE::DiagnosticLog(LOGINFO, "CB1 fast rendering: decision=enable policy=Auto reason=low-presentation-headroom margin_ms={:.3f} threshold_ms=2.5",
         double(*margin) / 1e6);

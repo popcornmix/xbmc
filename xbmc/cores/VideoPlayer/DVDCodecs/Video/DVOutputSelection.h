@@ -44,7 +44,7 @@ inline OutputSelection SelectOutput(const OutputPreferences& preferences,
   }
   auto policy = preferences.Policy();
   if (policy.mode == DVBRIDGE_MODE_MASTER_REFERENCE && preferences.fastRenderingMode == 2 &&
-      automaticFastRendering.load())
+      automaticFastRendering.load() && caps.fullRaster)
     policy.mode = DVBRIDGE_MODE_STANDARD;
   const auto admission = [&](dvbridge_mode mode) {
     if ((mode == DVBRIDGE_MODE_HDR10_EXPERT || mode == DVBRIDGE_MODE_ENHANCED_DV) &&
