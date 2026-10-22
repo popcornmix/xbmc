@@ -265,7 +265,6 @@ void CApplicationMessageHandling::OnApplicationMessage(MESSAGING::ThreadMessage*
       break;
 
     case TMSG_MINIMIZE:
-      winSystem->Minimize();
       break;
 
     case TMSG_EXECUTE_OS:
