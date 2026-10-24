@@ -2077,8 +2077,12 @@ CDemuxStream* CDVDDemuxFFmpeg::AddStream(int streamIdx)
         // multiview forces software decoding before the option can be refused -
         // and get nothing back, so an ffmpeg without H.264 MVC support keeps
         // hardware decoding the base view exactly as it does today.
-        if ((stereoMode.empty() || stereoMode == "block_lr" || stereoMode == "block_rl") &&
-            HasMvcExtension(pStream) && SupportsMultiviewDecode(pStream->codecpar->codec_id))
+        // A remux may drop the mvcC box and keep the dependent view's parameter
+        // sets in band, so a block layout on H.264 is enough on its own.
+        const bool blockLaced = stereoMode == "block_lr" || stereoMode == "block_rl";
+        if (((blockLaced && pStream->codecpar->codec_id == AV_CODEC_ID_H264) ||
+             (stereoMode.empty() && HasMvcExtension(pStream))) &&
+            SupportsMultiviewDecode(pStream->codecpar->codec_id))
         {
           stereoMode = stereoMode == "block_rl" ? "right_left" : "left_right";
           multiview = true;
