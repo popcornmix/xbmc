@@ -8,6 +8,8 @@
 
 #include "DRMLegacy.h"
 
+#include "DRMConnector.h"
+
 #include "guilib/gui3d.h"
 #include "settings/Settings.h"
 #include "utils/log.h"
@@ -31,8 +33,9 @@ bool CDRMLegacy::SetVideoMode(const RESOLUTION_INFO& res, struct gbm_bo* bo)
 {
   struct drm_fb* drm_fb = DrmFbGetFromBo(bo);
 
+  drmModeModeInfo scanoutMode = CDRMConnector::ToScanoutMode(*m_mode);
   auto ret = drmModeSetCrtc(m_fd, m_crtc->GetCrtcId(), drm_fb->fb_id, 0, 0,
-                            m_connector->GetConnectorId(), 1, m_mode);
+                            m_connector->GetConnectorId(), 1, &scanoutMode);
 
   if (ret < 0)
   {

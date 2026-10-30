@@ -8,6 +8,8 @@
 
 #include "DRMAtomic.h"
 
+#include "DRMConnector.h"
+
 #include "ServiceBroker.h"
 #include "application/ApplicationComponents.h"
 #include "application/ApplicationPlayer.h"
@@ -83,7 +85,10 @@ void CDRMAtomic::DrmAtomicCommit(int fb_id, int flags, bool rendered, bool video
     if (!AddProperty(m_connector, "CRTC_ID", m_crtc->GetCrtcId()))
       return;
 
-    modeBlob = CDRMPropertyBlob(m_fd, m_mode, sizeof(*m_mode));
+    // An emulated frame-packing mode is committed as its doubled 2D raster: the
+    // kernel does not know the mode is stereo (CDRMConnector::ToScanoutMode).
+    drmModeModeInfo scanoutMode = CDRMConnector::ToScanoutMode(*m_mode);
+    modeBlob = CDRMPropertyBlob(m_fd, &scanoutMode, sizeof(scanoutMode));
     if (!modeBlob.IsValid())
       return;
 
