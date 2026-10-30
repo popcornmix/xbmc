@@ -214,7 +214,7 @@ void COffsetMetadataStore::Add(double startPts, double frameDuration, OffsetMeta
 
   std::unique_lock lock(m_section);
 
-  m_entries.push_back({startPts, frameDuration, std::move(metadata)});
+  m_entries.push_back({startPts, frameDuration, std::move(metadata), std::nullopt});
   while (m_entries.size() > MAX_ENTRIES)
     m_entries.pop_front();
 }
@@ -231,6 +231,18 @@ void COffsetMetadataStore::NoteFrame(double pts)
     newest.startPts = pts;
 }
 
+void COffsetMetadataStore::ApplyCorrection(double correction)
+{
+  std::unique_lock lock(m_section);
+
+  for (SEntry& entry : m_entries | std::views::reverse)
+  {
+    if (entry.correction)
+      break;
+    entry.correction = correction;
+  }
+}
+
 int COffsetMetadataStore::GetOffset(double pts, unsigned int sequence) const
 {
   std::unique_lock lock(m_section);
@@ -238,7 +250,11 @@ int COffsetMetadataStore::GetOffset(double pts, unsigned int sequence) const
   // Most recent first: after a loop or a stream change the newer entry is the wanted one.
   for (const SEntry& entry : m_entries | std::views::reverse)
   {
-    const long frame{std::lround((pts - entry.startPts) / entry.frameDuration)};
+    if (!entry.correction)
+      continue;
+
+    const double startPts{entry.startPts - *entry.correction};
+    const long frame{std::lround((pts - startPts) / entry.frameDuration)};
     if (frame >= 0 && frame < static_cast<long>(entry.metadata.frames))
       return entry.metadata.Offset(sequence, static_cast<unsigned int>(frame));
   }
