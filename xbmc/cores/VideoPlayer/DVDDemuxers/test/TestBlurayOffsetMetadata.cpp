@@ -163,6 +163,7 @@ TEST(TestBlurayOffsetMetadata, StoreFindsTheFrameAtATime)
 
   COffsetMetadataStore store;
   store.Add(5000.0, FRAME, std::move(metadata));
+  store.ApplyCorrection(0.0);
 
   EXPECT_EQ(store.GetOffset(5000.0, 0), 1);
   EXPECT_EQ(store.GetOffset(6000.0, 0), 2);
@@ -185,6 +186,7 @@ TEST(TestBlurayOffsetMetadata, StoreStartsAnOpenGopAtItsFirstShownFrame)
   // Carried by the keyframe at 5000; a leading frame decoded after it is shown one frame earlier.
   COffsetMetadataStore store;
   store.Add(5000.0, FRAME, std::move(metadata));
+  store.ApplyCorrection(0.0);
   store.NoteFrame(4000.0);
 
   EXPECT_EQ(store.GetOffset(4000.0, 0), 1);
@@ -203,6 +205,7 @@ TEST(TestBlurayOffsetMetadata, StoreIgnoresAFrameFarBeforeTheNewestBlock)
   COffsetMetadataStore store;
   store.NoteFrame(0.0);
   store.Add(50000.0, FRAME, std::move(metadata));
+  store.ApplyCorrection(0.0);
 
   // Too far back for a leading frame: a loop or a timestamp jump.
   store.NoteFrame(20000.0);
@@ -217,6 +220,7 @@ TEST(TestBlurayOffsetMetadata, StoreForgetsWhatItIsToldTo)
 
   COffsetMetadataStore store;
   store.Add(0.0, FRAME, std::move(metadata));
+  store.ApplyCorrection(0.0);
   EXPECT_EQ(store.GetOffset(0.0, 0), 4);
 
   store.Flush();
@@ -233,6 +237,7 @@ TEST(TestBlurayOffsetMetadata, StoreKeepsTheMostRecentBlocks)
     OffsetMetadata metadata;
     ASSERT_TRUE(Parse(AccessUnit({0x40}, 1, 1, {static_cast<uint8_t>(1 + i % 9)}), metadata));
     store.Add(i * FRAME, FRAME, std::move(metadata));
+    store.ApplyCorrection(0.0);
   }
 
   EXPECT_EQ(store.GetOffset(99 * FRAME, 0), 1 + 99 % 9);
@@ -256,4 +261,24 @@ TEST(TestBlurayOffsetMetadata, RejectsATagThatNamesNoSequence)
   EXPECT_FALSE(ParseOffsetSequenceTag("2a").has_value());
   EXPECT_FALSE(ParseOffsetSequenceTag(" 2").has_value());
   EXPECT_FALSE(ParseOffsetSequenceTag("4294967296").has_value());
+}
+
+TEST(TestBlurayOffsetMetadata, StoreKeysABlockByTheCorrectionOfItsOwnClip)
+{
+  OffsetMetadata first;
+  ASSERT_TRUE(Parse(AccessUnit({0x40}, 1, 2, {3, 3}), first));
+  OffsetMetadata second;
+  ASSERT_TRUE(Parse(AccessUnit({0x40}, 1, 2, {7, 7}), second));
+
+  // The next clip restarts its timestamps; the player corrects them once the jump is confirmed.
+  COffsetMetadataStore store;
+  store.Add(50000.0, FRAME, std::move(first));
+  store.ApplyCorrection(0.0);
+  store.Add(5000.0, FRAME, std::move(second));
+  EXPECT_EQ(store.GetOffset(5000.0, 0), 0);
+  store.ApplyCorrection(-47000.0);
+
+  EXPECT_EQ(store.GetOffset(51000.0, 0), 3);
+  EXPECT_EQ(store.GetOffset(52000.0, 0), 7);
+  EXPECT_EQ(store.GetOffset(5000.0, 0), 0);
 }

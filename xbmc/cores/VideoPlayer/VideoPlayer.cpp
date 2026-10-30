@@ -2038,6 +2038,15 @@ void CVideoPlayer::ProcessVideoData(CDemuxStream* pStream, DemuxPacket* pPacket)
     checkcont = CheckContinuity(m_CurrentVideo, pPacket);
     UpdateTimestamps(m_CurrentVideo, pPacket);
   }
+
+  // A packet whose timestamps await confirmation of a jump leaves its block pending.
+  if (pPacket->dts != DVD_NOPTS_VALUE)
+  {
+    std::unique_lock lock(m_offsetMetadataSection);
+    if (m_offsetMetadata)
+      m_offsetMetadata->ApplyCorrection(m_offset_pts);
+  }
+
   if (checkcont && (m_CurrentVideo.avsync == CCurrentStream::AV_SYNC_CHECK))
     m_CurrentVideo.avsync = CCurrentStream::AV_SYNC_NONE;
 
@@ -4678,9 +4687,7 @@ std::optional<int> CVideoPlayer::GetSubtitlePlaneOffset(double pts)
   if (!m_offsetMetadata)
     return std::nullopt;
 
-  // The store is keyed by the demuxer's timestamps and this is a presentation time, which
-  // ReadPacket() has already had m_offset_pts taken off (see UpdateCorrection).
-  return m_offsetMetadata->GetOffset(pts + m_offset_pts, static_cast<unsigned int>(sequence));
+  return m_offsetMetadata->GetOffset(pts, static_cast<unsigned int>(sequence));
 }
 
 bool CVideoPlayer::OpenSubtitleStream(const CDVDStreamInfo& hint)

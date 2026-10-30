@@ -639,9 +639,7 @@ protected:
       reads as the end of the stream, and this is what Process() returns to instead. */
   double m_seekRecoverTime{DVD_NOPTS_VALUE};
 
-  /*! What CheckContinuity() has taken off the demuxer's timestamps to keep the player
-      clock monotonic. Read by the render thread (see GetSubtitlePlaneOffset), so atomic. */
-  std::atomic<double> m_offset_pts{0.0};
+  double m_offset_pts;
 
   CDVDMessageQueue m_messenger;
   std::unique_ptr<CJobQueue> m_outboundEvents;

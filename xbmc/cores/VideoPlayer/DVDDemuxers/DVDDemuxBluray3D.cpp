@@ -225,9 +225,6 @@ void CDVDDemuxBluray3D::CloseDependentView()
     m_pendingDependent = nullptr;
   }
 
-  // The offsets describe the play item being left behind.
-  m_bluray->GetOffsetMetadata()->Flush();
-
   {
     std::unique_lock lock(m_dependentSection);
     m_dependent.reset();
@@ -506,7 +503,6 @@ void CDVDDemuxBluray3D::PlaceDependent(double targetMs)
 
   m_dependentEnded = false;
   m_unmergedBase = 0;
-  m_bluray->GetOffsetMetadata()->Flush();
 
   if (!m_dependent)
     return;
