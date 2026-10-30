@@ -92,7 +92,11 @@ public:
   //!        frame shown, which in an open GOP is a leading frame decoded after the carrier.
   void NoteFrame(double pts);
 
-  //! \brief The offset a sequence asks for at \p pts, or 0 when nothing describes it.
+  //! \brief The player's timestamp correction for the blocks added since the last call.
+  void ApplyCorrection(double correction);
+
+  //! \brief The offset a sequence asks for at the corrected time \p pts, or 0 when nothing
+  //!        describes it.
   int GetOffset(double pts, unsigned int sequence) const;
 
   void Flush();
@@ -109,6 +113,7 @@ private:
     double startPts{0.0};
     double frameDuration{0.0};
     OffsetMetadata metadata;
+    std::optional<double> correction;
   };
 
   mutable CCriticalSection m_section;
