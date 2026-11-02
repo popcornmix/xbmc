@@ -227,6 +227,8 @@ SampledGeometry CVideoFileGeometry::ExtractContentGeometry(const CFileItem& file
   const std::string redactPath = CURL::GetRedacted(fileItem.GetPath());
   const auto start = std::chrono::steady_clock::now();
 
+  const CMetadataFrameDecodeLock lock;
+
   std::optional<VideoDecodeSession> session =
       OpenVideoDecodeSession(fileItem, CODEC_FORCE_SOFTWARE | CODEC_EXPORT_FILM_GRAIN, redactPath);
   if (!session)

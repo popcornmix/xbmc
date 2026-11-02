@@ -216,6 +216,8 @@ std::unique_ptr<CTexture> CDVDFileInfo::ExtractThumbToTexture(const CFileItem& f
 
   const std::string redactPath = CURL::GetRedacted(fileItem.GetPath());
   auto start = std::chrono::steady_clock::now();
+  
+  const CMetadataFrameDecodeLock lock;
 
   std::optional<VideoDecodeSession> session =
       OpenVideoDecodeSession(fileItem, CODEC_FORCE_SOFTWARE, redactPath);
@@ -375,6 +377,8 @@ static bool GetDetailsFromFrame(CDemuxStreamVideo* stream,
 
   CDVDStreamInfo hint(*stream, true);
   hint.codecOptions = CODEC_FORCE_SOFTWARE;
+
+  const CMetadataFrameDecodeLock lock;
 
   std::unique_ptr<CDVDVideoCodec> videoCodec =
       CDVDFactoryCodec::CreateVideoCodec(hint, *processInfo);

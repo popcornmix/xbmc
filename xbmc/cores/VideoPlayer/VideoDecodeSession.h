@@ -11,6 +11,7 @@
 #include "DVDStreamInfo.h"
 
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 
@@ -31,6 +32,21 @@ struct VideoDecodeSession
   std::unique_ptr<CProcessInfo> processInfo;
   CDVDStreamInfo hint;
   std::unique_ptr<CDVDVideoCodec> codec;
+};
+
+//! \brief Serializes the software frame decodes that extract metadata from video files.
+//!
+//! One such decode takes hundreds of megabytes on 4K files, so only one runs at a time.
+//! Hold an instance for the whole decode.
+class CMetadataFrameDecodeLock
+{
+public:
+  CMetadataFrameDecodeLock();
+  CMetadataFrameDecodeLock(const CMetadataFrameDecodeLock&) = delete;
+  CMetadataFrameDecodeLock& operator=(const CMetadataFrameDecodeLock&) = delete;
+
+private:
+  std::scoped_lock<std::mutex> m_lock;
 };
 
 //! \brief Open \p fileItem for decoding: input stream, demuxer with every stream but the first

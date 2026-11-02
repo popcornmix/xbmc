@@ -19,7 +19,18 @@
 #include "Process/ProcessInfo.h"
 #include "utils/log.h"
 
+#include <mutex>
 #include <vector>
+
+namespace
+{
+//! One metadata frame decode at a time; see CMetadataFrameDecodeLock
+std::mutex s_metadataFrameDecodeMutex;
+} // namespace
+
+CMetadataFrameDecodeLock::CMetadataFrameDecodeLock() : m_lock(s_metadataFrameDecodeMutex)
+{
+}
 
 std::optional<VideoDecodeSession> OpenVideoDecodeSession(const CFileItem& fileItem,
                                                          int codecOptions,
