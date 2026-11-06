@@ -216,6 +216,7 @@ protected:
   CStopWatch m_frameTime;
   CStopWatch m_slowTimer;
   XbmcThreads::EndTime<> m_guiRefreshTimer;
+  XbmcThreads::EndTime<> m_mallocTrimTimer{XbmcThreads::EndTime<>::Max()};
 
   std::string m_prevMedia;
   bool m_bInitializing = true;

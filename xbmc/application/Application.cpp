@@ -181,6 +181,10 @@
 #include <memory>
 #include <mutex>
 
+#if defined(__GLIBC__)
+#include <malloc.h>
+#endif
+
 #ifdef TARGET_WASM
 #include <emscripten.h>
 #endif
@@ -2091,6 +2095,8 @@ void CApplication::PlaybackCleanup()
   {
     stackHelper->Clear();
     appPlayer->ResetPlayer();
+    // after the GUI has settled back from fullscreen video
+    m_mallocTrimTimer.Set(10s);
   }
 
   if (CServiceBroker::GetAppParams()->IsTestMode())
@@ -2325,6 +2331,16 @@ void CApplication::ProcessSlow()
 {
   // process skin resources (skin timers)
   GetComponent<CApplicationSkinHandling>()->ProcessSkin();
+
+  if (m_mallocTrimTimer.IsTimePast())
+  {
+    m_mallocTrimTimer.Set(XbmcThreads::EndTime<>::Max());
+#if defined(__GLIBC__)
+    // glibc keeps freed memory in its arenas, which playback leaves large
+    if (!GetComponent<CApplicationPlayer>()->IsPlaying())
+      malloc_trim(0);
+#endif
+  }
 
   CServiceBroker::GetPowerManager().ProcessEvents();
 
