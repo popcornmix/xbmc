@@ -211,7 +211,7 @@ bool CUDevProvider::Eject(const std::string& mountpath)
   // Single quoted, as the mount point can be named after a volume label the shell must not expand
   std::string quotedPath{mountpath};
   StringUtils::Replace(quotedPath, "'", "'\\''");
-  std::string cmd = "umount '" + quotedPath + "'";
+  std::string cmd = "udevil umount '" + quotedPath + "'";
   int status = system(cmd.c_str());
 
   if (status == 0)
