@@ -82,6 +82,7 @@ constexpr const char* COLOR_FORMAT = "color format";
 constexpr const char* MAX_BPC = "max bpc";
 // indexed by the "Maximum bit depth" setting, 0 is Auto
 constexpr std::array<uint64_t, 4> MAX_BPC_VALUES{0, 8, 10, 12};
+constexpr int MAX_BPC_ADAPTIVE = 4;
 
 // HDMI 2.0 carries at most 600 MHz of TMDS characters: the pixel clock times bits per component
 // / 8 for RGB and YCbCr 4:4:4, half of that for 4:2:0, and as is for 4:2:2 (24 bit container).
@@ -378,11 +379,25 @@ void CWinSystemGbm::ApplyMaxBpcSetting(void* userptr)
   winSystem->ApplyConnectorProperties();
 }
 
-uint64_t CWinSystemGbm::GetEffectiveMaxBpc() const
+std::optional<uint64_t> CWinSystemGbm::GetChosenMaxBpc() const
 {
   const int setting = m_maxBpc;
-  if (!m_maxBpcFallback && setting > 0 && setting < static_cast<int>(MAX_BPC_VALUES.size()))
+  if (m_maxBpcFallback)
+    return std::nullopt;
+
+  if (setting == MAX_BPC_ADAPTIVE)
+    return m_contentBits > 8 ? MAX_BPC_VALUES.back() : MAX_BPC_VALUES[1];
+
+  if (setting > 0 && setting < static_cast<int>(MAX_BPC_VALUES.size()))
     return MAX_BPC_VALUES[setting];
+
+  return std::nullopt;
+}
+
+uint64_t CWinSystemGbm::GetEffectiveMaxBpc() const
+{
+  if (const auto chosen = GetChosenMaxBpc())
+    return *chosen;
 
   const auto connector = m_DRM ? m_DRM->GetConnector() : nullptr;
   if (!connector)
@@ -660,10 +675,9 @@ void CWinSystemGbm::ApplyMaxBpc()
     return;
 
   uint64_t value = 0;
-  const int setting = m_maxBpc;
   const auto limits = connector->GetRangePropertyLimits(MAX_BPC);
-  if (!m_maxBpcFallback && setting > 0 && setting < static_cast<int>(MAX_BPC_VALUES.size()))
-    value = MAX_BPC_VALUES[setting];
+  if (const auto chosen = GetChosenMaxBpc())
+    value = *chosen;
   else if (m_defaultMaxBpc)
     value = *m_defaultMaxBpc; // Auto, or back to it after a refusal
   else if (limits)
@@ -1068,6 +1082,8 @@ void CWinSystemGbm::SetColorimetry(const VideoPicture* videoPicture)
 
   // Adaptive follows the video: >8 bit content may need YCbCr, so evaluate when it starts or stops
   m_contentBits = videoPicture ? videoPicture->colorBits : 0;
+  if (m_maxBpc == MAX_BPC_ADAPTIVE)
+    ApplyMaxBpc();
   if (GetColorFormat() == ColorFormat::ADAPTIVE)
     ApplyColorFormat();
 

@@ -23383,7 +23383,7 @@ msgstr ""
 #: system/settings/linux.xml
 #: system/settings/freebsd.xml
 msgctxt "#36934"
-msgid "Most bits per colour component that the graphics driver may use for the display. \"Auto\" leaves the driver default, which some drivers keep at 8 bit. Choose at least 10 bit to show 10 bit video without reducing it to 8 bit. The driver lowers the depth by itself when the display or the video mode cannot carry it, and with \"Adaptive\" colour format a limit of 8 bit turns the switch to YCbCr off."
+msgid "Most bits per colour component that the graphics driver may use for the display. \"Auto\" leaves the driver default, which some drivers keep at 8 bit. Choose at least 10 bit to show 10 bit video without reducing it to 8 bit. \"Adaptive\" uses 8 bit, and the highest depth the driver allows while video with more than 8 bits per component plays. The driver lowers the depth by itself when the display or the video mode cannot carry it, and with \"Adaptive\" colour format a limit of 8 bit turns the switch to YCbCr off."
 msgstr ""
 
 #: system/settings/linux.xml

@@ -166,6 +166,8 @@ private:
   ColorFormat GetColorFormat() const;
   //! The format to ask the driver for: the choice or Adaptive's pick, if listed and not refused
   ColorFormat GetRequestedColorFormat() const;
+  //! The "max bpc" that the setting asks for, nothing for the driver default
+  std::optional<uint64_t> GetChosenMaxBpc() const;
   //! The "max bpc" in effect: the choice, or what the connector has. 0 if unknown
   uint64_t GetEffectiveMaxBpc() const;
   //! True if the HDMI link can be driven with FRL, which carries 4K 60 Hz 10 bit RGB

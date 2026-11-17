@@ -281,6 +281,7 @@
               <option label="36935">1</option> <!-- 8 bit -->
               <option label="36936">2</option> <!-- 10 bit -->
               <option label="36937">3</option> <!-- 12 bit -->
+              <option label="36932">4</option> <!-- Adaptive -->
             </options>
           </constraints>
           <control type="list" format="string" />
