@@ -530,8 +530,8 @@ void CAdvancedSettings::Initialize()
   m_videoExtensions += "|.pvr";
 
   m_stereoscopicregex_3d = "[-. _]3d[-. _]";
-  m_stereoscopicregex_sbs = "[-. _]h?sbs[-. _]";
-  m_stereoscopicregex_tab = "[-. _]h?tab[-. _]";
+  m_stereoscopicregex_sbs = "[-. _][fh]?sbs[-. _]";
+  m_stereoscopicregex_tab = "[-. _][fh]?tab[-. _]";
   m_stereoscopicPreferFramePacking = true;
 
   m_logLevelHint = m_logLevel = LOG_LEVEL_NORMAL;
